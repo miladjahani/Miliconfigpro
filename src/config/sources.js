@@ -6,6 +6,10 @@
 
 const ZEUS_VIP = code => `https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`;
 const TRIO = (code, kind) => `https://raw.githubusercontent.com/trio666/proxy-checker/main/country/${code}/${kind}.txt`;
+// منابع تازه و فعال (بررسی‌شده) — تاریخچه به‌روزرسانی خودکار دارند
+const CLEARPROXY = (code, kind) => `https://raw.githubusercontent.com/ClearProxy/checked-proxy-list/main/${kind}/raw/country/${code}.txt`;
+const PROXYSCRAPE = (code, kind) => `https://raw.githubusercontent.com/ProxyScrape/free-proxy-list/main/proxies/countries/${String(code).toLowerCase()}/${kind}/data.txt`;
+const PROXIFLY_CC = code => `https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/countries/${String(code).toUpperCase()}/data.txt`;
 
 // منابع اختصاصی هر کشور (Z-E-U-S vip + trio666 کشوری)
 export const COUNTRY_EXTRA_PROXY_SOURCES = {
@@ -70,6 +74,19 @@ export const COUNTRY_META = {
   SK: { name: 'اسلواکی', flag: '🇸🇰' }
 };
 
+// همه کشورها علاوه بر منابع اختصاصی، از سه منبع زنده کشوری جدید هم تغذیه می‌شوند
+for (const code of Object.keys(COUNTRY_META)) {
+  const extra = COUNTRY_EXTRA_PROXY_SOURCES[code] || [];
+  COUNTRY_EXTRA_PROXY_SOURCES[code] = [...new Set([
+    ...extra,
+    CLEARPROXY(code, 'socks5'),
+    CLEARPROXY(code, 'http'),
+    PROXYSCRAPE(code, 'socks5'),
+    PROXYSCRAPE(code, 'http'),
+    PROXIFLY_CC(code)
+  ])];
+}
+
 // لیست‌های عمومی SOCKS5 (هر بار زنده، برش چرخشی)
 export const GLOBAL_SOCKS5_SOURCES = [
   'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt',
@@ -112,7 +129,16 @@ export const GLOBAL_SOCKS5_SOURCES = [
   'https://raw.githubusercontent.com/ProxyListt/PROXY-list/main/socks5.txt',
   'https://raw.githubusercontent.com/Daniel3356/Proxy_Full-list/main/socks5.txt',
   'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/MostStable/socks5.txt',
-  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/Stable/socks5.txt'
+  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/Stable/socks5.txt',
+  // منابع تازه (بررسی‌شده و فعال — اکتبر ۲۰۲۶)
+  'https://raw.githubusercontent.com/ProxyScrape/free-proxy-list/main/proxies/protocols/socks5/data.txt',
+  'https://raw.githubusercontent.com/proxmint/free-proxy-list/main/proxies/socks5.txt',
+  'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/socks5.txt',
+  'https://raw.githubusercontent.com/ClearProxy/checked-proxy-list/main/socks5/raw/all.txt',
+  'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/socks5_all.txt',
+  'https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/socks5.txt',
+  'https://raw.githubusercontent.com/ALIILAPRO/Proxy/main/socks5.txt',
+  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/socks5.txt'
 ];
 
 // لیست‌های عمومی HTTP/HTTPS
@@ -185,7 +211,16 @@ export const GLOBAL_HTTP_SOURCES = [
   'https://raw.githubusercontent.com/ProxyListt/PROXY-list/main/http.txt',
   'https://raw.githubusercontent.com/Daniel3356/Proxy_Full-list/main/http.txt',
   'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/MostStable/http.txt',
-  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/Stable/http.txt'
+  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/Stable/http.txt',
+  // منابع تازه (بررسی‌شده و فعال — اکتبر ۲۰۲۶)
+  'https://raw.githubusercontent.com/ProxyScrape/free-proxy-list/main/proxies/protocols/http/data.txt',
+  'https://raw.githubusercontent.com/proxmint/free-proxy-list/main/proxies/http.txt',
+  'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/http.txt',
+  'https://raw.githubusercontent.com/ClearProxy/checked-proxy-list/main/http/raw/all.txt',
+  'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/http_all.txt',
+  'https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/http.txt',
+  'https://raw.githubusercontent.com/ALIILAPRO/Proxy/main/http.txt',
+  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/http.txt'
 ];
 
 // لیست‌های مسکونی (residential) — به‌عنوان استخر مکمل
@@ -240,3 +275,69 @@ export const IP_RANGE_SOURCES = {
     'https://raw.githubusercontent.com/oneoffdallas/dohservers/master/ipv6list.txt'
   ]
 };
+
+// ============================================================================
+// WARP (Cloudflare WireGuard) — ثابت‌های رسمی و نقاط پایانی شناخته‌شده
+// ============================================================================
+
+// سرویس ثبت‌نام دستگاه WARP (عمومی و بدون احراز هویت) — برای دریافت reserved و آدرس تونل
+export const WARP_REGISTRATION_URL = 'https://api.cloudflareclient.com/v0a2158/reg';
+export const WARP_CLIENT_VERSION = 'a-6.30-2158';
+
+// کلید عمومی همتا (پیش‌فرض کلادفلر) — از پاسخ همان سرویس ثبت‌نام
+export const WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=';
+export const WARP_DEFAULT_HOST = 'engage.cloudflareclient.com';
+export const WARP_DEFAULT_PORT = 2408;
+export const WARP_DEFAULT_ADDRESS = '172.16.0.2';
+
+// پورت‌های رسمی WARP (به ترتیب اولویت)
+export const WARP_ENDPOINT_PORTS = [2408, 500, 1701, 4500];
+
+// رنج‌های رسمی ingress کلادفلر — چندلوکیشن با همین نقاط پایانی ساخته می‌شود
+// (انتخاب کشور بر اساس مسیریابی کلادفلر است؛ برچسب هر نود قابل تغییر از پنل است)
+export const WARP_ENDPOINT_IPS = [
+  '162.159.192.1',
+  '162.159.193.1',
+  '162.159.195.1',
+  '162.159.204.1',
+  '188.114.96.1',
+  '188.114.97.1',
+  '188.114.98.1',
+  '188.114.99.1',
+  '2606:4700:d0::a29f:c001',
+  '2606:4700:d1::a29f:c001'
+];
+
+// ============================================================================
+// OpenVPN — منابع زندهٔ پروفایل عمومی
+// ۱) مخزن گیت‌هاب با پروفایل‌های ‎.ovpn‎ به‌صورت فایل مستقل (از داخل ورکر قابل خواندن است)
+// ۲) لیست CSV ونگیت (در برخی شبکه‌های خروجی کلادفلر مسدود است؛ فقط به‌عنوان پشتیبان)
+// ============================================================================
+
+const AUTO_OVPN = file => `https://raw.githubusercontent.com/9xN/auto-ovpn/main/configs/${file}`;
+
+export const OPENVPN_RAW_PROFILE_SOURCES = [
+  AUTO_OVPN('server_0_JP.ovpn'),
+  AUTO_OVPN('server_48_US.ovpn'),
+  AUTO_OVPN('server_20_GB.ovpn'),
+  AUTO_OVPN('server_12_KR.ovpn'),
+  AUTO_OVPN('server_40_TH.ovpn'),
+  AUTO_OVPN('server_63_FR.ovpn'),
+  AUTO_OVPN('server_66_BR.ovpn'),
+  AUTO_OVPN('server_71_RU.ovpn'),
+  AUTO_OVPN('server_29_RO.ovpn'),
+  AUTO_OVPN('server_23_TH.ovpn'),
+  AUTO_OVPN('server_93_RU.ovpn'),
+  AUTO_OVPN('server_59_KR.ovpn')
+];
+
+export const OPENVPN_CSV_SOURCES = [
+  'https://www.vpngate.net/api/iphone/'
+];
+
+// نام قدیمی برای سازگاری
+export const OPENVPN_PROFILE_SOURCES = OPENVPN_RAW_PROFILE_SOURCES;
+
+// کاربر/رمز عمومی سرورهای VPNGate
+export const OPENVPN_PUBLIC_USER = 'vpn';
+export const OPENVPN_PUBLIC_PASS = 'vpn';

@@ -34,6 +34,7 @@ function stripLocalImportsAndExports(code, isEntryPoint = false) {
   const lines = code.split('\n');
   const out = [];
   let skipMultiLineImport = false;
+  let skipExportBlock = false;
 
   for (let line of lines) {
     const trimmed = line.trim();
@@ -42,6 +43,20 @@ function stripLocalImportsAndExports(code, isEntryPoint = false) {
       if (trimmed.includes('from ') && (trimmed.endsWith(';') || trimmed.endsWith("'") || trimmed.endsWith('"'))) {
         skipMultiLineImport = false;
       }
+      continue;
+    }
+
+    // بلوک‌های «export { ... }» و «export * from ...» باید کامل حذف شوند؛
+    // در غیر این صورت runtime کلادفلر به‌خاطر نام‌های غیرتابعی در namespace ماژول، ورکر را بالا نمی‌آورد.
+    if (skipExportBlock) {
+      if (trimmed.includes('}')) skipExportBlock = false;
+      continue;
+    }
+    if (/^export\s*\{/.test(trimmed)) {
+      if (!trimmed.includes('}')) skipExportBlock = true;
+      continue;
+    }
+    if (/^export\s+\*/.test(trimmed)) {
       continue;
     }
 

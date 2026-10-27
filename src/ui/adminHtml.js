@@ -884,6 +884,62 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
           </div>
 
+          <div class="group-title" style="margin-top: 22px;">${icon('bolt')} <span data-i18n="settings.extra">دامنهٔ پنل، WARP و OpenVPN</span></div>
+          <div class="form-grid">
+            <div class="switch-row">
+              <div class="switch-meta">${icon('globe')}<div><b>نود دامنهٔ پنل</b><span>آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)</span></div></div>
+              <label class="switch"><input type="checkbox" data-key="pd"><i></i></label>
+            </div>
+            <div class="switch-row">
+              <div class="switch-meta">${icon('shield')}<div><b>WARP</b><span>نود WireGuard با ثبت‌نام واقعی کلادفلر</span></div></div>
+              <label class="switch"><input type="checkbox" data-key="warp"><i></i></label>
+            </div>
+            <div class="switch-row">
+              <div class="switch-meta">${icon('bolt')}<div><b>WARP PRO</b><span>نیازمند لایسنس WARP+ برای حساب ثبت‌شده</span></div></div>
+              <label class="switch"><input type="checkbox" data-key="warpPro"><i></i></label>
+            </div>
+            <div class="switch-row">
+              <div class="switch-meta">${icon('branch')}<div><b>WARP چندلوکیشن</b><span>چند نود با نقاط پایانی متفاوت کلادفلر</span></div></div>
+              <label class="switch"><input type="checkbox" data-key="warpMl"><i></i></label>
+            </div>
+            <div class="switch-row">
+              <div class="switch-meta">${icon('lock')}<div><b>OpenVPN</b><span>پروفایل‌های زندهٔ VPNGate (چندکشوری)</span></div></div>
+              <label class="switch"><input type="checkbox" data-key="ovpn"><i></i></label>
+            </div>
+            <div class="field">
+              <label>تعداد نود دامنهٔ پنل</label>
+              <input type="number" data-key="pdCount" min="0" max="20" step="1" placeholder="2">
+            </div>
+            <div class="field">
+              <label>تعداد نود WARP چندلوکیشن</label>
+              <input type="number" data-key="warpCount" min="1" max="30" step="1" placeholder="6">
+            </div>
+            <div class="field">
+              <label>لایسنس WARP+ (برای WARP PRO)</label>
+              <input type="text" data-key="warpLicense" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx">
+              <span class="hint">لایسنس روی حساب ثبت‌شده اعمال می‌شود؛ بدون آن نود با برچسب «بدون لایسنس» ساخته می‌شود.</span>
+            </div>
+            <div class="field">
+              <label>نقاط پایانی WARP سفارشی</label>
+              <input type="text" data-key="warpEndpoint" placeholder="162.159.192.1:2408#DE,188.114.97.1:500#TR">
+              <span class="hint">خالی بگذارید تا نقاط پایانی رسمی کلادفلر به‌صورت چرخشی استفاده شوند. برچسب هر آی‌پی نام لوکیشن نود می‌شود.</span>
+            </div>
+            <div class="field">
+              <label>تعداد نود OpenVPN</label>
+              <input type="number" data-key="ovpnCount" min="0" max="12" step="1" placeholder="4">
+            </div>
+            <div class="field">
+              <label>کشورهای OpenVPN</label>
+              <input type="text" data-key="ovpnCountries" placeholder="JP,KR,US">
+              <span class="hint">کد کشورها با کاما (مثلاً JP,KR,US). خالی = انتخاب خودکار از کشورهای مختلف.</span>
+            </div>
+            <div class="field">
+              <label>منبع سفارشی OpenVPN</label>
+              <input type="text" data-key="ovpnSource" placeholder="https://raw.githubusercontent.com/.../server_0_JP.ovpn">
+              <span class="hint">آدرس یک یا چند فایل ‎.ovpn‎ با کاما. خالی = منابع پیش‌فرض گیت‌هاب.</span>
+            </div>
+          </div>
+
           <div class="group-title" style="margin-top: 22px;">${icon('shield')} <span data-i18n="settings.panel">پنل و امنیت</span></div>
           <div class="form-grid">
             <div class="field">
@@ -1298,16 +1354,17 @@ export function renderAdminDashboardHtml(initialData = {}) {
   function detectConflicts(c) {
     var out = [];
     if (c.es === 'yes' && c.frag === 'yes') out.push('Shadowsocks از فرگمنت پشتیبانی نمی‌کند؛ نودهای SS بدون fragment ساخته می‌شوند (مجاز است).');
-    if (c.ech === 'yes' && !/^https:\/\//i.test(String(c.customDNS || ''))) out.push('ECH به یک DNS از نوع DoH (https://) نیاز دارد.');
+    if (c.ech === 'yes' && !/^https:\\/\\//i.test(String(c.customDNS || ''))) out.push('ECH به یک DNS از نوع DoH (https://) نیاز دارد.');
     if (c.ech === 'yes' && c.dkby === 'no') out.push('با فعال بودن ECH، پورت‌های HTTP خودکار حذف می‌شوند.');
     if (c.frag === 'yes' && (!c.fragmentPreset || c.fragmentPreset === 'off')) out.push('فرگمنت روشن است اما پریست روی «غیرفعال» است؛ پارامتری ساخته نمی‌شود.');
     if (c.epi === 'no' && c.epd === 'no' && !String(c.yx || '').trim()) out.push('همه منابع آدرس خاموش‌اند؛ سابلینک فقط از هاست ورکر ساخته می‌شود.');
     if (c.ev === 'no' && c.et === 'no' && c.ex === 'no' && c.es === 'no') out.push('هیچ پروتکلی روشن نیست؛ هسته به‌ناچار VLESS را فعال می‌کند.');
-    if (String(c.s || '').trim() && !/^(socks5?|https?):\/\//i.test(String(c.s).trim())) out.push('آدرس پروکسی خروجی (s) باید با socks5:// یا http:// شروع شود.');
+    if (String(c.s || '').trim() && !/^(socks5?|https?):\\/\\//i.test(String(c.s).trim())) out.push('آدرس پروکسی خروجی (s) باید با socks5:// یا http:// شروع شود.');
     if (c.yxURL && c.egi === 'no') out.push('آدرس yxURL وارد شده اما لیست آی‌پی خارجی (EGI) خاموش است.');
-    var ports = String(c.ports || '').split(/[,\s]+/).filter(Boolean).map(Number).filter(function(p) { return p >= 1 && p <= 65535; });
+    var ports = String(c.ports || '').split(/[,\\s]+/).filter(Boolean).map(Number).filter(function(p) { return p >= 1 && p <= 65535; });
     if (!ports.length) out.push('لیست پورت‌های نود خالی/نامعتبر است؛ از 443 استفاده می‌شود.');
     if (c.ipRotation && c.ipRotation !== 'off' && !String(c.yx || '').trim()) out.push('چرخش آی‌پی فعال است اما لیست yx خالی است.');
+    if (c.warpPro === 'yes' && !String(c.warpLicense || '').trim()) out.push('WARP PRO روشن است اما لایسنس WARP+ وارد نشده؛ نود با برچسب «بدون لایسنس» ساخته می‌شود.');
     return out;
   }
   function renderWarnings(list) {
@@ -1329,7 +1386,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     });
     var warnings = detectConflicts(payload);
     renderWarnings(warnings);
-    if (warnings.length && !confirm(t('warn.title') + '\n\n' + warnings.map(function(w, i) { return (i + 1) + '. ' + w; }).join('\n') + '\n\nادامه می‌دهید؟')) return;
+    if (warnings.length && !confirm(t('warn.title') + '\\n\\n' + warnings.map(function(w, i) { return (i + 1) + '. ' + w; }).join('\\n') + '\\n\\nادامه می‌دهید؟')) return;
     var btn = document.querySelector('[data-act="save-config"]');
     if (btn) btn.disabled = true;
     api('/api/config', { method: 'POST', body: JSON.stringify(payload) })
@@ -1557,8 +1614,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
       .then(function(text) {
         var nodes = [];
         var seen = {};
-        String(text || '').split(/\r?\n/).forEach(function(line) {
-          var match = line.match(/@\[?([0-9a-fA-F:.]+)\]?:(\d+)/);
+        String(text || '').split(/\\r?\\n/).forEach(function(line) {
+          var match = line.match(/@\\[?([0-9a-fA-F:.]+)\\]?:(\\d+)/);
           if (!match) return;
           var host = match[1];
           var port = parseInt(match[2], 10) || 443;

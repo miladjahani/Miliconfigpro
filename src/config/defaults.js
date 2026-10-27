@@ -10,7 +10,20 @@ import {
   GLOBAL_SOCKS5_SOURCES,
   IP_CANDIDATE_SOURCES,
   IP_RANGE_SOURCES,
-  RESIDENTIAL_SOURCES
+  OPENVPN_CSV_SOURCES,
+  OPENVPN_PROFILE_SOURCES,
+  OPENVPN_PUBLIC_PASS,
+  OPENVPN_PUBLIC_USER,
+  OPENVPN_RAW_PROFILE_SOURCES,
+  RESIDENTIAL_SOURCES,
+  WARP_CLIENT_VERSION,
+  WARP_DEFAULT_ADDRESS,
+  WARP_DEFAULT_HOST,
+  WARP_DEFAULT_PORT,
+  WARP_ENDPOINT_IPS,
+  WARP_ENDPOINT_PORTS,
+  WARP_PEER_PUBLIC_KEY,
+  WARP_REGISTRATION_URL
 } from './sources.js';
 
 export const BRAND_NAME = 'miliconfig';
@@ -77,12 +90,28 @@ export const CONFIG_DEFAULTS = {
   frag: 'yes', // کلید روشن/خاموش فرگمنت (شادوساکس فرگمنت ندارد)
   ports: '443,2053,2087,8443', // پورت‌های نودهای ساب‌لینک (لیست جداشده با کاما)
   adminPasswordHash: '', // هش رمز عبور مدیر
-  supportChannel: TELEGRAM_SUPPORT
+  supportChannel: TELEGRAM_SUPPORT,
+  // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
+  pd: 'yes',
+  pdCount: 2,
+  // — WARP / WARP PRO / WARP چندلوکیشن
+  warp: 'yes',
+  warpPro: 'no',
+  warpMl: 'yes',
+  warpCount: 6,
+  warpLicense: '', // لایسنس WARP+ برای نود WARP PRO
+  warpEndpoint: '', // لیست سفارشی نقاط پایانی: ip:port#برچسب,ip2:port2#برچسب (خالی = نقاط پایانی رسمی کلادفلر)
+  // — OpenVPN (پروفایل‌های عمومی زنده از VPNGate)
+  ovpn: 'yes',
+  ovpnCount: 4,
+  ovpnCountries: '',
+  ovpnSource: '' // آدرس‌های سفارشی ‎.ovpn‎ (کاما) — خالی = منابع پیش‌فرض
 };
 
 export const BOOLEAN_CONFIG_KEYS = [
   'ev', 'et', 'ex', 'es', 'ech', 'ena', 'epd', 'epi', 'egi',
-  'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag'
+  'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag',
+  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn'
 ];
 
 export const ENV_KEY_MAPPING = {
@@ -127,7 +156,19 @@ export const ENV_KEY_MAPPING = {
   frag: ['frag', 'FRAG', 'FRAGMENT_ENABLED'],
   ports: ['ports', 'PORTS', 'NODE_PORTS'],
   ipRotation: ['ipRotation', 'IP_ROTATION', 'ROTATION_MINUTES'],
-  locationNodeCount: ['locationNodeCount', 'LOCATION_NODE_COUNT']
+  locationNodeCount: ['locationNodeCount', 'LOCATION_NODE_COUNT'],
+  pd: ['pd', 'PD', 'PANEL_DOMAIN_NODES'],
+  pdCount: ['pdCount', 'PDCOUNT', 'PANEL_DOMAIN_NODE_COUNT'],
+  warp: ['warp', 'WARP'],
+  warpPro: ['warpPro', 'WARPPRO', 'WARP_PRO'],
+  warpMl: ['warpMl', 'WARPML', 'WARP_MULTI_LOCATION'],
+  warpCount: ['warpCount', 'WARPCOUNT', 'WARP_NODE_COUNT'],
+  warpLicense: ['warpLicense', 'WARPLICENSE', 'WARP_LICENSE'],
+  warpEndpoint: ['warpEndpoint', 'WARPENDPOINT', 'WARP_ENDPOINT'],
+  ovpn: ['ovpn', 'OVPN', 'OPENVPN'],
+  ovpnCount: ['ovpnCount', 'OVPNCOUNT', 'OPENVPN_NODE_COUNT'],
+  ovpnCountries: ['ovpnCountries', 'OVPNCOUNTRIES', 'OPENVPN_COUNTRIES'],
+  ovpnSource: ['ovpnSource', 'OVPNSOURCE', 'OPENVPN_SOURCE']
 };
 
 export const FRAGMENT_PRESETS = {
@@ -385,7 +426,23 @@ export const GLOBAL_PROXY_SOURCES = {
   residential: RESIDENTIAL_SOURCES
 };
 
-export { IP_CANDIDATE_SOURCES, IP_RANGE_SOURCES };
+export {
+  IP_CANDIDATE_SOURCES,
+  IP_RANGE_SOURCES,
+  OPENVPN_CSV_SOURCES,
+  OPENVPN_PROFILE_SOURCES,
+  OPENVPN_PUBLIC_PASS,
+  OPENVPN_PUBLIC_USER,
+  OPENVPN_RAW_PROFILE_SOURCES,
+  WARP_CLIENT_VERSION,
+  WARP_DEFAULT_ADDRESS,
+  WARP_DEFAULT_HOST,
+  WARP_DEFAULT_PORT,
+  WARP_ENDPOINT_IPS,
+  WARP_ENDPOINT_PORTS,
+  WARP_PEER_PUBLIC_KEY,
+  WARP_REGISTRATION_URL
+};
 
 export const REGION_MAP = {
   CF: ['🌐 مستقیم رسمی CF', 'CF', 'Cloudflare Direct'],
@@ -543,6 +600,18 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   snap.fp = snap.fp || 'chrome';
   snap.patt = snap.patt || '/?ed=2048';
   snap.ports = parseNodePorts(snap.ports).join(',');
+  const clampInt = (val, min, max, dflt) => {
+    const n = parseInt(val, 10);
+    if (!Number.isFinite(n)) return dflt;
+    return Math.min(max, Math.max(min, n));
+  };
+  snap.pdCount = clampInt(snap.pdCount, 0, 20, 2);
+  snap.warpCount = clampInt(snap.warpCount, 1, 30, 6);
+  snap.ovpnCount = clampInt(snap.ovpnCount, 0, 12, 4);
+  snap.warpLicense = String(snap.warpLicense || '').trim();
+  snap.warpEndpoint = String(snap.warpEndpoint || '').trim();
+  snap.ovpnCountries = String(snap.ovpnCountries || '').trim().toUpperCase();
+  snap.ovpnSource = String(snap.ovpnSource || '').trim();
   snap.supportChannel = TELEGRAM_SUPPORT;
   snap.brand = BRAND_NAME;
   return snap;

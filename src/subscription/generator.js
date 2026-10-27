@@ -15,6 +15,19 @@ import {
   HARDCODED_INFO_NODES,
   OFFICIAL_DIRECT_IPS,
   OFFICIAL_DIRECT_IPV6,
+  OPENVPN_CSV_SOURCES,
+  OPENVPN_PROFILE_SOURCES,
+  OPENVPN_PUBLIC_PASS,
+  OPENVPN_RAW_PROFILE_SOURCES,
+  OPENVPN_PUBLIC_USER,
+  WARP_DEFAULT_ADDRESS,
+  WARP_DEFAULT_HOST,
+  WARP_DEFAULT_PORT,
+  WARP_ENDPOINT_IPS,
+  WARP_ENDPOINT_PORTS,
+  WARP_PEER_PUBLIC_KEY,
+  WARP_REGISTRATION_URL,
+  WARP_CLIENT_VERSION,
   isEnabledValue,
   normalizeAlpn,
   normalizeEffectiveConfig,
@@ -22,6 +35,7 @@ import {
 } from '../config/defaults.js';
 import {
   createMiliNodeNamer,
+  decodeBase64Utf8,
   encodeBase64Utf8,
   finalizeMiliSubscriptionLinks,
   isValidDomain,
@@ -663,6 +677,480 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
   return links;
 }
 
+// ============================================================================
+// نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
+// ============================================================================
+export function buildPanelDomainNodes(workerHost, cfg = {}) {
+  const host = normalizeNodeHost(workerHost);
+  if (!host) return [];
+  const count = Math.max(1, Math.min(parseInt(cfg.pdCount, 10) || 2, 20));
+  return Array.from({ length: count }, () => ({ ip: host, port: 443, isp: 'Panel' }));
+}
+
+// ============================================================================
+// WARP / WARP PRO / WARP چندلوکیشن — تولید کانفیگ واقعی WireGuard
+// خروجی سازگار با v2rayN / Hiddify / NekoBox (قالب wireguard://) و Mihomo/sing-box
+// ============================================================================
+
+const X25519_P = (1n << 255n) - 19n;
+const X25519_A24 = 121665n;
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToBytes(b64) {
+  let clean = String(b64 || '').trim().replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+  while (clean.length % 4 !== 0) clean += '=';
+  try {
+    const bin = atob(clean);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch (_e) {
+    return new Uint8Array(0);
+  }
+}
+
+// بستن اسکالر کلید خصوصی طبق RFC 7748 (همان کلمپی که WireGuard انجام می‌دهد)
+function clampScalar(raw) {
+  const key = Uint8Array.from(raw);
+  key[0] &= 248;
+  key[31] &= 127;
+  key[31] |= 64;
+  return key;
+}
+
+// ضرب اسکالر منحنی Curve25519 روی نقطه پایه (X25519) — کلید عمومی از کلید خصوصی
+function x25519PublicKey(privateKeyBytes) {
+  let k = 0n;
+  for (let i = 31; i >= 0; i--) k = (k << 8n) | BigInt(privateKeyBytes[i]);
+  const inv = a => {
+    let result = 1n;
+    let base = a % X25519_P;
+    let exp = X25519_P - 2n;
+    while (exp > 0n) {
+      if (exp & 1n) result = (result * base) % X25519_P;
+      base = (base * base) % X25519_P;
+      exp >>= 1n;
+    }
+    return result;
+  };
+  const x1 = 9n;
+  let x2 = 1n;
+  let z2 = 0n;
+  let x3 = 9n;
+  let z3 = 1n;
+  let swap = 0n;
+  for (let t = 254; t >= 0; t--) {
+    const bit = (k >> BigInt(t)) & 1n;
+    swap ^= bit;
+    if (swap === 1n) {
+      [x2, x3] = [x3, x2];
+      [z2, z3] = [z3, z2];
+    }
+    swap = bit;
+    const a = (x2 + z2) % X25519_P;
+    const aa = (a * a) % X25519_P;
+    const b = (x2 - z2 + X25519_P) % X25519_P;
+    const bb = (b * b) % X25519_P;
+    const e = (aa - bb + X25519_P) % X25519_P;
+    const c = (x3 + z3) % X25519_P;
+    const d = (x3 - z3 + X25519_P) % X25519_P;
+    const da = (d * a) % X25519_P;
+    const cb = (c * b) % X25519_P;
+    const daCb = (da + cb) % X25519_P;
+    const daCbNeg = (da - cb + X25519_P) % X25519_P;
+    x3 = (daCb * daCb) % X25519_P;
+    z3 = (x1 * ((daCbNeg * daCbNeg) % X25519_P)) % X25519_P;
+    x2 = (aa * bb) % X25519_P;
+    z2 = (e * ((aa + X25519_A24 * e) % X25519_P)) % X25519_P;
+  }
+  if (swap === 1n) {
+    [x2, x3] = [x3, x2];
+    [z2, z3] = [z3, z2];
+  }
+  const value = (x2 * inv(z2)) % X25519_P;
+  const out = new Uint8Array(32);
+  let rest = value;
+  for (let i = 0; i < 32; i++) {
+    out[i] = Number(rest & 255n);
+    rest >>= 8n;
+  }
+  return out;
+}
+
+export function generateWireGuardIdentity() {
+  const raw = new Uint8Array(32);
+  crypto.getRandomValues(raw);
+  const privateKeyBytes = clampScalar(raw);
+  return {
+    privateKey: bytesToBase64(privateKeyBytes),
+    publicKey: bytesToBase64(x25519PublicKey(privateKeyBytes))
+  };
+}
+
+// کش ثبت‌نام WARP در حافظهٔ ایزوله؛ از ثبت‌نام مجدد در هر درخواست ساب‌لینک جلوگیری می‌کند
+let warpRegCache = { key: '', at: 0, data: null };
+const WARP_REG_CACHE_TTL = 6 * 60 * 60 * 1000;
+
+async function applyWarpLicense(deviceId, license) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const resp = await fetch(`${WARP_REGISTRATION_URL}/${deviceId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Client-Version': WARP_CLIENT_VERSION,
+        'User-Agent': 'okhttp/3.12.1'
+      },
+      body: JSON.stringify({ license, warp_enabled: true }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch (_e) {
+    return null;
+  }
+}
+
+// ثبت‌نام دستگاه رایگان WARP برای دریافت reserved/آدرس تونل/کلید همتا (و ارتقای لایسنس در حالت PRO)
+export async function fetchWarpRegistration(cfg = {}, force = false) {
+  const license = String(cfg.warpLicense || '').trim();
+  const cacheKey = license ? `lic:${license}` : 'free';
+  if (!force && warpRegCache.data && warpRegCache.key === cacheKey && Date.now() - warpRegCache.at < WARP_REG_CACHE_TTL) {
+    return warpRegCache.data;
+  }
+  try {
+    const identity = generateWireGuardIdentity();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const resp = await fetch(WARP_REGISTRATION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Client-Version': WARP_CLIENT_VERSION,
+        'User-Agent': 'okhttp/3.12.1'
+      },
+      body: JSON.stringify({
+        key: identity.publicKey,
+        install_id: '',
+        fcm_token: '',
+        tos: new Date().toISOString(),
+        model: 'PC',
+        serial_number: '',
+        locale: 'en_US'
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) return null;
+    let device = await resp.json();
+    if (license && device?.id) {
+      const upgraded = await applyWarpLicense(device.id, license);
+      if (upgraded && upgraded.config) device = upgraded;
+    }
+    const peer = device?.config?.peers?.[0] || {};
+    const endpointHostRaw = String(peer?.endpoint?.host || `${WARP_DEFAULT_HOST}:${WARP_DEFAULT_PORT}`);
+    const [endpointHost, endpointPortRaw] = endpointHostRaw.split(':');
+    const clientIdBytes = base64ToBytes(device?.config?.client_id || '');
+    const data = {
+      privateKey: identity.privateKey,
+      publicKey: peer.public_key || WARP_PEER_PUBLIC_KEY,
+      reserved: clientIdBytes.length >= 3 ? [...clientIdBytes.slice(0, 3)] : [0, 0, 0],
+      address4: device?.config?.interface?.addresses?.v4 || WARP_DEFAULT_ADDRESS,
+      address6: device?.config?.interface?.addresses?.v6 || '',
+      server: endpointHost || WARP_DEFAULT_HOST,
+      port: parseInt(endpointPortRaw, 10) || WARP_DEFAULT_PORT,
+      license: device?.account?.license || '',
+      registered: true
+    };
+    warpRegCache = { key: cacheKey, at: Date.now(), data };
+    return data;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// پیکربندی پشتیبان وقتی سرویس ثبت‌نام در دسترس نیست (کلیدهای شناخته‌شدهٔ WARP)
+export function buildFallbackWarpConfig() {
+  const identity = generateWireGuardIdentity();
+  return {
+    privateKey: identity.privateKey,
+    publicKey: WARP_PEER_PUBLIC_KEY,
+    reserved: [0, 0, 0],
+    address4: WARP_DEFAULT_ADDRESS,
+    address6: '',
+    server: WARP_DEFAULT_HOST,
+    port: WARP_DEFAULT_PORT,
+    license: '',
+    registered: false
+  };
+}
+
+// لیست نقاط پایانی: مقدار دستی پنل (ip:port#برچسب) یا رنج‌های رسمی WARP
+function parseWarpEndpointList(raw, count) {
+  const manual = String(raw || '')
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+  if (manual.length) {
+    return manual.map(item => {
+      const [addrPart, labelPart] = item.split('#');
+      const clean = String(addrPart || '').trim();
+      const bracketed = clean.match(/^\[([^\]]+)\](?::(\d+))?$/);
+      const plain = clean.match(/^([^:]+)(?::(\d+))?$/);
+      const host = bracketed ? bracketed[1] : (plain ? plain[1] : clean);
+      const port = parseInt((bracketed ? bracketed[2] : plain?.[2]) || String(WARP_DEFAULT_PORT), 10);
+      return { host, port, label: String(labelPart || '').trim() };
+    }).filter(x => x.host);
+  }
+  const wanted = Math.max(1, Math.min(parseInt(count, 10) || 6, 30));
+  const bucket = Math.floor(Date.now() / (10 * 60 * 1000));
+  const out = [];
+  for (let i = 0; i < wanted; i++) {
+    const host = WARP_ENDPOINT_IPS[(bucket + i) % WARP_ENDPOINT_IPS.length];
+    const port = WARP_ENDPOINT_PORTS[(bucket + i) % WARP_ENDPOINT_PORTS.length];
+    out.push({ host, port, label: '' });
+  }
+  return out;
+}
+
+// قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify)
+export function buildWireguardLink(config = {}, name = 'WARP') {
+  const host = String(config.server || WARP_DEFAULT_HOST);
+  const endpoint = host.includes(':') ? `[${host}]` : host;
+  const params = new URLSearchParams();
+  params.set('publickey', config.publicKey || WARP_PEER_PUBLIC_KEY);
+  params.set('reserved', (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(','));
+  params.set('address', `${config.address4 || WARP_DEFAULT_ADDRESS}/32`);
+  params.set('mtu', '1280');
+  params.set('dns', '1.1.1.1, 1.0.0.1');
+  const userInfo = encodeURIComponent(String(config.privateKey || ''));
+  return `wireguard://${userInfo}@${endpoint}:${config.port || WARP_DEFAULT_PORT}?${params.toString()}#${encodeURIComponent(name)}`;
+}
+
+// خانوادهٔ WARP: یک نود WARP، یک نود WARP PRO (با لایسنس) و N نود چندلوکیشن
+export async function buildWarpFamilyLinks(cfg = {}) {
+  const links = [];
+  const wantWarp = isEnabledValue(cfg.warp, true);
+  const wantPro = isEnabledValue(cfg.warpPro, false);
+  const wantMl = isEnabledValue(cfg.warpMl, true);
+  if (!wantWarp && !wantPro && !wantMl) return links;
+
+  const registered = await fetchWarpRegistration(cfg);
+  const base = registered || buildFallbackWarpConfig();
+
+  if (wantWarp) {
+    links.push(buildWireguardLink(base, 'WARP'));
+  }
+  if (wantPro) {
+    const licensed = String(cfg.warpLicense || '').trim();
+    links.push(buildWireguardLink(base, licensed ? 'WARP PRO' : 'WARP PRO (بدون لایسنس)'));
+  }
+  if (wantMl) {
+    const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
+    endpoints.forEach((endpoint, idx) => {
+      const suffix = endpoint.label ? ` ${endpoint.label}` : '';
+      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, `WARP-ML-${idx + 1}${suffix}`));
+    });
+  }
+  return links;
+}
+
+// ============================================================================
+// OpenVPN — پروفایل‌های رایگان و زنده (VPNGate) با پشتیبانی چندکشوری
+// ============================================================================
+
+let openVpnCache = { at: 0, items: [] };
+const OPENVPN_CACHE_TTL = 30 * 60 * 1000;
+const OPENVPN_ROTATE_MS = 30 * 60 * 1000;
+const OPENVPN_MAX_CHARS = 320000; // برش امن برای جلوگیری از دریافت کل فایل ۱.۳ مگابایتی
+
+function extractOvpnDirective(text, name) {
+  const match = String(text || '').match(new RegExp(`^\\s*${name}\\s+(.+)$`, 'mi'));
+  return match ? match[1].trim() : '';
+}
+
+function extractOvpnBlock(text, tag) {
+  const match = String(text || '').match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'));
+  return match ? match[1].trim() : '';
+}
+
+async function readLimitedText(response, maxChars) {
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const full = await response.text();
+    return full.slice(0, maxChars);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    while (text.length < maxChars) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } catch (_e) {
+    // اگر برش خورد، همان مقدار خوانده‌شده کافی است
+  }
+  try { await reader.cancel(); } catch (_e) {}
+  return text;
+}
+
+// تبدیل متن یک پروفایل ‎.ovpn‎ خام به نود قابل استفاده در Clash / خروجی ‎.ovpn‎
+export function parseOvpnProfileText(profileText, meta = {}) {
+  const profile = String(profileText || '').replace(/\r\n/g, '\n');
+  if (!profile.includes('remote ')) return null;
+  const remote = extractOvpnDirective(profile, 'remote').split(/\s+/);
+  const server = remote[0];
+  if (!server) return null;
+  const ca = extractOvpnBlock(profile, 'ca');
+  if (!ca) return null;
+  const cc = String(meta.country || '').trim().toUpperCase();
+  const proto = (extractOvpnDirective(profile, 'proto') || 'udp').toLowerCase();
+  return {
+    name: meta.name || `OpenVPN-${cc || 'ML'}-${(parseInt(meta.index, 10) || 0) + 1}`,
+    country: cc,
+    server,
+    port: parseInt(remote[1], 10) || 1194,
+    proto: proto.startsWith('tcp') ? 'tcp' : 'udp',
+    cipher: extractOvpnDirective(profile, 'cipher') || 'AES-128-CBC',
+    auth: extractOvpnDirective(profile, 'auth') || 'SHA1',
+    ca,
+    cert: extractOvpnBlock(profile, 'cert'),
+    key: extractOvpnBlock(profile, 'key'),
+    tlsAuth: extractOvpnBlock(profile, 'tls-auth') || extractOvpnBlock(profile, 'tls-crypt'),
+    keyDirection: extractOvpnDirective(profile, 'key-direction') || '1',
+    username: OPENVPN_PUBLIC_USER,
+    password: OPENVPN_PUBLIC_PASS,
+    profile
+  };
+}
+
+// تبدیل خطوط CSV منبع VPNGate به نودهای OpenVPN
+export function parseOpenVpnList(raw, cfg = {}) {
+  if (!isEnabledValue(cfg.ovpn, true)) return [];
+  const limit = Math.max(0, Math.min(parseInt(cfg.ovpnCount, 10) || 4, 12));
+  if (limit === 0) return [];
+  const countryFilter = String(cfg.ovpnCountries || '')
+    .split(',')
+    .map(x => x.trim().toUpperCase())
+    .filter(Boolean);
+  const seenCountries = new Set();
+  const items = [];
+  for (const line of String(raw || '').split(/\r?\n/)) {
+    if (!line || line.startsWith('*') || line.startsWith('#')) continue;
+    const cols = line.split(',');
+    if (cols.length < 15) continue;
+    const cc = String(cols[6] || '').trim().toUpperCase();
+    const profileB64 = String(cols[cols.length - 1] || '').trim();
+    if (!profileB64) continue;
+    if (countryFilter.length && !countryFilter.includes(cc)) continue;
+    // در حالت آزاد از هر کشور فقط یک سرور انتخاب می‌شود تا ساب‌لینک چندلوکیشن بماند
+    if (!countryFilter.length && seenCountries.has(cc)) continue;
+    const node = parseOvpnProfileText(decodeBase64Utf8(profileB64), { country: cc, index: items.length });
+    if (!node) continue;
+    items.push(node);
+    seenCountries.add(cc);
+    if (items.length >= limit) break;
+  }
+  return items;
+}
+
+function isOvpnCsv(text) {
+  const head = String(text || '').slice(0, 400);
+  return head.includes('OpenVPN_ConfigData_Base64') || head.startsWith('*vpn_servers') || head.includes('#HostName,IP,');
+}
+
+// انتخاب منابع: لیست سفارشی مدیر (ovpnSource) یا فایل‌های ‎.ovpn‎ مخزن گیت‌هاب، با چرخش دوره‌ای
+function pickOpenVpnSources(cfg = {}, limit = 4) {
+  const custom = String(cfg.ovpnSource || '')
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+  const pool = custom.length ? custom : OPENVPN_RAW_PROFILE_SOURCES;
+  const countryFilter = String(cfg.ovpnCountries || '')
+    .split(',')
+    .map(x => x.trim().toUpperCase())
+    .filter(Boolean);
+  const withCountry = pool.map(url => {
+    const match = String(url).match(/_([A-Za-z]{2})\.ovpn(?:[?#]|$)/);
+    return { url, country: match ? match[1].toUpperCase() : '' };
+  });
+  const filtered = countryFilter.length
+    ? withCountry.filter(item => !item.country || countryFilter.includes(item.country))
+    : withCountry;
+  if (!filtered.length) return [];
+  const bucket = Math.floor(Date.now() / OPENVPN_ROTATE_MS);
+  const shift = bucket % filtered.length;
+  const rotated = [...filtered.slice(shift), ...filtered.slice(0, shift)];
+  return rotated.slice(0, Math.max(1, limit));
+}
+
+export async function fetchOpenVpnNodes(cfg = {}, force = false) {
+  if (!isEnabledValue(cfg.ovpn, true)) return [];
+  if (!force && openVpnCache.items.length && Date.now() - openVpnCache.at < OPENVPN_CACHE_TTL) {
+    return openVpnCache.items;
+  }
+  const limit = Math.max(0, Math.min(parseInt(cfg.ovpnCount, 10) || 4, 12));
+  if (limit === 0) return [];
+
+  const fetchProfile = async (source, index) => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      const resp = await fetch(source.url, {
+        headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/plain' },
+        signal: controller.signal
+      });
+      if (!resp.ok) return [];
+      const text = await readLimitedText(resp, OPENVPN_MAX_CHARS);
+      clearTimeout(timer);
+      if (isOvpnCsv(text)) return parseOpenVpnList(text, cfg);
+      const node = parseOvpnProfileText(text, { country: source.country, index });
+      return node ? [node] : [];
+    } catch (_e) {
+      return [];
+    }
+  };
+
+  const sources = pickOpenVpnSources(cfg, limit);
+  const collected = [];
+  const results = await Promise.allSettled(sources.map(fetchProfile));
+  for (const result of results) {
+    if (result.status === 'fulfilled' && Array.isArray(result.value)) collected.push(...result.value);
+  }
+
+  // پشتیبان: لیست CSV ونگیت (در برخی شبکه‌های خروجی کلودفلر در دسترس نیست)
+  if (!collected.length) {
+    for (const url of OPENVPN_CSV_SOURCES) {
+      const nodes = await fetchProfile({ url, country: '' }, 0);
+      if (nodes.length) {
+        collected.push(...nodes);
+        break;
+      }
+    }
+  }
+
+  const seen = new Set();
+  const items = [];
+  for (const node of collected) {
+    const key = `${node.server}:${node.port}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(node);
+    if (items.length >= limit) break;
+  }
+
+  if (items.length) openVpnCache = { at: Date.now(), items };
+  return items;
+}
+
 // تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری دقیق number+miliconfig و رعایت سقف تعداد نود در ساب
 export async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
@@ -725,6 +1213,12 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
 
   if (enableNative && nodeScope !== 'edge') {
     appendFromSource([{ ip: workerHost, isp: 'Origin' }]);
+  }
+
+  // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
+  if (isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
+    const panelDomainNodes = buildPanelDomainNodes(workerHost, cfg);
+    if (panelDomainNodes.length) appendFromSource(panelDomainNodes);
   }
 
   const { ipList: customIps, domainList: customDomains, proxyList: customProxies } = parseCustomPreferredString(cfg.yx);
@@ -801,8 +1295,12 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // اعمال دقیق نام‌گذاری number+miliconfig و سقف تعداد نودهای ساب‌لینک کاربر
   const finalized = finalizeMiliSubscriptionLinks(rotatedLinks, subNodeCount, BRAND_NAME);
 
+  // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
+  const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
+  const warpLinks = warpAllowed ? await buildWarpFamilyLinks(cfg) : [];
+
   // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
-  return [...HARDCODED_INFO_NODES, ...finalized];
+  return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
 }
 
 // تشخیص خودکار کلاینت از User-Agent در صورت عدم ارسال پارامتر target
@@ -838,6 +1336,39 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
   }
 
   const target = detectTargetFromRequest(request, url);
+
+  // ساب‌لینک OpenVPN: پروفایل خام (قابل ایمپورت در کلاینت‌های OpenVPN)
+  if (['ovpn', 'openvpn'].includes(target)) {
+    if (!isEnabledValue(cfg.ovpn, true)) {
+      return new Response('نودهای OpenVPN در پنل مدیریت miliconfig خاموش است.', {
+        status: 403,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+      });
+    }
+    const ovpnNodes = await fetchOpenVpnNodes(cfg);
+    if (!ovpnNodes.length) {
+      return new Response('در حال حاضر پروفایل OpenVPN در دسترس نیست؛ لطفاً بعداً تلاش کنید.', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+      });
+    }
+    const first = ovpnNodes[0];
+    const body = [
+      `# miliconfig OpenVPN - ${first.country || 'ML'} (${first.server}:${first.port}/${first.proto})`,
+      `# ${ovpnNodes.length} پروفایل در این ساب‌لینک موجود است`,
+      first.profile
+    ].join('\n');
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/x-openvpn-profile; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="miliconfig-openvpn.ovpn"',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
+
   const isJkTarget = ['vg', 'jk', 'jiakuan'].includes(target);
   if (isJkTarget && cfg.jk !== 'yes') {
     return new Response('زنجیره اینترنت خانگی فعال نیست. در پنل مدیریت miliconfig گزینه «فعال‌سازی زنجیره اینترنت خانگی (jk)» را روشن کنید.', {
@@ -864,10 +1395,13 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     case 'clashr':
     case 'stash':
     case 'meta':
-    case 'clashmeta':
-      bodyContent = generateClashConfig(finalLinks, cfg);
+    case 'clashmeta': {
+      // نودهای OpenVPN (پروفایل‌های زندهٔ VPNGate) فقط در خروجی Clash/Mihomo قابل استفاده‌اند
+      const ovpnNodes = await fetchOpenVpnNodes(cfg);
+      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes });
       contentType = 'text/yaml; charset=utf-8';
       break;
+    }
     case 'vg':
     case 'jk':
     case 'jiakuan':

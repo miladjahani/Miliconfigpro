@@ -59,6 +59,29 @@ function buildIniGroupProxies(names, opts = {}) {
 
 export function parseShareLink(link) {
   try {
+    // نود WARP/WireGuard (خانوادهٔ WARP که در انتهای ساب‌لینک ساخته می‌شود)
+    if (link.startsWith('wireguard://') || link.startsWith('warp://')) {
+      const isWarp = link.startsWith('warp://');
+      const url = new URL(link);
+      const params = new URLSearchParams(url.search);
+      const reserved = (params.get('reserved') || '')
+        .split(',')
+        .map(x => parseInt(x.trim(), 10))
+        .filter(n => Number.isFinite(n));
+      return {
+        proto: 'wireguard',
+        name: decodeURIComponent(url.hash.substring(1)) || 'WARP',
+        privateKey: decodeURIComponent(url.username),
+        publicKey: params.get('publickey') || '',
+        presharedKey: params.get('presharedkey') || '',
+        reserved,
+        address: params.get('address') || '172.16.0.2/32',
+        mtu: parseInt(params.get('mtu') || '1280', 10) || 1280,
+        dns: (params.get('dns') || '').split(',').map(s => s.trim()).filter(Boolean),
+        server: normalizeHost(url.hostname),
+        port: parseInt(url.port, 10) || (isWarp ? 2408 : 2408)
+      };
+    }
     if (link.startsWith('vless://')) {
       const url = new URL(link);
       const params = new URLSearchParams(url.search);
@@ -228,7 +251,63 @@ export function parseShareLink(link) {
   return null;
 }
 
+// نود WireGuard/WARP برای Mihomo (type: wireguard)
+function buildClashWireGuardYaml(node) {
+  const lines = [];
+  lines.push(`  - name: ${quoteYaml(node.name)}`);
+  lines.push('    type: wireguard');
+  lines.push(`    server: ${quoteYaml(normalizeHost(node.server))}`);
+  lines.push(`    port: ${node.port}`);
+  lines.push(`    ip: ${quoteYaml(String(node.address || '172.16.0.2/32').split('/')[0])}`);
+  lines.push(`    private-key: ${quoteYaml(node.privateKey)}`);
+  lines.push(`    public-key: ${quoteYaml(node.publicKey)}`);
+  if (node.presharedKey) lines.push(`    pre-shared-key: ${quoteYaml(node.presharedKey)}`);
+  lines.push("    allowed-ips: ['0.0.0.0/0', '::/0']");
+  if (node.reserved && node.reserved.length) lines.push(`    reserved: [${node.reserved.join(', ')}]`);
+  lines.push(`    mtu: ${node.mtu || 1280}`);
+  lines.push('    remote-dns-resolve: true');
+  if (node.dns && node.dns.length) lines.push(`    dns: [${node.dns.map(d => quoteYaml(d)).join(', ')}]`);
+  lines.push('    udp: true');
+  return lines.join('\n');
+}
+
+// نود OpenVPN برای Mihomo (type: openvpn) از پروفایل‌های زندهٔ VPNGate
+function buildClashOpenVpnYaml(node) {
+  const lines = [];
+  lines.push(`  - name: ${quoteYaml(node.name)}`);
+  lines.push('    type: openvpn');
+  lines.push(`    server: ${quoteYaml(node.server)}`);
+  lines.push(`    port: ${node.port}`);
+  lines.push(`    proto: ${node.proto === 'tcp' ? 'tcp' : 'udp'}`);
+  lines.push(`    udp: ${node.proto === 'tcp' ? 'false' : 'true'}`);
+  if (node.username) lines.push(`    username: ${quoteYaml(node.username)}`);
+  if (node.password) lines.push(`    password: ${quoteYaml(node.password)}`);
+  if (node.cipher) lines.push(`    cipher: ${quoteYaml(node.cipher)}`);
+  if (node.auth) lines.push(`    auth: ${quoteYaml(node.auth)}`);
+  if (node.tlsAuth) {
+    lines.push(`    tls-auth: ${quoteYaml(node.tlsAuth)}`);
+    lines.push(`    key-direction: ${quoteYaml(node.keyDirection || '1')}`);
+  }
+  lines.push('    dev: tun');
+  lines.push('    remote-dns-resolve: true');
+  lines.push('    dns: [1.1.1.1, 8.8.8.8]');
+  if (node.ca) {
+    lines.push(`    ca: |`);
+    lines.push(String(node.ca).split('\n').map(l => `      ${l}`).join('\n'));
+  }
+  if (node.cert) {
+    lines.push(`    cert: |`);
+    lines.push(String(node.cert).split('\n').map(l => `      ${l}`).join('\n'));
+  }
+  if (node.key) {
+    lines.push(`    key: |`);
+    lines.push(String(node.key).split('\n').map(l => `      ${l}`).join('\n'));
+  }
+  return lines.join('\n');
+}
+
 function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
+  if (node.proto === 'wireguard') return buildClashWireGuardYaml(node);
   const lines = [];
   const srv = normalizeHost(node.server);
   const host = normalizeHost(node.host) || srv;
@@ -289,8 +368,9 @@ function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
 export function generateClashConfig(links, options = {}) {
   const customDNS = options.customDNS || 'https://223.5.5.5/dns-query';
   const customECHDomain = options.customECHDomain || 'cloudflare-ech.com';
-  const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss'));
-  const names = nodes.map(n => n.name);
+  const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss' || n.proto === 'wireguard'));
+  const ovpnNodes = Array.isArray(options.ovpnNodes) ? options.ovpnNodes : [];
+  const names = [...nodes.map(n => n.name), ...ovpnNodes.map(n => n.name)];
 
   const header = [
     '# miliconfig v3.1 - Clash / Mihomo Subscription',
@@ -357,6 +437,7 @@ export function generateClashConfig(links, options = {}) {
 
   const proxiesSection = ['proxies:'];
   for (const n of nodes) proxiesSection.push(buildClashNodeYaml(n, customECHDomain));
+  for (const n of ovpnNodes) proxiesSection.push(buildClashOpenVpnYaml(n));
 
   const nodesOnly = names.length ? names.map(n => `      - ${quoteYaml(n)}`).join('\n') : '      - DIRECT';
   const groupsSection = [
@@ -531,10 +612,25 @@ function splitDnsAddress(addr) {
 
 export function generateSingboxConfig(links, options = {}) {
   const customDNS = options.customDNS || 'https://223.5.5.5/dns-query';
-  const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss'));
+  const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss' || n.proto === 'wireguard'));
   const outboundTags = nodes.map(n => n.name);
 
   function buildOutbound(n) {
+    if (n.proto === 'wireguard') {
+      const wg = {
+        type: 'wireguard',
+        tag: n.name,
+        server: normalizeHost(n.server),
+        server_port: n.port,
+        local_address: [n.address || '172.16.0.2/32'],
+        private_key: n.privateKey,
+        peer_public_key: n.publicKey,
+        mtu: n.mtu || 1280
+      };
+      if (n.reserved && n.reserved.length) wg.reserved = n.reserved;
+      if (n.presharedKey) wg.pre_shared_key = n.presharedKey;
+      return wg;
+    }
     const out = {
       type: n.proto,
       tag: n.name,
