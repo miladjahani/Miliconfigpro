@@ -8,8 +8,9 @@
     "build": "node scripts/build.js",
     "obfuscate": "node scripts/build.js --obfuscate",
     "test": "node scripts/test-worker.js",
+    "sources:check": "node scripts/check-sources.mjs",
     "deploy:worker": "wrangler deploy",
-    "deploy:pages": "npm run build && wrangler pages deploy dist"
+    "deploy:pages": "npm run build && wrangler pages deploy dist --project-name miliconfig-v5 --branch main"
   },
   "keywords": [
     "miliconfig",

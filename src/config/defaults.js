@@ -7,7 +7,11 @@ import {
   COUNTRY_EXTRA_PROXY_SOURCES,
   COUNTRY_META,
   GLOBAL_HTTP_SOURCES,
+  GLOBAL_MIXED_SOURCES,
   GLOBAL_SOCKS5_SOURCES,
+  HIGH_YIELD_PROXY_SOURCES,
+  PROXY_FEED_REGISTRY,
+  getFeedKind,
   IP_CANDIDATE_SOURCES,
   IP_RANGE_SOURCES,
   OPENVPN_CSV_SOURCES,
@@ -257,163 +261,24 @@ export function parseNodePorts(value = '') {
   return list.length ? list : [443];
 }
 
-// لیست پروکسی‌های کشوری VIP (پایه؛ در انتها با منابع زنده اسکنر ادغام می‌شود)
-const BASE_COUNTRY_PROXY_SOURCES = {
-  'DE': {
-    name: 'آلمان',
-    flag: '🇩🇪',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/DE.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/DE/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/DE.txt'
-    ]
-  },
-  'NL': {
-    name: 'هلند',
-    flag: '🇳🇱',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/NL.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/NL/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/NL.txt'
-    ]
-  },
-  'US': {
-    name: 'ایالات متحده آمریکا',
-    flag: '🇺🇸',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/US.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/US/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/US.txt'
-    ]
-  },
-  'GB': {
-    name: 'بریتانیا / انگلستان',
-    flag: '🇬🇧',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/GB.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/GB.txt'
-    ]
-  },
-  'CA': {
-    name: 'کانادا',
-    flag: '🇨🇦',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/CA.txt'
-    ]
-  },
-  'TR': {
-    name: 'ترکیه',
-    flag: '🇹🇷',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/TR.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/TR.txt'
-    ]
-  },
-  'AE': {
-    name: 'امارات متحده عربی',
-    flag: '🇦🇪',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/AE.txt'
-    ]
-  },
-  'FR': {
-    name: 'فرانسه',
-    flag: '🇫🇷',
-    urls: [
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/FR.txt'
-    ]
-  },
-  'FI': {
-    name: 'فنلاند',
-    flag: '🇫🇮',
-    urls: [
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/FI/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/FI.txt'
-    ]
-  },
-  'SE': {
-    name: 'سوئد',
-    flag: '🇸🇪',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/SE.txt'
-    ]
-  },
-  'NO': {
-    name: 'نروژ',
-    flag: '🇳🇴',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/NO.txt'
-    ]
-  },
-  'IT': {
-    name: 'ایتالیا',
-    flag: '🇮🇹',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/IT.txt'
-    ]
-  },
-  'BG': {
-    name: 'بلغارستان',
-    flag: '🇧🇬',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/BG.txt'
-    ]
-  },
-  'KZ': {
-    name: 'قزاقستان',
-    flag: '🇰🇿',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/KZ.txt'
-    ]
-  },
-  'LV': {
-    name: 'لتونی',
-    flag: '🇱🇻',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/LV.txt'
-    ]
-  },
-  'TH': {
-    name: 'تایلند',
-    flag: '🇹🇭',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/TH.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/TH/socks5.txt'
-    ]
-  },
-  'UZ': {
-    name: 'ازبکستان',
-    flag: '🇺🇿',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/UZ.txt'
-    ]
-  },
-  'SG': {
-    name: 'سنگاپور',
-    flag: '🇸🇬',
-    urls: [
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/SG/socks5.txt'
-    ]
-  }
-};
+// منابع کشوری از رجیستری زندهٔ اسکنر (src/config/sources.js) ساخته می‌شوند؛
+// آدرس‌های ۴۰۴ (dimzon، بخشی از فایل‌های proxy_vip و …) از این استخر حذف شده‌اند.
 
 // ============================================================================
-// ادغام منابع پایه با منابع زنده اسکنر (Z-E-U-S + trio666 + dimzon)
+// ادغام منابع زنده اسکنر (Z-E-U-S + trio666 + proxifly + ProxyScrape + ClearProxy)
 // ============================================================================
 export const COUNTRY_PROXY_SOURCES = (() => {
   const codes = new Set([
-    ...Object.keys(BASE_COUNTRY_PROXY_SOURCES),
     ...Object.keys(COUNTRY_EXTRA_PROXY_SOURCES),
     ...Object.keys(COUNTRY_META)
   ]);
   const merged = {};
   for (const code of codes) {
-    const base = BASE_COUNTRY_PROXY_SOURCES[code] || {};
     const meta = COUNTRY_META[code] || {};
-    const urls = [...new Set([...(base.urls || []), ...(COUNTRY_EXTRA_PROXY_SOURCES[code] || [])])];
+    const urls = [...new Set(COUNTRY_EXTRA_PROXY_SOURCES[code] || [])];
     merged[code] = {
-      name: base.name || meta.name || code,
-      flag: base.flag || meta.flag || '',
+      name: meta.name || code,
+      flag: meta.flag || '',
       urls
     };
   }
@@ -423,12 +288,16 @@ export const COUNTRY_PROXY_SOURCES = (() => {
 export const GLOBAL_PROXY_SOURCES = {
   socks5: GLOBAL_SOCKS5_SOURCES,
   http: GLOBAL_HTTP_SOURCES,
+  mixed: GLOBAL_MIXED_SOURCES,
   residential: RESIDENTIAL_SOURCES
 };
 
 export {
   IP_CANDIDATE_SOURCES,
   IP_RANGE_SOURCES,
+  HIGH_YIELD_PROXY_SOURCES,
+  PROXY_FEED_REGISTRY,
+  getFeedKind,
   OPENVPN_CSV_SOURCES,
   OPENVPN_PROFILE_SOURCES,
   OPENVPN_PUBLIC_PASS,

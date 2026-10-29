@@ -12,7 +12,10 @@ import {
   IP_RANGE_SOURCES,
   MAX_USERS_LIMIT,
   OFFICIAL_DIRECT_IPS,
-  OFFICIAL_DIRECT_IPV6
+  OFFICIAL_DIRECT_IPV6,
+  HIGH_YIELD_PROXY_SOURCES,
+  PROXY_FEED_REGISTRY,
+  getFeedKind
 } from '../config/defaults.js';
 import { USER_PRESETS } from '../config/presets.js';
 import { isValidDomain, isValidIpAddress, normalizeNodeHost, parseAddressAndPort } from '../core/utils.js';
@@ -67,50 +70,307 @@ function sanitizeUserForClient(user) {
   return { ...user, config: sanitizeConfigForClient(user.config || {}) };
 }
 
-// تجزیه لیست پروکسی: پشتیبانی از socks5://user:pass@host:port و host:port
-// آدرس کامل پروکسی (با پروتکل و رمز) برای تنظیم مقدار s حفظ می‌شود.
-function parseProxyLines(text, defaultProtocol = '') {
+// ============================================================================
+// تجزیهٔ فیدهای پروکسی
+// فیدهای عمومی قالب یکسان ندارند؛ این پارسر به‌جای تکیه بر «کل خط = host:port»
+// هر توکن host:port را در خط پیدا می‌کند تا همهٔ این قالب‌ها خوانده شوند:
+//   host:port | host:port:Country | host:port|Country|City | 🇩🇪 1.2.3.4:1080 519ms DE [ISP]
+//   SOCKS5 US 0.15s 1.2.3.4:45395 | socks5://user:pass@host:port | HTTPS://host:port
+// و اگر خط فقط یک آی‌پی باشد (بدون پورت) با پورت پیش‌فرض همان پروتکل خوانده می‌شود.
+// ============================================================================
+const DEFAULT_PROXY_PORTS = { SOCKS5: 1080, SOCKS4: 1080, HTTP: 80, HTTPS: 443 };
+const IPV4_HP_RE = /\b((?:\d{1,3}\.){3}\d{1,3}):(\d{1,5})\b/;
+const IPV6_HP_RE = /\[([0-9a-fA-F:]+)\]:(\d{1,5})/;
+const DOMAIN_HP_RE = /\b((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}):(\d{1,5})\b/i;
+const BARE_IPV4_RE = /^(\d{1,3}(?:\.\d{1,3}){3})$/;
+
+function isStrictIpv4(ip) {
+  const parts = String(ip).split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(p => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+}
+
+// اولین host:port معتبر داخل خط (هر جای خط باشد)
+function extractHostPort(line) {
+  let m = line.match(IPV6_HP_RE);
+  if (m) return { host: m[1], port: parseInt(m[2], 10) };
+  m = line.match(IPV4_HP_RE);
+  if (m && isStrictIpv4(m[1])) return { host: m[1], port: parseInt(m[2], 10) };
+  m = line.match(DOMAIN_HP_RE);
+  if (m) return { host: m[1].toLowerCase(), port: parseInt(m[2], 10) };
+  return null;
+}
+
+// کد کشور اگر در خط باشد (پسوند :DE یا ستون |DE| یا توکن DE)
+function extractCountryHint(line) {
+  if (line.includes('|')) {
+    const parts = line.split('|').map(s => s.trim());
+    for (const part of parts.slice(1)) {
+      if (/^[A-Za-z]{2}$/.test(part)) return part.toUpperCase();
+    }
+  }
+  const notProxy = (line.match(IPV4_HP_RE) || line.match(DOMAIN_HP_RE) || [''])[0];
+  const rest = notProxy ? line.replace(notProxy, ' ') : line;
+  const token = rest.match(/\b([A-Z]{2})\b/);
+  return token ? token[1] : '';
+}
+
+function normalizeProxyProtocol(value) {
+  const raw = String(value || '').toLowerCase();
+  if (raw === 'socks5' || raw === 'socks5h' || raw === 'socks') return 'SOCKS5';
+  if (raw === 'socks4') return 'SOCKS4';
+  if (raw === 'https') return 'HTTPS';
+  if (raw === 'http') return 'HTTP';
+  return '';
+}
+
+// فیدهای JSON (مثل ProxyGenerator/ALL/all.json): فقط فرمت‌های سبک و کوچک
+function parseProxyJson(text, hintProtocol) {
+  const trimmed = String(text || '').trim();
+  if (trimmed.length > 1_500_000) return [];
+  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return [];
+  let data;
+  try { data = JSON.parse(trimmed); } catch (_e) { return []; }
+  const rows = Array.isArray(data) ? data : (data.proxies || data.data || data.list || []);
+  if (!Array.isArray(rows)) return [];
   const out = [];
-  for (const raw of String(text || '').split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#') || line.startsWith('//')) continue;
-    let protocol = 'TCP';
-    let proxyUrl = '';
-    let rest = line;
-    const scheme = rest.match(/^([a-z0-9+.-]+):\/\//i);
-    if (scheme) {
-      protocol = scheme[1].toUpperCase();
-      const schemeName = scheme[1].toLowerCase();
-      const rawRest = rest.slice(scheme[0].length).split('#')[0].trim();
-      if (['socks5', 'socks', 'http', 'https'].includes(schemeName)) {
-        proxyUrl = `${schemeName}://${rawRest}`;
-      }
-      rest = rest.slice(scheme[0].length);
+  for (const row of rows) {
+    if (typeof row === 'string') {
+      const found = extractHostPort(row) || (BARE_IPV4_RE.test(row.trim()) ? { host: row.trim(), port: 0 } : null);
+      if (found) out.push({ ...found, protocol: normalizeProxyProtocol(row.split('://')[0]) || hintProtocol, username: '', password: '', countryHint: '' });
+      continue;
     }
-    rest = rest.split('#')[0].trim();
-    if (rest.includes('@')) rest = rest.split('@').pop();
-    rest = rest.split('/')[0].trim();
-    let host = '';
-    let port = 0;
-    if (rest.startsWith('[')) {
-      const m = rest.match(/^\[([^\]]+)\]:(\d{1,5})/);
-      if (m) { host = m[1]; port = parseInt(m[2], 10); }
-    } else {
-      const idx = rest.lastIndexOf(':');
-      if (idx > 0) { host = rest.slice(0, idx).trim(); port = parseInt(rest.slice(idx + 1), 10); }
-    }
-    if (!host || !Number.isFinite(port) || port < 1 || port > 65535) continue;
-    if (/^(vless|vmess|trojan|ss|ssr)$/i.test(protocol)) continue;
-    let proto = protocol === 'HTTPS' ? 'HTTPS' : protocol === 'HTTP' ? 'HTTP' : protocol === 'SOCKS5' ? 'SOCKS5' : protocol === 'SOCKS4' ? 'SOCKS4' : 'TCP';
-    // لیست‌های بدون scheme (مثل monosans) از مسیر منبع تشخیص داده می‌شوند
-    if (proto === 'TCP' && defaultProtocol) {
-      proto = defaultProtocol;
-      proxyUrl = `${defaultProtocol.toLowerCase()}://${host}:${port}`;
-    }
-    const family = host.includes(':') ? 'ipv6' : (/^\d+\.\d+\.\d+\.\d+$/.test(host) ? 'ipv4' : 'domain');
-    out.push({ host, port, protocol: proto, proxy: proxyUrl, family });
+    if (!row || typeof row !== 'object') continue;
+    const host = row.ip || row.host || row.address || row.server || row.proxy_ip;
+    const port = parseInt(row.port || row.proxy_port || row.proxyPort || 0, 10);
+    if (!host || !port) continue;
+    const rawProtocol = row.protocol || row.protocols || row.type || row.scheme || '';
+    out.push({
+      host: String(host),
+      port,
+      protocol: normalizeProxyProtocol(Array.isArray(rawProtocol) ? rawProtocol[0] : rawProtocol) || hintProtocol,
+      username: String(row.username || row.user || ''),
+      password: String(row.password || row.pass || ''),
+      countryHint: String(row.country || row.country_code || '').toUpperCase().slice(0, 2)
+    });
   }
   return out;
+}
+
+// hintProtocol خالی یعنی «مشخص نیست» و هنگام تست، SOCKS5 و بعد HTTP امتحان می‌شود.
+function parseProxyLines(text, hintProtocol = '') {
+  const source = String(text || '');
+  const fromJson = parseProxyJson(source, hintProtocol);
+  if (fromJson.length) return fromJson;
+
+  const out = [];
+  const compatibleHint = normalizeProxyProtocol(hintProtocol);
+  for (const raw of source.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith('//') || line.startsWith(';')) continue;
+    if (/^(website|support|btc|eth|ltc|doge)\b/i.test(line)) continue;
+    if (/^(format|fromat)\b/i.test(line)) continue;
+    if (/updated\s+at\s+\d{4}-\d{2}-\d{2}/i.test(line)) continue;
+
+    const schemeMatch = line.match(/\b(socks5h?|socks4|socks|https?):\/\//i);
+    const schemeProtocol = schemeMatch ? normalizeProxyProtocol(schemeMatch[1]) : '';
+    let username = '';
+    let password = '';
+    const authMatch = line.match(/\/\/([^@\/\s]+)@/);
+    if (authMatch) {
+      const parts = authMatch[1].split(':');
+      username = parts[0] || '';
+      password = parts.slice(1).join(':') || '';
+    }
+
+    const found = extractHostPort(line);
+    let host = found ? found.host : '';
+    let port = found ? found.port : 0;
+    if (!host) {
+      const bare = line.match(BARE_IPV4_RE);
+      if (!bare || !isStrictIpv4(bare[1])) continue;
+      host = bare[1];
+      port = DEFAULT_PROXY_PORTS[schemeProtocol || compatibleHint] || 1080;
+    }
+    if (!host || !(port > 0 && port < 65536)) continue;
+    if (host.includes(':') && !/^[0-9a-fA-F:]+$/.test(host)) continue;
+
+    const protocol = schemeProtocol || compatibleHint;
+    const family = host.includes(':') ? 'ipv6' : (isStrictIpv4(host) ? 'ipv4' : 'domain');
+    out.push({
+      host,
+      port,
+      protocol,
+      secure: protocol === 'HTTPS',
+      username,
+      password,
+      countryHint: extractCountryHint(line),
+      proxy: protocol ? `${protocol.toLowerCase().replace('socks5h', 'socks5')}://${username ? `${username}:${password}@` : ''}${host}:${port}` : '',
+      family
+    });
+  }
+  return out;
+}
+
+// دسته‌بندی ورودی‌ها با احترام به سقف اتصال هم‌زمان کلادفلر (۶ سوکت باز)
+const MAX_PARALLEL_SOCKETS = 5;
+
+async function runLimited(items, limit, worker, stopAt = 0) {
+  let index = 0;
+  const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (index < items.length) {
+      if (stopAt && Date.now() > stopAt) return;
+      const current = index++;
+      await worker(items[current], current);
+    }
+  });
+  await Promise.all(runners);
+}
+
+function withDeadline(promise, timeoutMs, message = 'timeout') {
+  let timer = 0;
+  const guard = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
+function concatBytes(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function shortError(err) {
+  return String((err && err.message) || err || 'connect_failed').slice(0, 40);
+}
+
+// مقصد آزمایشی handshake پروکسی — فقط برای اثبات عبور ترافیک است
+const PROXY_TEST_TARGET = { host: 'www.cloudflare.com', port: 443 };
+// بیشتر پروکسی‌های مرده همین اول در برقراری TCP گیر می‌کنند؛ مهلت کوتاه اتصال
+// باعث می‌شود بودجهٔ زمانی اسکن صرف پروکسی‌های واقعاً زنده شود.
+const PROXY_CONNECT_TIMEOUT_MS = 900;
+
+// تست واقعی SOCKS5: احراز هویت + CONNECT به مقصد آزمایشی
+async function verifySocks5(entry, timeoutMs) {
+  const started = Date.now();
+  // بودجهٔ زمانی برای کل handshake است، نه هر مرحله؛ در غیر این صورت مجموع
+  // مراحل می‌توانست چند برابر مهلت شود.
+  const left = () => Math.max(250, timeoutMs - (Date.now() - started));
+  let sock = null;
+  try {
+    sock = connect({ hostname: entry.host, port: entry.port });
+    await withDeadline(sock.opened, Math.min(left(), PROXY_CONNECT_TIMEOUT_MS));
+    const writer = sock.writable.getWriter();
+    const reader = sock.readable.getReader();
+    let buf = new Uint8Array(0);
+    const readExact = async count => {
+      while (buf.length < count) {
+        const { value, done } = await withDeadline(reader.read(), left());
+        if (done || !value) throw new Error('closed');
+        buf = concatBytes(buf, value);
+      }
+      const out = buf.slice(0, count);
+      buf = buf.slice(count);
+      return out;
+    };
+    const needsAuth = Boolean(entry.username);
+    await writer.write(new Uint8Array(needsAuth ? [5, 2, 0, 2] : [5, 1, 0]));
+    const greeting = await readExact(2);
+    if (greeting[0] !== 5) throw new Error('not-socks5');
+    const method = greeting[1];
+    if (method === 255) throw new Error('no-method');
+    if (method === 2) {
+      if (!needsAuth) throw new Error('auth-required');
+      const enc = new TextEncoder();
+      const userBytes = enc.encode(entry.username);
+      const passBytes = enc.encode(entry.password || '');
+      await writer.write(new Uint8Array([1, userBytes.length, ...userBytes, passBytes.length, ...passBytes]));
+      const authReply = await readExact(2);
+      if (authReply[1] !== 0) throw new Error('auth-failed');
+    } else if (method !== 0) {
+      throw new Error('method-' + method);
+    }
+    const targetHost = new TextEncoder().encode(PROXY_TEST_TARGET.host);
+    const targetPort = PROXY_TEST_TARGET.port;
+    await writer.write(new Uint8Array([5, 1, 0, 3, targetHost.length, ...targetHost, (targetPort >> 8) & 255, targetPort & 255]));
+    const reply = await readExact(4);
+    if (reply[1] !== 0) throw new Error('connect-code-' + reply[1]);
+    const latencyMs = Date.now() - started;
+    try { writer.releaseLock(); } catch (_e) {}
+    try { reader.releaseLock(); } catch (_e) {}
+    try { sock.close(); } catch (_e) {}
+    return { ok: true, latencyMs };
+  } catch (err) {
+    try { if (sock) sock.close(); } catch (_e) {}
+    return { ok: false, error: shortError(err) };
+  }
+}
+
+// تست واقعی HTTP(S): درخواست CONNECT و انتظار پاسخ 2xx
+async function verifyHttpProxy(entry, timeoutMs) {
+  const started = Date.now();
+  const left = () => Math.max(250, timeoutMs - (Date.now() - started));
+  let sock = null;
+  try {
+    // اتصال همیشه TCP است: بیشتر خط‌های «https://» در این فیدها پروکسی CONNECT معمولی
+    // هستند، و اتصال TLS به یک آی‌پی باعث خطای «certificate IP mismatch» در runtime می‌شد.
+    sock = connect({ hostname: entry.host, port: entry.port });
+    await withDeadline(sock.opened, Math.min(left(), PROXY_CONNECT_TIMEOUT_MS));
+    const writer = sock.writable.getWriter();
+    const reader = sock.readable.getReader();
+    const authority = `${PROXY_TEST_TARGET.host}:${PROXY_TEST_TARGET.port}`;
+    let request =
+      `CONNECT ${authority} HTTP/1.1\r\n` +
+      `Host: ${authority}\r\n` +
+      `Proxy-Connection: keep-alive\r\n`;
+    if (entry.username) {
+      request += `Proxy-Authorization: Basic ${btoa(`${entry.username}:${entry.password || ''}`)}\r\n`;
+    }
+    request += '\r\n';
+    await writer.write(new TextEncoder().encode(request));
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes('\r\n\r\n') && text.length < 2048) {
+      const { value, done } = await withDeadline(reader.read(), left());
+      if (done || !value) break;
+      text += decoder.decode(value, { stream: true });
+    }
+    if (!/^HTTP\/1\.[01] 2\d\d/.test(text)) {
+      if (/^HTTP\/1\.[01] 407/.test(text)) throw new Error('auth-required');
+      throw new Error(text.startsWith('HTTP/') ? 'rejected-' + text.slice(9, 12) : 'bad-response');
+    }
+    const latencyMs = Date.now() - started;
+    try { writer.releaseLock(); } catch (_e) {}
+    try { reader.releaseLock(); } catch (_e) {}
+    try { sock.close(); } catch (_e) {}
+    return { ok: true, latencyMs };
+  } catch (err) {
+    try { if (sock) sock.close(); } catch (_e) {}
+    return { ok: false, error: shortError(err) };
+  }
+}
+
+// تأیید نهایی یک پروکسی: پروتکل نامشخص باشد، هر دو حالت امتحان می‌شود.
+async function verifyProxyEntry(entry, timeoutMs = 3200) {
+  const attempts = entry.protocol ? [entry.protocol] : ['SOCKS5', 'HTTP'];
+  const deadlineAt = Date.now() + timeoutMs;
+  let lastError = 'timeout';
+  for (let i = 0; i < attempts.length; i++) {
+    // پروتکل نامشخص: بودجهٔ زمانی بین SOCKS5 و HTTP نصف می‌شود تا هر دو شانس
+    // امتحان داشته باشند و مجموع از مهلت کلی رد نشود.
+    const remaining = deadlineAt - Date.now();
+    const budget = Math.floor(remaining / (attempts.length - i));
+    if (budget < 300) break;
+    const protocol = attempts[i];
+    const result = protocol === 'SOCKS5'
+      ? await verifySocks5(entry, budget)
+      : await verifyHttpProxy(entry, budget);
+    if (result.ok) return { ...result, protocol, verified: true };
+    lastError = result.error;
+  }
+  return { ok: false, error: lastError, verified: false };
 }
 
 // --- اسکنر آی‌پی: تجزیه رنج‌های CIDR و انتخاب تصادفی آدرس سالم ---
@@ -245,39 +505,39 @@ function pickRotating(list, count, seed = Date.now()) {
 }
 
 async function fetchSourceText(url, timeoutMs = 3500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // بدون گزینهٔ cache: خود runtime کلادفلر مقدار cache: 'no-store' را پیاده نکرده و
+    // درخواست فوراً throw می‌شود؛ به‌جای آن پارامتر یکتای _mili برای هر درخواست
+    // امکان کش شدن پاسخ را از بین می‌برد.
     const separator = url.includes('?') ? '&' : '?';
     const res = await fetch(`${url}${separator}_mili=${Date.now()}`, {
       signal: controller.signal,
-      cache: 'no-store',
       headers: {
         'User-Agent': 'miliconfig-scanner/3.1',
         'Cache-Control': 'no-cache'
       }
     });
-    clearTimeout(timer);
     if (!res.ok) return '';
     return await res.text();
   } catch (_e) {
     return '';
+  } finally {
+    clearTimeout(timer);
   }
-}
-
-async function fetchProxySource(url, timeoutMs = 3500) {
-  const lower = String(url || '').toLowerCase();
-  const defaultProtocol = /socks/.test(lower) ? 'SOCKS5' : /http/.test(lower) ? 'HTTP' : '';
-  return parseProxyLines(await fetchSourceText(url, timeoutMs), defaultProtocol);
 }
 
 // تست واقعی اتصال TCP و اندازه‌گیری پینگ
 async function probeTcp(host, port, timeoutMs = 1800) {
   const started = Date.now();
   let socket;
+  let timer = 0;
   try {
     socket = connect({ hostname: host, port });
-    const guard = new Promise((_resolve, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs));
+    const guard = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+    });
     await Promise.race([socket.opened, guard]);
     const latencyMs = Date.now() - started;
     try { socket.close(); } catch (_e) {}
@@ -285,6 +545,8 @@ async function probeTcp(host, port, timeoutMs = 1800) {
   } catch (err) {
     try { if (socket) socket.close(); } catch (_e2) {}
     return { ok: false, latencyMs: 0, error: String((err && err.message) || err || 'connect_failed').slice(0, 40) };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -869,6 +1131,7 @@ export async function handleScannerApi(request, env) {
       globalSources: {
         socks5: GLOBAL_PROXY_SOURCES.socks5.length,
         http: GLOBAL_PROXY_SOURCES.http.length,
+        mixed: (GLOBAL_PROXY_SOURCES.mixed || []).length,
         ipv4: IP_RANGE_SOURCES.ipv4.length,
         ipv6: IP_RANGE_SOURCES.ipv6.length
       },
@@ -876,6 +1139,30 @@ export async function handleScannerApi(request, env) {
       officialIps: OFFICIAL_DIRECT_IPS,
       officialIpv6: OFFICIAL_DIRECT_IPV6,
       directDomains: DIRECT_DOMAINS.map(item => item.domain)
+    });
+  }
+
+  // رجیستری فیدها: همهٔ آدرس‌هایی که اسکنر از آنها تغذیه می‌شود، به‌صورت JSON
+  // (?scope=country|global و ?country=DE و ?kind=socks5|http|mixed برای فیلتر)
+  // این همان «سازوکار اتصال» به مخازن بیرونی است؛ هر ابزار بیرونی می‌تواند از
+  // همین خروجی فهرست منابع را بخواند و مستقیم همان آدرس‌ها را دریافت کند.
+  if (action === 'sources' && request.method === 'GET') {
+    const scope = String(url.searchParams.get('scope') || '').toLowerCase();
+    const countryFilter = String(url.searchParams.get('country') || '').toUpperCase();
+    const kindFilter = String(url.searchParams.get('kind') || '').toLowerCase();
+    let feeds = PROXY_FEED_REGISTRY.slice();
+    if (scope === 'global' || scope === 'country') feeds = feeds.filter(feed => feed.scope === scope);
+    if (countryFilter) feeds = feeds.filter(feed => feed.country === countryFilter);
+    if (kindFilter) feeds = feeds.filter(feed => feed.kind === kindFilter);
+    return jsonResponse({
+      success: true,
+      count: feeds.length,
+      total: PROXY_FEED_REGISTRY.length,
+      kinds: ['socks5', 'http', 'mixed'],
+      // روش‌های خواندن هر فید: خطوط host:port، host:port:CC، host:port|CC|City،
+      // خطوط بس‌شدهٔ آی‌پی، فیدهای JSON، و پروکسی‌های دارای user:pass@
+      supportedFormats: ['host:port', 'scheme://host:port', 'user:pass@host:port', 'host:port:CC', 'host:port|CC|City', 'bare-ip', 'json'],
+      feeds
     });
   }
 
@@ -1014,19 +1301,29 @@ export async function handleScannerApi(request, env) {
       // ---- اسکن پروکسی (SOCKS5/HTTP) با منابع کشوری + لیست‌های عمومی ----
       // برای کشور مشخص فقط منابع همان کشور خوانده می‌شود تا نتیجه واقعاً به آن کشور تعلق داشته باشد؛
       // لیست‌های عمومی فقط در حالت «چند کشور» استفاده می‌شوند.
+      //
+      // هر پروکسی قبل از نمایش، handshake واقعی پروتکل را پاس می‌کند (SOCKS5 CONNECT یا
+      // HTTP CONNECT). باز بودن پورت به‌تنهایی معیار نیست: بیشتر پروکسی‌های منقضی پورت
+      // باز دارند ولی ترافیک را عبور نمی‌دهند و همین باعث می‌شد نودهای «آنلاین» کار نکنند.
       const countrySources = multi
         ? pickRotating(Object.keys(COUNTRY_PROXY_SOURCES), 3).flatMap(c => pickRotating(COUNTRY_PROXY_SOURCES[c].urls || [], 1))
-        : pickRotating(COUNTRY_PROXY_SOURCES[code].urls || [], 4);
-      const globalSources = multi
-        ? pickRotating([...GLOBAL_PROXY_SOURCES.socks5, ...GLOBAL_PROXY_SOURCES.http], 3)
-        : [];
-      const sources = [...new Set([...countrySources, ...globalSources])].slice(0, 12);
+        : pickRotating(COUNTRY_PROXY_SOURCES[code].urls || [], 5);
+      // فیدهای با بازده بالا اولویت دارند؛ در حالت کشوری هم دو فید عمومی
+      // با بازده بالا اضافه می‌شود تا استخر تست کوچک نماند.
+      const highYield = pickRotating(HIGH_YIELD_PROXY_SOURCES, multi ? 4 : 2);
+      const sources = [...new Set([...countrySources, ...highYield])].slice(0, 8);
 
-      const lists = await Promise.all(sources.map(src => fetchProxySource(src, 3500)));
+      const feedResults = await Promise.all(sources.map(async src => {
+        const text = await fetchSourceText(src, 4000);
+        const kind = getFeedKind(src);
+        const hint = kind === 'socks5' ? 'SOCKS5' : kind === 'http' ? 'HTTP' : '';
+        return { url: src, reachable: text.length > 0, entries: text ? parseProxyLines(text, hint) : [] };
+      }));
+
       const seen = new Set();
       const candidates = [];
-      for (const list of lists) {
-        for (const p of list) {
+      for (const feed of feedResults) {
+        for (const p of feed.entries) {
           if (family !== 'any' && p.family && p.family !== family && p.family !== 'domain') continue;
           const key = p.host + ':' + p.port;
           if (seen.has(key)) continue;
@@ -1035,53 +1332,76 @@ export async function handleScannerApi(request, env) {
         }
       }
 
+      // گزارش وضعیت هر فید — برای این‌که پنل بتواند دلیل نتیجه صفر را نشان دهد
+      const diagnostics = feedResults.map(feed => ({
+        source: feed.url,
+        kind: getFeedKind(feed.url),
+        reachable: feed.reachable,
+        entries: feed.entries.length
+      }));
+      const deadFeeds = diagnostics.filter(item => !item.reachable || item.entries === 0).length;
+
       if (!candidates.length) {
         return jsonResponse({
           success: false, kind, family, country: countryLabel, code,
-          count: 0, sourceCount: sources.length, testedCount: 0, proxies: [],
-          message: 'منبع لیست پروکسی در دسترس نبود یا خالی بود. چند لحظه بعد دوباره تلاش کنید.'
+          count: 0, sourceCount: sources.length, testedCount: 0, proxies: [], diagnostics,
+          message: `از ${sources.length} منبع هیچ ورودی پروکسی خوانده نشد (${deadFeeds} منبع خالی یا در دسترس نبود). چند لحظه بعد دوباره تلاش کنید.`
         });
       }
 
-      const pool = candidates
-        .slice()
-        .sort(() => 0.5 - Math.random())
-        .slice(0, Math.min(candidates.length, limit * 3));
+      // سقف ۴ سوکت هم‌زمان (runtime کلادفلر حداکثر ۶ اتصال هم‌زمان می‌دهد) و
+      // سقف زمانی، تا اسکن هیچ‌وقت با خطای «Too many open connections» یا timeout نکشد.
+      const startedAt = Date.now();
+      const scanDeadline = startedAt + 24000;
+      const pool = shuffleList(candidates).slice(0, Math.min(candidates.length, 45));
+      const verifiedProxies = [];
+      let testedCount = 0;
+      // آمار دلیل ردشدن‌ها — برای این‌که معلوم باشد مشکل «کد» است یا «خشک بودن استخر»
+      const failures = {};
 
-      const probed = await Promise.all(pool.map(async p => {
-        const result = await probeTcp(p.host, p.port, 1800);
-        return { ...p, ...result };
-      }));
+      await runLimited(pool, MAX_PARALLEL_SOCKETS, async candidate => {
+        if (verifiedProxies.length >= limit || Date.now() > scanDeadline) return;
+        testedCount++;
+        const result = await verifyProxyEntry(candidate, 3200);
+        if (result.ok) {
+          verifiedProxies.push({ ...candidate, ...result });
+        } else {
+          const reason = String(result.error || 'unknown').split('-')[0];
+          failures[reason] = (failures[reason] || 0) + 1;
+        }
+      }, scanDeadline);
 
-      const online = probed
-        .filter(p => p.ok)
+      const online = verifiedProxies
         .sort((a, b) => a.latencyMs - b.latencyMs)
         .slice(0, limit);
 
       const proxies = online.map(p => {
-        const isHttp = p.protocol === 'HTTP' || p.protocol === 'HTTPS';
-        const proxyUrl = p.proxy || `${isHttp ? 'http' : 'socks5'}://${p.host}:${p.port}`;
+        const scheme = (p.protocol || 'SOCKS5').toLowerCase() === 'https' ? 'http' : (p.protocol || 'SOCKS5').toLowerCase();
+        const auth = p.username ? `${p.username}:${p.password || ''}@` : '';
         return {
           kind: 'proxy',
           ip: p.host,
           port: p.port,
           name: `${p.host}:${p.port}`,
-          proxy: proxyUrl,
+          proxy: `${scheme}://${auth}${p.host}:${p.port}`,
           country: countryLabel,
-          code,
+          code: p.countryHint && COUNTRY_PROXY_SOURCES[p.countryHint] ? p.countryHint : code,
           family: p.family || '',
           protocol: p.protocol,
           latencyMs: p.latencyMs,
+          verified: true,
           status: 'online'
         };
       });
 
       return jsonResponse({
         success: proxies.length > 0, kind, family, country: countryLabel, code,
-        count: proxies.length, sourceCount: candidates.length, testedCount: probed.length, proxies,
+        count: proxies.length, sourceCount: candidates.length, testedCount, proxies, diagnostics,
+        failures,
+        elapsedMs: Date.now() - startedAt,
         message: proxies.length
-          ? `${proxies.length} پروکسی آنلاین از ${probed.length} اتصال تست‌شده`
-          : `هیچ‌کدام از ${probed.length} پروکسی پاسخ ندادند؛ دوباره تلاش کنید.`
+          ? `${proxies.length} پروکسی تأییدشده (handshake کامل) از ${testedCount} مورد تست‌شده در ${sources.length} منبع`
+          : `از ${testedCount} پروکسی تست‌شده هیچ‌کدام handshake را پاس نکردند${deadFeeds ? ` (${deadFeeds} منبع خالی/۴۰۴)` : ''}؛ دوباره تلاش کنید یا حالت «چند کشور» را انتخاب کنید.`
       });
     } catch (err) {
       return jsonResponse({ success: false, message: 'خطا در اسکنر: ' + (err?.message || err) }, 500);

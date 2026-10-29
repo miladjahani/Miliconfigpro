@@ -2,50 +2,181 @@ import { connect, connect as cfConnect } from 'cloudflare:sockets';
 
 // --- MODULE: src/config/sources.js ---
 // ============================================================================
-// miliconfig v3.1 - استخر منابع زنده اسکنر (پروکسی‌های کشوری، لیست‌های عمومی و رنج‌های IP)
+// miliconfig v3.1 - استخر منابع زنده اسکنر (پروکسی‌های SOCKS5/HTTP، لیست‌های کشوری و رنج‌های IP)
 // همه لیست‌ها هر بار به‌صورت زنده خوانده می‌شوند (بدون کش سمت سرور) و اسکنر
 // از هر استخر یک برش چرخشی برمی‌دارد تا سقف subrequest کلادفلر رعایت شود.
+//
+// نکته مهم درباره فهرست فیدها: هر آدرسی که در این فایل می‌ماند باید زنده باشد.
+// در بازبینی اکتبر ۲۰۲۶، ۴۸ آدرس از فهرست قبلی (dimzon، residential ها،
+// monosans/geolocation، ipverse و بخشی از proxy_vip) ۴۰۴ بودند و حذف شدند؛
+// یک فید ۴۰۴ فقط یک subrequest هدر می‌دهد و ممکن است سهم فیدهای سالم را
+// از برش چرخشی بگیرد. آدرس‌های جایگزین زنده به فهرست اضافه شده‌اند.
 // ============================================================================
 
-const ZEUS_VIP = code => `https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`;
-const TRIO = (code, kind) => `https://raw.githubusercontent.com/trio666/proxy-checker/main/country/${code}/${kind}.txt`;
-// منابع تازه و فعال (بررسی‌شده) — تاریخچه به‌روزرسانی خودکار دارند
-const CLEARPROXY = (code, kind) => `https://raw.githubusercontent.com/ClearProxy/checked-proxy-list/main/${kind}/raw/country/${code}.txt`;
-const PROXYSCRAPE = (code, kind) => `https://raw.githubusercontent.com/ProxyScrape/free-proxy-list/main/proxies/countries/${String(code).toLowerCase()}/${kind}/data.txt`;
-const PROXIFLY_CC = code => `https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/countries/${String(code).toUpperCase()}/data.txt`;
+const RAW = 'https://raw.githubusercontent.com/';
+const raw = path => RAW + path;
 
-// منابع اختصاصی هر کشور (Z-E-U-S vip + trio666 کشوری)
-const COUNTRY_EXTRA_PROXY_SOURCES = {
-  AE: [ZEUS_VIP('AE')],
-  BG: [ZEUS_VIP('BG')],
-  CA: [ZEUS_VIP('CA')],
-  DE: [ZEUS_VIP('DE'), TRIO('DE', 'socks5'), TRIO('DE', 'http')],
-  GB: [ZEUS_VIP('GB')],
-  IT: [ZEUS_VIP('IT')],
-  KZ: [ZEUS_VIP('KZ')],
-  LV: [ZEUS_VIP('LV')],
-  NL: [ZEUS_VIP('NL'), TRIO('NL', 'socks5'), TRIO('NL', 'http')],
-  NO: [ZEUS_VIP('NO')],
-  SE: [ZEUS_VIP('SE')],
-  TH: [ZEUS_VIP('TH'), TRIO('TH', 'socks5'), TRIO('TH', 'http')],
-  TR: [ZEUS_VIP('TR')],
-  US: [ZEUS_VIP('US'), TRIO('US', 'socks5'), TRIO('US', 'http')],
-  UZ: [ZEUS_VIP('UZ')],
-  FR: ['https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/FR.txt'],
-  FI: [TRIO('FI', 'socks5'), TRIO('FI', 'http')],
-  SG: [TRIO('SG', 'socks5'), TRIO('SG', 'http')],
-  RU: [TRIO('RU', 'socks5'), TRIO('RU', 'http'), 'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/RU.txt'],
-  CN: [TRIO('CN', 'socks5'), TRIO('CN', 'http')],
-  CH: [TRIO('CH', 'socks5'), TRIO('CH', 'http')],
-  KR: [TRIO('KR', 'socks5'), TRIO('KR', 'http')],
-  UA: [TRIO('UA', 'socks5'), TRIO('UA', 'http')],
-  VN: [TRIO('VN', 'socks5'), TRIO('VN', 'http')],
-  BR: [TRIO('BR', 'socks5'), TRIO('BR', 'http')],
-  IN: [TRIO('IN', 'socks5'), TRIO('IN', 'http')],
-  RS: [TRIO('RS', 'socks5'), TRIO('RS', 'http')],
-  SK: [TRIO('SK', 'socks5'), TRIO('SK', 'http')]
-};
+// نوع فید:
+//   socks5 → همهٔ خطوط پروکسی SOCKS5 هستند
+//   http   → همهٔ خطوط پروکسی HTTP/HTTPS هستند
+//   mixed  → هر دو نوع (یا نامشخص)؛ اسکنر خودش پروتکل را با handshake تشخیص می‌دهد
+//   any    → فید ترکیبی بدون پروتکل مشخص
+const PROXY_FEED_TYPES = ['socks5', 'http', 'mixed', 'any'];
 
+// ---------------------------------------------------------------------------
+// فیدهای عمومی SOCKS5 — همه در اکتبر ۲۰۲۶ پاسخ ۲۰۰ داده‌اند
+// ---------------------------------------------------------------------------
+const SOCKS5_FEEDS = [
+  'monosans/proxy-list/main/proxies/socks5.txt',
+  'rdavydov/proxy-list/main/proxies/socks5.txt',
+  'rdavydov/proxy-list/main/proxies_anonymous/socks5.txt',
+  'rdavydov/proxy-list/main/proxies_geolocation/socks5.txt',
+  'rdavydov/proxy-list/main/proxies_geolocation_anonymous/socks5.txt',
+  'zloi-user/hideip.me/main/socks5.txt',
+  'vakhov/fresh-proxy-list/master/socks5.txt',
+  'hookzof/socks5_list/master/proxy.txt',
+  'MuRongPIG/Proxy-Master/main/socks5.txt',
+  'Noctiro/getproxy/master/file/socks5.txt',
+  'Noctiro/getproxy/master/file/socks5_with_protocol.txt',
+  'roosterkid/openproxylist/main/SOCKS5_RAW.txt',
+  'roosterkid/openproxylist/main/SOCKS5.txt',
+  'sunny9577/proxy-scraper/master/generated/socks5_proxies.txt',
+  'trio666/proxy-checker/main/socks5.txt',
+  'TheSpeedX/SOCKS-List/master/socks5.txt',
+  'proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt',
+  'ProxyScrape/free-proxy-list/main/proxies/protocols/socks5/data.txt',
+  'ikimono-afk/proxy-api/main/proxies/socks5.txt',
+  'ikimono-afk/proxy-api/main/proxies_anonymous/socks5.txt',
+  'ikimono-afk/proxy-api/main/proxies_geolocation/socks5.txt',
+  'ikimono-afk/proxy-api/main/proxies_geolocation_anonymous/socks5.txt',
+  'ProxyScraper/ProxyScraper/main/socks5.txt',
+  'r00tee/Proxy-List/main/Socks5.txt',
+  'jetkai/proxy-list/main/archive/txt/proxies-socks5.txt',
+  'iplocate/free-proxy-list/main/protocols/socks5.txt',
+  'officialputuid/KangProxy/main/socks5/socks5.txt',
+  'karimi-mohammad/SOCKS5-Proxy-Checker/main/socks5.txt',
+  'FosterG4/proxy-list/main/socks5.txt',
+  'yosephplex/proxy-updater/main/proxies/socks5.txt',
+  'readloud/clauneck/main/PROXY-List/socks5.txt',
+  'ItzRazvyy/ProxyList/main/socks5.txt',
+  'i-am-unbekannt/BLITZPROXY/main/out-files/socks5.txt',
+  'ProxyListt/PROXY-list/main/socks5.txt',
+  'Daniel3356/Proxy_Full-list/main/socks5.txt',
+  'proxygenerator1/ProxyGenerator/main/MostStable/socks5.txt',
+  'proxygenerator1/ProxyGenerator/main/Stable/socks5.txt',
+  'proxmint/free-proxy-list/main/proxies/socks5.txt',
+  'Thordata/awesome-free-proxy-list/main/proxies/socks5.txt',
+  'ClearProxy/checked-proxy-list/main/socks5/raw/all.txt',
+  'VPSLabCloud/VPSLab-Free-Proxy-List/main/socks5_all.txt',
+  'komutan234/Proxy-List-Free/main/proxies/socks5.txt',
+  'ALIILAPRO/Proxy/main/socks5.txt'
+];
+
+// ---------------------------------------------------------------------------
+// فیدهای عمومی HTTP / HTTPS — همه پاسخ ۲۰۰
+// ---------------------------------------------------------------------------
+const HTTP_FEEDS = [
+  'monosans/proxy-list/main/proxies/http.txt',
+  'rdavydov/proxy-list/main/proxies/http.txt',
+  'rdavydov/proxy-list/main/proxies_anonymous/http.txt',
+  'rdavydov/proxy-list/main/proxies_geolocation/http.txt',
+  'rdavydov/proxy-list/main/proxies_geolocation_anonymous/http.txt',
+  'zloi-user/hideip.me/main/http.txt',
+  'zloi-user/hideip.me/main/https.txt',
+  'vakhov/fresh-proxy-list/master/http.txt',
+  'vakhov/fresh-proxy-list/master/https.txt',
+  'Vadim287/free-proxy/main/proxies/http.txt',
+  'MuRongPIG/Proxy-Master/main/http.txt',
+  'Noctiro/getproxy/master/file/http.txt',
+  'Noctiro/getproxy/master/file/https.txt',
+  'Noctiro/getproxy/master/file/http_with_protocol.txt',
+  'Noctiro/getproxy/master/file/https_with_protocol.txt',
+  'roosterkid/openproxylist/main/HTTPS_RAW.txt',
+  'roosterkid/openproxylist/main/HTTPS.txt',
+  'sunny9577/proxy-scraper/master/generated/http_proxies.txt',
+  'trio666/proxy-checker/main/http.txt',
+  'trio666/proxy-checker/main/https.txt',
+  'TheSpeedX/PROXY-List/master/http.txt',
+  'proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
+  'proxifly/free-proxy-list/main/proxies/protocols/https/data.txt',
+  'ProxyScrape/free-proxy-list/main/proxies/protocols/http/data.txt',
+  'ikimono-afk/proxy-api/main/proxies/http.txt',
+  'ikimono-afk/proxy-api/main/proxies_anonymous/http.txt',
+  'ikimono-afk/proxy-api/main/proxies_geolocation/http.txt',
+  'ikimono-afk/proxy-api/main/proxies_geolocation_anonymous/http.txt',
+  'ProxyScraper/ProxyScraper/main/http.txt',
+  'r00tee/Proxy-List/main/Https.txt',
+  'jetkai/proxy-list/main/archive/txt/proxies-http.txt',
+  'jetkai/proxy-list/main/archive/txt/proxies-https.txt',
+  'iplocate/free-proxy-list/main/protocols/http.txt',
+  'iplocate/free-proxy-list/main/protocols/https.txt',
+  'officialputuid/KangProxy/main/http/http.txt',
+  'officialputuid/KangProxy/main/https/https.txt',
+  'elliottophellia/yakumo/master/results/http/global/http_checked.txt',
+  'Zaeem20/FREE_PROXIES_LIST/master/http.txt',
+  'Zaeem20/FREE_PROXIES_LIST/master/https.txt',
+  'Anonym0usWork1221/Free-Proxies/main/proxy_files/http_proxies.txt',
+  'Anonym0usWork1221/Free-Proxies/main/proxy_files/https_proxies.txt',
+  'dpangestuw/Free-Proxy/main/http_proxies.txt',
+  'Tsprnay/Proxy-lists/master/proxies/http.txt',
+  'Tsprnay/Proxy-lists/master/proxies/https.txt',
+  'mzyui/proxy-list/main/http.txt',
+  'ErcinDedeoglu/proxies/main/proxies/http.txt',
+  'ErcinDedeoglu/proxies/main/proxies/https.txt',
+  'ALIILAPRO/Proxy/main/http.txt',
+  'Skillter/ProxyGather/master/proxies/working-proxies-http.txt',
+  'SevenworksDev/proxy-list/main/proxies/http.txt',
+  'SevenworksDev/proxy-list/main/proxies/https.txt',
+  'Vann-Dev/proxy-list/main/proxies/http.txt',
+  'Vann-Dev/proxy-list/main/proxies/https.txt',
+  'TuanMinPay/live-proxy/master/http.txt',
+  'vmheaven/VMHeaven-Free-Proxy-Updated/main/http.txt',
+  'vmheaven/VMHeaven-Free-Proxy-Updated/main/https.txt',
+  'yosephplex/proxy-updater/main/proxies/http.txt',
+  'readloud/clauneck/main/PROXY-List/http.txt',
+  'ItzRazvyy/ProxyList/main/http.txt',
+  'i-am-unbekannt/BLITZPROXY/main/out-files/http.txt',
+  'ProxyListt/PROXY-list/main/http.txt',
+  'Daniel3356/Proxy_Full-list/main/http.txt',
+  'proxygenerator1/ProxyGenerator/main/MostStable/http.txt',
+  'proxygenerator1/ProxyGenerator/main/Stable/http.txt',
+  'proxmint/free-proxy-list/main/proxies/http.txt',
+  'Thordata/awesome-free-proxy-list/main/proxies/http.txt',
+  'ClearProxy/checked-proxy-list/main/http/raw/all.txt',
+  'VPSLabCloud/VPSLab-Free-Proxy-List/main/http_all.txt',
+  'komutan234/Proxy-List-Free/main/proxies/http.txt'
+];
+
+// ---------------------------------------------------------------------------
+// فیدهای ترکیبی (هر دو پروتکل در یک فایل) — پروتکل هنگام تست handshake مشخص می‌شود
+// ---------------------------------------------------------------------------
+const MIXED_FEEDS = [
+  'proxygenerator1/ProxyGenerator/main/MostStable/ALL.txt',
+  'proxygenerator1/ProxyGenerator/main/Stable/ALL.txt'
+];
+
+// ---------------------------------------------------------------------------
+// فیدهای با بازده بالا — در سنجش واقعی اکتبر ۲۰۲۶ (handshake کامل SOCKS5/HTTP)
+// بیشترین نرخ اتصال را داشتند. اسکنر اول از این‌ها برمی‌دارد و بعد از بقیه.
+// ---------------------------------------------------------------------------
+const HIGH_YIELD_PROXY_SOURCES = [
+  'zloi-user/hideip.me/main/socks5.txt',
+  'iplocate/free-proxy-list/main/protocols/socks5.txt',
+  'ProxyScrape/free-proxy-list/main/proxies/protocols/socks5/data.txt',
+  'monosans/proxy-list/main/proxies/socks5.txt',
+  'proxygenerator1/ProxyGenerator/main/MostStable/ALL.txt',
+  'proxygenerator1/ProxyGenerator/main/Stable/ALL.txt',
+  'vmheaven/VMHeaven-Free-Proxy-Updated/main/http.txt',
+  'iplocate/free-proxy-list/main/protocols/http.txt',
+  'ProxyScrape/free-proxy-list/main/proxies/protocols/http/data.txt',
+  'proxygenerator1/ProxyGenerator/main/MostStable/http.txt',
+  'monosans/proxy-list/main/proxies/http.txt',
+  'zloi-user/hideip.me/main/http.txt'
+].map(raw);
+
+// ---------------------------------------------------------------------------
+// فیدهای کشوری
+// ---------------------------------------------------------------------------
 const COUNTRY_META = {
   AE: { name: 'امارات متحده عربی', flag: '🇦🇪' },
   BG: { name: 'بلغارستان', flag: '🇧🇬' },
@@ -77,173 +208,113 @@ const COUNTRY_META = {
   SK: { name: 'اسلواکی', flag: '🇸🇰' }
 };
 
-// همه کشورها علاوه بر منابع اختصاصی، از سه منبع زنده کشوری جدید هم تغذیه می‌شوند
-for (const code of Object.keys(COUNTRY_META)) {
-  const extra = COUNTRY_EXTRA_PROXY_SOURCES[code] || [];
-  COUNTRY_EXTRA_PROXY_SOURCES[code] = [...new Set([
-    ...extra,
-    CLEARPROXY(code, 'socks5'),
-    CLEARPROXY(code, 'http'),
-    PROXYSCRAPE(code, 'socks5'),
-    PROXYSCRAPE(code, 'http'),
-    PROXIFLY_CC(code)
-  ])];
+// فقط این کشورها در مخزن Z-E-U-S فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
+const ZEUS_VIP_COUNTRIES = new Set(['CA', 'DE', 'GB', 'TH', 'TR', 'US']);
+const zeusVip = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
+
+// کدام کشورها در کدام قالب کشوری فایل دارند (بازبینی اکتبر ۲۰۲۶).
+// برای کشورهای غایب، ساختن آدرس فقط یک ۴۰۴ و یک subrequest هدر است.
+const COUNTRY_FEED_AVAILABILITY = {
+  clearSocks: new Set('CA DE GB IT NL US FR FI SG RU CN KR VN IN'.split(' ')),
+  clearHttp: new Set('DE GB NL TH TR US UZ FR RU SG CN KR VN BR IN'.split(' ')),
+  scrapeSocks: new Set('AE CA DE GB IT LV NL SE TH US FR FI RU SG CN KR VN UA IN BR'.split(' ')),
+  scrapeHttp: new Set('AE BG CA DE GB IT KZ NL TH SE US TR UZ FI FR RU SG CH CN KR UA VN BR IN'.split(' ')),
+  trioSocks: new Set('AE BG CA DE GB IT NL SE TH US FI FR SG RU CN KR CH VN UA BR IN RS SK'.split(' ')),
+  trioHttp: new Set('AE CA GB DE IT KZ NL NO SE TH TR US UZ FI FR RU SG CN CH KR UA VN BR IN RS'.split(' '))
+};
+
+// منابع کشوری هر کد کشور: هر کد از چند مخزن مستقل تغذیه می‌شود تا ۴۰۴ شدن یک
+// مخزن باعث خالی شدن اسکن آن کشور نشود.
+function buildCountryFeeds(code) {
+  const cc = String(code || '').toUpperCase();
+  if (!COUNTRY_META[cc]) return [];
+  const lower = cc.toLowerCase();
+  const available = COUNTRY_FEED_AVAILABILITY;
+  const feeds = [
+    raw(`proxifly/free-proxy-list/main/proxies/countries/${cc}/data.txt`)
+  ];
+  if (available.scrapeSocks.has(cc)) feeds.push(raw(`ProxyScrape/free-proxy-list/main/proxies/countries/${lower}/socks5/data.txt`));
+  if (available.scrapeHttp.has(cc)) feeds.push(raw(`ProxyScrape/free-proxy-list/main/proxies/countries/${lower}/http/data.txt`));
+  if (available.clearSocks.has(cc)) feeds.push(raw(`ClearProxy/checked-proxy-list/main/socks5/raw/country/${cc}.txt`));
+  if (available.clearHttp.has(cc)) feeds.push(raw(`ClearProxy/checked-proxy-list/main/http/raw/country/${cc}.txt`));
+  if (available.trioSocks.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/socks5.txt`));
+  if (available.trioHttp.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/http.txt`));
+  if (ZEUS_VIP_COUNTRIES.has(cc)) feeds.unshift(zeusVip(cc));
+  return feeds;
 }
 
-// لیست‌های عمومی SOCKS5 (هر بار زنده، برش چرخشی)
+const COUNTRY_EXTRA_PROXY_SOURCES = (() => {
+  const map = {};
+  for (const code of Object.keys(COUNTRY_META)) map[code] = buildCountryFeeds(code);
+  return map;
+})();
+
+// فیدهایی که خودشان آدرس کامل هستند (GitHub Pages) و با raw() ساخته نمی‌شوند
+const ABSOLUTE_FEEDS = [
+  { url: 'https://sunny9577.github.io/proxy-scraper/generated/socks5_proxies.txt', kind: 'socks5' },
+  { url: 'https://sunny9577.github.io/proxy-scraper/generated/http_proxies.txt', kind: 'http' }
+];
+
+// ---------------------------------------------------------------------------
+// لیست‌های عمومی
+// ---------------------------------------------------------------------------
 const GLOBAL_SOCKS5_SOURCES = [
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_anonymous/socks5.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_geolocation/socks5.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_geolocation_anonymous/socks5.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_anonymous/socks5.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_geolocation/socks5.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_geolocation_anonymous/socks5.txt',
-  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/socks5.txt',
-  'https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/socks5.txt',
-  'https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt',
-  'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/socks5.txt',
-  'https://raw.githubusercontent.com/Noctiro/getproxy/master/file/socks5.txt',
-  'https://raw.githubusercontent.com/Noctiro/getproxy/master/file/socks5_with_protocol.txt',
-  'https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt',
-  'https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5.txt',
-  'https://raw.githubusercontent.com/sunny9577/proxy-scraper/master/generated/socks5_proxies.txt',
-  'https://sunny9577.github.io/proxy-scraper/generated/socks5_proxies.txt',
-  'https://raw.githubusercontent.com/trio666/proxy-checker/main/socks5.txt',
-  'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt',
-  'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies_anonymous/socks5.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies_geolocation/socks5.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies_geolocation_anonymous/socks5.txt',
-  'https://raw.githubusercontent.com/ProxyScraper/ProxyScraper/main/socks5.txt',
-  'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Socks5.txt',
-  'https://raw.githubusercontent.com/jetkai/proxy-list/main/archive/txt/proxies-socks5.txt',
-  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/socks5.txt',
-  'https://raw.githubusercontent.com/officialputuid/KangProxy/main/socks5/socks5.txt',
-  'https://raw.githubusercontent.com/karimi-mohammad/SOCKS5-Proxy-Checker/main/socks5.txt',
-  'https://raw.githubusercontent.com/FosterG4/proxy-list/main/socks5.txt',
-  'https://raw.githubusercontent.com/yosephplex/proxy-updater/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/readloud/clauneck/main/PROXY-List/socks5.txt',
-  'https://raw.githubusercontent.com/ItzRazvyy/ProxyList/main/socks5.txt',
-  'https://raw.githubusercontent.com/i-am-unbekannt/BLITZPROXY/main/out-files/socks5.txt',
-  'https://raw.githubusercontent.com/caedencode/proxy-list/main/socks5.txt',
-  'https://raw.githubusercontent.com/ProxyListt/PROXY-list/main/socks5.txt',
-  'https://raw.githubusercontent.com/Daniel3356/Proxy_Full-list/main/socks5.txt',
-  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/MostStable/socks5.txt',
-  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/Stable/socks5.txt',
-  // منابع تازه (بررسی‌شده و فعال — اکتبر ۲۰۲۶)
-  'https://raw.githubusercontent.com/ProxyScrape/free-proxy-list/main/proxies/protocols/socks5/data.txt',
-  'https://raw.githubusercontent.com/proxmint/free-proxy-list/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/ClearProxy/checked-proxy-list/main/socks5/raw/all.txt',
-  'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/socks5_all.txt',
-  'https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/socks5.txt',
-  'https://raw.githubusercontent.com/ALIILAPRO/Proxy/main/socks5.txt',
-  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/socks5.txt'
+  ...SOCKS5_FEEDS.map(raw),
+  ...ABSOLUTE_FEEDS.filter(feed => feed.kind === 'socks5').map(feed => feed.url)
 ];
-
-// لیست‌های عمومی HTTP/HTTPS
 const GLOBAL_HTTP_SOURCES = [
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_anonymous/http.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_geolocation/http.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_geolocation_anonymous/http.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_anonymous/http.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_geolocation/http.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_geolocation_anonymous/http.txt',
-  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/http.txt',
-  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/https.txt',
-  'https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/http.txt',
-  'https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/https.txt',
-  'https://raw.githubusercontent.com/Vadim287/free-proxy/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/Vadim287/free-proxy/main/proxies/https.txt',
-  'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt',
-  'https://raw.githubusercontent.com/Noctiro/getproxy/master/file/http.txt',
-  'https://raw.githubusercontent.com/Noctiro/getproxy/master/file/https.txt',
-  'https://raw.githubusercontent.com/Noctiro/getproxy/master/file/http_with_protocol.txt',
-  'https://raw.githubusercontent.com/Noctiro/getproxy/master/file/https_with_protocol.txt',
-  'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt',
-  'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS.txt',
-  'https://raw.githubusercontent.com/sunny9577/proxy-scraper/master/generated/http_proxies.txt',
-  'https://sunny9577.github.io/proxy-scraper/generated/http_proxies.txt',
-  'https://raw.githubusercontent.com/trio666/proxy-checker/main/http.txt',
-  'https://raw.githubusercontent.com/trio666/proxy-checker/main/https.txt',
-  'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
-  'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
-  'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/https/data.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies_anonymous/http.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies_geolocation/http.txt',
-  'https://raw.githubusercontent.com/ikimono-afk/proxy-api/main/proxies_geolocation_anonymous/http.txt',
-  'https://raw.githubusercontent.com/ProxyScraper/ProxyScraper/main/http.txt',
-  'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Https.txt',
-  'https://raw.githubusercontent.com/jetkai/proxy-list/main/archive/txt/proxies-http.txt',
-  'https://raw.githubusercontent.com/jetkai/proxy-list/main/archive/txt/proxies-https.txt',
-  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/http.txt',
-  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/https.txt',
-  'https://raw.githubusercontent.com/officialputuid/KangProxy/main/http/http.txt',
-  'https://raw.githubusercontent.com/officialputuid/KangProxy/main/https/https.txt',
-  'https://raw.githubusercontent.com/elliottophellia/yakumo/master/results/http/global/http_checked.txt',
-  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/http.txt',
-  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/https.txt',
-  'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/http_proxies.txt',
-  'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/https_proxies.txt',
-  'https://raw.githubusercontent.com/dpangestuw/Free-Proxy/main/http_proxies.txt',
-  'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/http.txt',
-  'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/https.txt',
-  'https://raw.githubusercontent.com/mzyui/proxy-list/main/http.txt',
-  'https://raw.githubusercontent.com/ErcinDedeoglu/proxies/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/ErcinDedeoglu/proxies/main/proxies/https.txt',
-  'https://raw.githubusercontent.com/ALIILAPRO/Proxy/main/http.txt',
-  'https://raw.githubusercontent.com/Skillter/ProxyGather/master/proxies/working-proxies-http.txt',
-  'https://raw.githubusercontent.com/SevenworksDev/proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/SevenworksDev/proxy-list/main/proxies/https.txt',
-  'https://raw.githubusercontent.com/Vann-Dev/proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/Vann-Dev/proxy-list/main/proxies/https.txt',
-  'https://raw.githubusercontent.com/TuanMinPay/live-proxy/master/http.txt',
-  'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/main/http.txt',
-  'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/main/https.txt',
-  'https://raw.githubusercontent.com/yosephplex/proxy-updater/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/readloud/clauneck/main/PROXY-List/http.txt',
-  'https://raw.githubusercontent.com/ItzRazvyy/ProxyList/main/http.txt',
-  'https://raw.githubusercontent.com/i-am-unbekannt/BLITZPROXY/main/out-files/http.txt',
-  'https://raw.githubusercontent.com/caedencode/proxy-list/main/http.txt',
-  'https://raw.githubusercontent.com/ProxyListt/PROXY-list/main/http.txt',
-  'https://raw.githubusercontent.com/Daniel3356/Proxy_Full-list/main/http.txt',
-  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/MostStable/http.txt',
-  'https://raw.githubusercontent.com/proxygenerator1/ProxyGenerator/main/Stable/http.txt',
-  // منابع تازه (بررسی‌شده و فعال — اکتبر ۲۰۲۶)
-  'https://raw.githubusercontent.com/ProxyScrape/free-proxy-list/main/proxies/protocols/http/data.txt',
-  'https://raw.githubusercontent.com/proxmint/free-proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/ClearProxy/checked-proxy-list/main/http/raw/all.txt',
-  'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/http_all.txt',
-  'https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/ALIILAPRO/Proxy/main/http.txt',
-  'https://raw.githubusercontent.com/iplocate/free-proxy-list/main/protocols/http.txt'
+  ...HTTP_FEEDS.map(raw),
+  ...ABSOLUTE_FEEDS.filter(feed => feed.kind === 'http').map(feed => feed.url)
+];
+const GLOBAL_MIXED_SOURCES = MIXED_FEEDS.map(raw);
+
+// فید عمومی residential در حال حاضر هیچ منبع زنده‌ای ندارد؛ به‌جای نگه‌داشتن
+// آدرس‌های ۴۰۴ این فهرست خالی است تا subrequest هدر نرود.
+const RESIDENTIAL_SOURCES = [];
+
+// ---------------------------------------------------------------------------
+// رجیستری یکپارچه فیدها — همین فهرست در /api/scanner/sources هم برگردانده می‌شود
+// ---------------------------------------------------------------------------
+const PROXY_FEED_REGISTRY = [
+  ...SOCKS5_FEEDS.map(path => ({ url: raw(path), kind: 'socks5', scope: 'global' })),
+  ...HTTP_FEEDS.map(path => ({ url: raw(path), kind: 'http', scope: 'global' })),
+  ...MIXED_FEEDS.map(path => ({ url: raw(path), kind: 'mixed', scope: 'global' })),
+  ...ABSOLUTE_FEEDS.map(feed => ({ url: feed.url, kind: feed.kind, scope: 'global' })),
+  ...Object.keys(COUNTRY_META).flatMap(code =>
+    buildCountryFeeds(code).map(url => ({
+      url,
+      kind: guessFeedKind(url),
+      scope: 'country',
+      country: code
+    }))
+  )
 ];
 
-// لیست‌های مسکونی (residential) — به‌عنوان استخر مکمل
-const RESIDENTIAL_SOURCES = [
-  'https://raw.githubusercontent.com/shadowsock/proxy-lists/main/residential.txt',
-  'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/types/residential/data.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/types/residential.txt',
-  'https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies_types/residential.txt',
-  'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/residential.txt',
-  'https://raw.githubusercontent.com/parser-free/proxy-list/main/residential/proxy.txt',
-  'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/residential.txt'
-];
+// نوع فید از روی مسیر فایل تشخیص داده می‌شود، نه کل آدرس؛ در غیر این صورت
+// خود «https://» باعث می‌شود همه چیز http شناسایی شود.
+function guessFeedKind(url) {
+  const path = String(url || '').toLowerCase().replace(/^https?:\/\//, '');
+  if (/socks/.test(path)) return 'socks5';
+  if (/https?/.test(path)) return 'http';
+  return 'mixed';
+}
 
-// لیست‌های آی‌پی/دامنه ثابت کلادفلر (هر خط یک آدرس) — نمونه‌گیری زنده برای yx
-// منبع Z-E-U-S شامل هزاران آی‌پی فرانت‌شده کلادفلر است که به‌عنوان آدرس نود پاسخ می‌دهند.
+const FEED_KIND_BY_URL = new Map(PROXY_FEED_REGISTRY.map(feed => [feed.url, feed.kind]));
+
+// نوع اعلام‌شدهٔ یک فید (برای انتخاب پارسر و پورت پیش‌فرض)
+function getFeedKind(url) {
+  return FEED_KIND_BY_URL.get(url) || guessFeedKind(url);
+}
+
+// ---------------------------------------------------------------------------
+// آی‌پی‌ها
+// ---------------------------------------------------------------------------
+// لیست آی‌پی/دامنه ثابت کلادفلر (هر خط یک آدرس) — نمونه‌گیری زنده برای yx
 const IP_CANDIDATE_SOURCES = [
   'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt'
 ];
 
-// رنج‌های IPv4/IPv6 کلادفلر برای تست و انتخاب آی‌پی ثابت
+// رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
 const IP_RANGE_SOURCES = {
   ipv4: [
     'https://raw.githubusercontent.com/lord-alfred/ipranges/main/cloudflare/ipv4.txt',
@@ -267,11 +338,9 @@ const IP_RANGE_SOURCES = {
   // رنج‌های IPv6 سایر ارائه‌دهندگان (برای تست دستی/پیشرفته)
   extraIpv6: [
     'https://raw.githubusercontent.com/lord-alfred/ipranges/main/all/ipv6.txt',
-    'https://raw.githubusercontent.com/lord-alfred/ipranges/main/apple-proxy/ipv6.txt',
     'https://raw.githubusercontent.com/lord-alfred/ipranges/main/digitalocean/ipv6.txt',
     'https://raw.githubusercontent.com/lord-alfred/ipranges/main/linode/ipv6.txt',
     'https://raw.githubusercontent.com/lord-alfred/ipranges/main/vultr/ipv6.txt',
-    'https://raw.githubusercontent.com/lord-alfred/ipranges/main/oracle/ipv6.txt',
     'https://raw.githubusercontent.com/lord-alfred/ipranges/main/amazon/ipv6.txt',
     'https://raw.githubusercontent.com/mrkhachaturov/ipranges/main/all/ipv6.txt',
     'https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/master/doh-ipv6.txt',
@@ -297,7 +366,6 @@ const WARP_DEFAULT_ADDRESS = '172.16.0.2';
 const WARP_ENDPOINT_PORTS = [2408, 500, 1701, 4500];
 
 // رنج‌های رسمی ingress کلادفلر — چندلوکیشن با همین نقاط پایانی ساخته می‌شود
-// (انتخاب کشور بر اساس مسیریابی کلادفلر است؛ برچسب هر نود قابل تغییر از پنل است)
 const WARP_ENDPOINT_IPS = [
   '162.159.192.1',
   '162.159.193.1',
@@ -584,163 +652,24 @@ function parseNodePorts(value = '') {
   return list.length ? list : [443];
 }
 
-// لیست پروکسی‌های کشوری VIP (پایه؛ در انتها با منابع زنده اسکنر ادغام می‌شود)
-const BASE_COUNTRY_PROXY_SOURCES = {
-  'DE': {
-    name: 'آلمان',
-    flag: '🇩🇪',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/DE.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/DE/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/DE.txt'
-    ]
-  },
-  'NL': {
-    name: 'هلند',
-    flag: '🇳🇱',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/NL.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/NL/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/NL.txt'
-    ]
-  },
-  'US': {
-    name: 'ایالات متحده آمریکا',
-    flag: '🇺🇸',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/US.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/US/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/US.txt'
-    ]
-  },
-  'GB': {
-    name: 'بریتانیا / انگلستان',
-    flag: '🇬🇧',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/GB.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/GB.txt'
-    ]
-  },
-  'CA': {
-    name: 'کانادا',
-    flag: '🇨🇦',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/CA.txt'
-    ]
-  },
-  'TR': {
-    name: 'ترکیه',
-    flag: '🇹🇷',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/TR.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/TR.txt'
-    ]
-  },
-  'AE': {
-    name: 'امارات متحده عربی',
-    flag: '🇦🇪',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/AE.txt'
-    ]
-  },
-  'FR': {
-    name: 'فرانسه',
-    flag: '🇫🇷',
-    urls: [
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/FR.txt'
-    ]
-  },
-  'FI': {
-    name: 'فنلاند',
-    flag: '🇫🇮',
-    urls: [
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/FI/socks5.txt',
-      'https://raw.githubusercontent.com/dimzon/scaling-sniffle/main/by-country/FI.txt'
-    ]
-  },
-  'SE': {
-    name: 'سوئد',
-    flag: '🇸🇪',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/SE.txt'
-    ]
-  },
-  'NO': {
-    name: 'نروژ',
-    flag: '🇳🇴',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/NO.txt'
-    ]
-  },
-  'IT': {
-    name: 'ایتالیا',
-    flag: '🇮🇹',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/IT.txt'
-    ]
-  },
-  'BG': {
-    name: 'بلغارستان',
-    flag: '🇧🇬',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/BG.txt'
-    ]
-  },
-  'KZ': {
-    name: 'قزاقستان',
-    flag: '🇰🇿',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/KZ.txt'
-    ]
-  },
-  'LV': {
-    name: 'لتونی',
-    flag: '🇱🇻',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/LV.txt'
-    ]
-  },
-  'TH': {
-    name: 'تایلند',
-    flag: '🇹🇭',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/TH.txt',
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/TH/socks5.txt'
-    ]
-  },
-  'UZ': {
-    name: 'ازبکستان',
-    flag: '🇺🇿',
-    urls: [
-      'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy_vip/UZ.txt'
-    ]
-  },
-  'SG': {
-    name: 'سنگاپور',
-    flag: '🇸🇬',
-    urls: [
-      'https://raw.githubusercontent.com/trio666/proxy-checker/main/country/SG/socks5.txt'
-    ]
-  }
-};
+// منابع کشوری از رجیستری زندهٔ اسکنر (src/config/sources.js) ساخته می‌شوند؛
+// آدرس‌های ۴۰۴ (dimzon، بخشی از فایل‌های proxy_vip و …) از این استخر حذف شده‌اند.
 
 // ============================================================================
-// ادغام منابع پایه با منابع زنده اسکنر (Z-E-U-S + trio666 + dimzon)
+// ادغام منابع زنده اسکنر (Z-E-U-S + trio666 + proxifly + ProxyScrape + ClearProxy)
 // ============================================================================
 const COUNTRY_PROXY_SOURCES = (() => {
   const codes = new Set([
-    ...Object.keys(BASE_COUNTRY_PROXY_SOURCES),
     ...Object.keys(COUNTRY_EXTRA_PROXY_SOURCES),
     ...Object.keys(COUNTRY_META)
   ]);
   const merged = {};
   for (const code of codes) {
-    const base = BASE_COUNTRY_PROXY_SOURCES[code] || {};
     const meta = COUNTRY_META[code] || {};
-    const urls = [...new Set([...(base.urls || []), ...(COUNTRY_EXTRA_PROXY_SOURCES[code] || [])])];
+    const urls = [...new Set(COUNTRY_EXTRA_PROXY_SOURCES[code] || [])];
     merged[code] = {
-      name: base.name || meta.name || code,
-      flag: base.flag || meta.flag || '',
+      name: meta.name || code,
+      flag: meta.flag || '',
       urls
     };
   }
@@ -750,6 +679,7 @@ const COUNTRY_PROXY_SOURCES = (() => {
 const GLOBAL_PROXY_SOURCES = {
   socks5: GLOBAL_SOCKS5_SOURCES,
   http: GLOBAL_HTTP_SOURCES,
+  mixed: GLOBAL_MIXED_SOURCES,
   residential: RESIDENTIAL_SOURCES
 };
 
@@ -6656,50 +6586,307 @@ function sanitizeUserForClient(user) {
   return { ...user, config: sanitizeConfigForClient(user.config || {}) };
 }
 
-// تجزیه لیست پروکسی: پشتیبانی از socks5://user:pass@host:port و host:port
-// آدرس کامل پروکسی (با پروتکل و رمز) برای تنظیم مقدار s حفظ می‌شود.
-function parseProxyLines(text, defaultProtocol = '') {
+// ============================================================================
+// تجزیهٔ فیدهای پروکسی
+// فیدهای عمومی قالب یکسان ندارند؛ این پارسر به‌جای تکیه بر «کل خط = host:port»
+// هر توکن host:port را در خط پیدا می‌کند تا همهٔ این قالب‌ها خوانده شوند:
+//   host:port | host:port:Country | host:port|Country|City | 🇩🇪 1.2.3.4:1080 519ms DE [ISP]
+//   SOCKS5 US 0.15s 1.2.3.4:45395 | socks5://user:pass@host:port | HTTPS://host:port
+// و اگر خط فقط یک آی‌پی باشد (بدون پورت) با پورت پیش‌فرض همان پروتکل خوانده می‌شود.
+// ============================================================================
+const DEFAULT_PROXY_PORTS = { SOCKS5: 1080, SOCKS4: 1080, HTTP: 80, HTTPS: 443 };
+const IPV4_HP_RE = /\b((?:\d{1,3}\.){3}\d{1,3}):(\d{1,5})\b/;
+const IPV6_HP_RE = /\[([0-9a-fA-F:]+)\]:(\d{1,5})/;
+const DOMAIN_HP_RE = /\b((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}):(\d{1,5})\b/i;
+const BARE_IPV4_RE = /^(\d{1,3}(?:\.\d{1,3}){3})$/;
+
+function isStrictIpv4(ip) {
+  const parts = String(ip).split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(p => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+}
+
+// اولین host:port معتبر داخل خط (هر جای خط باشد)
+function extractHostPort(line) {
+  let m = line.match(IPV6_HP_RE);
+  if (m) return { host: m[1], port: parseInt(m[2], 10) };
+  m = line.match(IPV4_HP_RE);
+  if (m && isStrictIpv4(m[1])) return { host: m[1], port: parseInt(m[2], 10) };
+  m = line.match(DOMAIN_HP_RE);
+  if (m) return { host: m[1].toLowerCase(), port: parseInt(m[2], 10) };
+  return null;
+}
+
+// کد کشور اگر در خط باشد (پسوند :DE یا ستون |DE| یا توکن DE)
+function extractCountryHint(line) {
+  if (line.includes('|')) {
+    const parts = line.split('|').map(s => s.trim());
+    for (const part of parts.slice(1)) {
+      if (/^[A-Za-z]{2}$/.test(part)) return part.toUpperCase();
+    }
+  }
+  const notProxy = (line.match(IPV4_HP_RE) || line.match(DOMAIN_HP_RE) || [''])[0];
+  const rest = notProxy ? line.replace(notProxy, ' ') : line;
+  const token = rest.match(/\b([A-Z]{2})\b/);
+  return token ? token[1] : '';
+}
+
+function normalizeProxyProtocol(value) {
+  const raw = String(value || '').toLowerCase();
+  if (raw === 'socks5' || raw === 'socks5h' || raw === 'socks') return 'SOCKS5';
+  if (raw === 'socks4') return 'SOCKS4';
+  if (raw === 'https') return 'HTTPS';
+  if (raw === 'http') return 'HTTP';
+  return '';
+}
+
+// فیدهای JSON (مثل ProxyGenerator/ALL/all.json): فقط فرمت‌های سبک و کوچک
+function parseProxyJson(text, hintProtocol) {
+  const trimmed = String(text || '').trim();
+  if (trimmed.length > 1_500_000) return [];
+  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return [];
+  let data;
+  try { data = JSON.parse(trimmed); } catch (_e) { return []; }
+  const rows = Array.isArray(data) ? data : (data.proxies || data.data || data.list || []);
+  if (!Array.isArray(rows)) return [];
   const out = [];
-  for (const raw of String(text || '').split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#') || line.startsWith('//')) continue;
-    let protocol = 'TCP';
-    let proxyUrl = '';
-    let rest = line;
-    const scheme = rest.match(/^([a-z0-9+.-]+):\/\//i);
-    if (scheme) {
-      protocol = scheme[1].toUpperCase();
-      const schemeName = scheme[1].toLowerCase();
-      const rawRest = rest.slice(scheme[0].length).split('#')[0].trim();
-      if (['socks5', 'socks', 'http', 'https'].includes(schemeName)) {
-        proxyUrl = `${schemeName}://${rawRest}`;
-      }
-      rest = rest.slice(scheme[0].length);
+  for (const row of rows) {
+    if (typeof row === 'string') {
+      const found = extractHostPort(row) || (BARE_IPV4_RE.test(row.trim()) ? { host: row.trim(), port: 0 } : null);
+      if (found) out.push({ ...found, protocol: normalizeProxyProtocol(row.split('://')[0]) || hintProtocol, username: '', password: '', countryHint: '' });
+      continue;
     }
-    rest = rest.split('#')[0].trim();
-    if (rest.includes('@')) rest = rest.split('@').pop();
-    rest = rest.split('/')[0].trim();
-    let host = '';
-    let port = 0;
-    if (rest.startsWith('[')) {
-      const m = rest.match(/^\[([^\]]+)\]:(\d{1,5})/);
-      if (m) { host = m[1]; port = parseInt(m[2], 10); }
-    } else {
-      const idx = rest.lastIndexOf(':');
-      if (idx > 0) { host = rest.slice(0, idx).trim(); port = parseInt(rest.slice(idx + 1), 10); }
-    }
-    if (!host || !Number.isFinite(port) || port < 1 || port > 65535) continue;
-    if (/^(vless|vmess|trojan|ss|ssr)$/i.test(protocol)) continue;
-    let proto = protocol === 'HTTPS' ? 'HTTPS' : protocol === 'HTTP' ? 'HTTP' : protocol === 'SOCKS5' ? 'SOCKS5' : protocol === 'SOCKS4' ? 'SOCKS4' : 'TCP';
-    // لیست‌های بدون scheme (مثل monosans) از مسیر منبع تشخیص داده می‌شوند
-    if (proto === 'TCP' && defaultProtocol) {
-      proto = defaultProtocol;
-      proxyUrl = `${defaultProtocol.toLowerCase()}://${host}:${port}`;
-    }
-    const family = host.includes(':') ? 'ipv6' : (/^\d+\.\d+\.\d+\.\d+$/.test(host) ? 'ipv4' : 'domain');
-    out.push({ host, port, protocol: proto, proxy: proxyUrl, family });
+    if (!row || typeof row !== 'object') continue;
+    const host = row.ip || row.host || row.address || row.server || row.proxy_ip;
+    const port = parseInt(row.port || row.proxy_port || row.proxyPort || 0, 10);
+    if (!host || !port) continue;
+    const rawProtocol = row.protocol || row.protocols || row.type || row.scheme || '';
+    out.push({
+      host: String(host),
+      port,
+      protocol: normalizeProxyProtocol(Array.isArray(rawProtocol) ? rawProtocol[0] : rawProtocol) || hintProtocol,
+      username: String(row.username || row.user || ''),
+      password: String(row.password || row.pass || ''),
+      countryHint: String(row.country || row.country_code || '').toUpperCase().slice(0, 2)
+    });
   }
   return out;
+}
+
+// hintProtocol خالی یعنی «مشخص نیست» و هنگام تست، SOCKS5 و بعد HTTP امتحان می‌شود.
+function parseProxyLines(text, hintProtocol = '') {
+  const source = String(text || '');
+  const fromJson = parseProxyJson(source, hintProtocol);
+  if (fromJson.length) return fromJson;
+
+  const out = [];
+  const compatibleHint = normalizeProxyProtocol(hintProtocol);
+  for (const raw of source.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith('//') || line.startsWith(';')) continue;
+    if (/^(website|support|btc|eth|ltc|doge)\b/i.test(line)) continue;
+    if (/^(format|fromat)\b/i.test(line)) continue;
+    if (/updated\s+at\s+\d{4}-\d{2}-\d{2}/i.test(line)) continue;
+
+    const schemeMatch = line.match(/\b(socks5h?|socks4|socks|https?):\/\//i);
+    const schemeProtocol = schemeMatch ? normalizeProxyProtocol(schemeMatch[1]) : '';
+    let username = '';
+    let password = '';
+    const authMatch = line.match(/\/\/([^@\/\s]+)@/);
+    if (authMatch) {
+      const parts = authMatch[1].split(':');
+      username = parts[0] || '';
+      password = parts.slice(1).join(':') || '';
+    }
+
+    const found = extractHostPort(line);
+    let host = found ? found.host : '';
+    let port = found ? found.port : 0;
+    if (!host) {
+      const bare = line.match(BARE_IPV4_RE);
+      if (!bare || !isStrictIpv4(bare[1])) continue;
+      host = bare[1];
+      port = DEFAULT_PROXY_PORTS[schemeProtocol || compatibleHint] || 1080;
+    }
+    if (!host || !(port > 0 && port < 65536)) continue;
+    if (host.includes(':') && !/^[0-9a-fA-F:]+$/.test(host)) continue;
+
+    const protocol = schemeProtocol || compatibleHint;
+    const family = host.includes(':') ? 'ipv6' : (isStrictIpv4(host) ? 'ipv4' : 'domain');
+    out.push({
+      host,
+      port,
+      protocol,
+      secure: protocol === 'HTTPS',
+      username,
+      password,
+      countryHint: extractCountryHint(line),
+      proxy: protocol ? `${protocol.toLowerCase().replace('socks5h', 'socks5')}://${username ? `${username}:${password}@` : ''}${host}:${port}` : '',
+      family
+    });
+  }
+  return out;
+}
+
+// دسته‌بندی ورودی‌ها با احترام به سقف اتصال هم‌زمان کلادفلر (۶ سوکت باز)
+const MAX_PARALLEL_SOCKETS = 5;
+
+async function runLimited(items, limit, worker, stopAt = 0) {
+  let index = 0;
+  const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (index < items.length) {
+      if (stopAt && Date.now() > stopAt) return;
+      const current = index++;
+      await worker(items[current], current);
+    }
+  });
+  await Promise.all(runners);
+}
+
+function withDeadline(promise, timeoutMs, message = 'timeout') {
+  let timer = 0;
+  const guard = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
+function concatBytes(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function shortError(err) {
+  return String((err && err.message) || err || 'connect_failed').slice(0, 40);
+}
+
+// مقصد آزمایشی handshake پروکسی — فقط برای اثبات عبور ترافیک است
+const PROXY_TEST_TARGET = { host: 'www.cloudflare.com', port: 443 };
+// بیشتر پروکسی‌های مرده همین اول در برقراری TCP گیر می‌کنند؛ مهلت کوتاه اتصال
+// باعث می‌شود بودجهٔ زمانی اسکن صرف پروکسی‌های واقعاً زنده شود.
+const PROXY_CONNECT_TIMEOUT_MS = 900;
+
+// تست واقعی SOCKS5: احراز هویت + CONNECT به مقصد آزمایشی
+async function verifySocks5(entry, timeoutMs) {
+  const started = Date.now();
+  // بودجهٔ زمانی برای کل handshake است، نه هر مرحله؛ در غیر این صورت مجموع
+  // مراحل می‌توانست چند برابر مهلت شود.
+  const left = () => Math.max(250, timeoutMs - (Date.now() - started));
+  let sock = null;
+  try {
+    sock = connect({ hostname: entry.host, port: entry.port });
+    await withDeadline(sock.opened, Math.min(left(), PROXY_CONNECT_TIMEOUT_MS));
+    const writer = sock.writable.getWriter();
+    const reader = sock.readable.getReader();
+    let buf = new Uint8Array(0);
+    const readExact = async count => {
+      while (buf.length < count) {
+        const { value, done } = await withDeadline(reader.read(), left());
+        if (done || !value) throw new Error('closed');
+        buf = concatBytes(buf, value);
+      }
+      const out = buf.slice(0, count);
+      buf = buf.slice(count);
+      return out;
+    };
+    const needsAuth = Boolean(entry.username);
+    await writer.write(new Uint8Array(needsAuth ? [5, 2, 0, 2] : [5, 1, 0]));
+    const greeting = await readExact(2);
+    if (greeting[0] !== 5) throw new Error('not-socks5');
+    const method = greeting[1];
+    if (method === 255) throw new Error('no-method');
+    if (method === 2) {
+      if (!needsAuth) throw new Error('auth-required');
+      const enc = new TextEncoder();
+      const userBytes = enc.encode(entry.username);
+      const passBytes = enc.encode(entry.password || '');
+      await writer.write(new Uint8Array([1, userBytes.length, ...userBytes, passBytes.length, ...passBytes]));
+      const authReply = await readExact(2);
+      if (authReply[1] !== 0) throw new Error('auth-failed');
+    } else if (method !== 0) {
+      throw new Error('method-' + method);
+    }
+    const targetHost = new TextEncoder().encode(PROXY_TEST_TARGET.host);
+    const targetPort = PROXY_TEST_TARGET.port;
+    await writer.write(new Uint8Array([5, 1, 0, 3, targetHost.length, ...targetHost, (targetPort >> 8) & 255, targetPort & 255]));
+    const reply = await readExact(4);
+    if (reply[1] !== 0) throw new Error('connect-code-' + reply[1]);
+    const latencyMs = Date.now() - started;
+    try { writer.releaseLock(); } catch (_e) {}
+    try { reader.releaseLock(); } catch (_e) {}
+    try { sock.close(); } catch (_e) {}
+    return { ok: true, latencyMs };
+  } catch (err) {
+    try { if (sock) sock.close(); } catch (_e) {}
+    return { ok: false, error: shortError(err) };
+  }
+}
+
+// تست واقعی HTTP(S): درخواست CONNECT و انتظار پاسخ 2xx
+async function verifyHttpProxy(entry, timeoutMs) {
+  const started = Date.now();
+  const left = () => Math.max(250, timeoutMs - (Date.now() - started));
+  let sock = null;
+  try {
+    // اتصال همیشه TCP است: بیشتر خط‌های «https://» در این فیدها پروکسی CONNECT معمولی
+    // هستند، و اتصال TLS به یک آی‌پی باعث خطای «certificate IP mismatch» در runtime می‌شد.
+    sock = connect({ hostname: entry.host, port: entry.port });
+    await withDeadline(sock.opened, Math.min(left(), PROXY_CONNECT_TIMEOUT_MS));
+    const writer = sock.writable.getWriter();
+    const reader = sock.readable.getReader();
+    const authority = `${PROXY_TEST_TARGET.host}:${PROXY_TEST_TARGET.port}`;
+    let request =
+      `CONNECT ${authority} HTTP/1.1\r\n` +
+      `Host: ${authority}\r\n` +
+      `Proxy-Connection: keep-alive\r\n`;
+    if (entry.username) {
+      request += `Proxy-Authorization: Basic ${btoa(`${entry.username}:${entry.password || ''}`)}\r\n`;
+    }
+    request += '\r\n';
+    await writer.write(new TextEncoder().encode(request));
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes('\r\n\r\n') && text.length < 2048) {
+      const { value, done } = await withDeadline(reader.read(), left());
+      if (done || !value) break;
+      text += decoder.decode(value, { stream: true });
+    }
+    if (!/^HTTP\/1\.[01] 2\d\d/.test(text)) {
+      if (/^HTTP\/1\.[01] 407/.test(text)) throw new Error('auth-required');
+      throw new Error(text.startsWith('HTTP/') ? 'rejected-' + text.slice(9, 12) : 'bad-response');
+    }
+    const latencyMs = Date.now() - started;
+    try { writer.releaseLock(); } catch (_e) {}
+    try { reader.releaseLock(); } catch (_e) {}
+    try { sock.close(); } catch (_e) {}
+    return { ok: true, latencyMs };
+  } catch (err) {
+    try { if (sock) sock.close(); } catch (_e) {}
+    return { ok: false, error: shortError(err) };
+  }
+}
+
+// تأیید نهایی یک پروکسی: پروتکل نامشخص باشد، هر دو حالت امتحان می‌شود.
+async function verifyProxyEntry(entry, timeoutMs = 3200) {
+  const attempts = entry.protocol ? [entry.protocol] : ['SOCKS5', 'HTTP'];
+  const deadlineAt = Date.now() + timeoutMs;
+  let lastError = 'timeout';
+  for (let i = 0; i < attempts.length; i++) {
+    // پروتکل نامشخص: بودجهٔ زمانی بین SOCKS5 و HTTP نصف می‌شود تا هر دو شانس
+    // امتحان داشته باشند و مجموع از مهلت کلی رد نشود.
+    const remaining = deadlineAt - Date.now();
+    const budget = Math.floor(remaining / (attempts.length - i));
+    if (budget < 300) break;
+    const protocol = attempts[i];
+    const result = protocol === 'SOCKS5'
+      ? await verifySocks5(entry, budget)
+      : await verifyHttpProxy(entry, budget);
+    if (result.ok) return { ...result, protocol, verified: true };
+    lastError = result.error;
+  }
+  return { ok: false, error: lastError, verified: false };
 }
 
 // --- اسکنر آی‌پی: تجزیه رنج‌های CIDR و انتخاب تصادفی آدرس سالم ---
@@ -6834,39 +7021,39 @@ function pickRotating(list, count, seed = Date.now()) {
 }
 
 async function fetchSourceText(url, timeoutMs = 3500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // بدون گزینهٔ cache: خود runtime کلادفلر مقدار cache: 'no-store' را پیاده نکرده و
+    // درخواست فوراً throw می‌شود؛ به‌جای آن پارامتر یکتای _mili برای هر درخواست
+    // امکان کش شدن پاسخ را از بین می‌برد.
     const separator = url.includes('?') ? '&' : '?';
     const res = await fetch(`${url}${separator}_mili=${Date.now()}`, {
       signal: controller.signal,
-      cache: 'no-store',
       headers: {
         'User-Agent': 'miliconfig-scanner/3.1',
         'Cache-Control': 'no-cache'
       }
     });
-    clearTimeout(timer);
     if (!res.ok) return '';
     return await res.text();
   } catch (_e) {
     return '';
+  } finally {
+    clearTimeout(timer);
   }
-}
-
-async function fetchProxySource(url, timeoutMs = 3500) {
-  const lower = String(url || '').toLowerCase();
-  const defaultProtocol = /socks/.test(lower) ? 'SOCKS5' : /http/.test(lower) ? 'HTTP' : '';
-  return parseProxyLines(await fetchSourceText(url, timeoutMs), defaultProtocol);
 }
 
 // تست واقعی اتصال TCP و اندازه‌گیری پینگ
 async function probeTcp(host, port, timeoutMs = 1800) {
   const started = Date.now();
   let socket;
+  let timer = 0;
   try {
     socket = connect({ hostname: host, port });
-    const guard = new Promise((_resolve, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs));
+    const guard = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+    });
     await Promise.race([socket.opened, guard]);
     const latencyMs = Date.now() - started;
     try { socket.close(); } catch (_e) {}
@@ -6874,6 +7061,8 @@ async function probeTcp(host, port, timeoutMs = 1800) {
   } catch (err) {
     try { if (socket) socket.close(); } catch (_e2) {}
     return { ok: false, latencyMs: 0, error: String((err && err.message) || err || 'connect_failed').slice(0, 40) };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -7458,6 +7647,7 @@ async function handleScannerApi(request, env) {
       globalSources: {
         socks5: GLOBAL_PROXY_SOURCES.socks5.length,
         http: GLOBAL_PROXY_SOURCES.http.length,
+        mixed: (GLOBAL_PROXY_SOURCES.mixed || []).length,
         ipv4: IP_RANGE_SOURCES.ipv4.length,
         ipv6: IP_RANGE_SOURCES.ipv6.length
       },
@@ -7465,6 +7655,30 @@ async function handleScannerApi(request, env) {
       officialIps: OFFICIAL_DIRECT_IPS,
       officialIpv6: OFFICIAL_DIRECT_IPV6,
       directDomains: DIRECT_DOMAINS.map(item => item.domain)
+    });
+  }
+
+  // رجیستری فیدها: همهٔ آدرس‌هایی که اسکنر از آنها تغذیه می‌شود، به‌صورت JSON
+  // (?scope=country|global و ?country=DE و ?kind=socks5|http|mixed برای فیلتر)
+  // این همان «سازوکار اتصال» به مخازن بیرونی است؛ هر ابزار بیرونی می‌تواند از
+  // همین خروجی فهرست منابع را بخواند و مستقیم همان آدرس‌ها را دریافت کند.
+  if (action === 'sources' && request.method === 'GET') {
+    const scope = String(url.searchParams.get('scope') || '').toLowerCase();
+    const countryFilter = String(url.searchParams.get('country') || '').toUpperCase();
+    const kindFilter = String(url.searchParams.get('kind') || '').toLowerCase();
+    let feeds = PROXY_FEED_REGISTRY.slice();
+    if (scope === 'global' || scope === 'country') feeds = feeds.filter(feed => feed.scope === scope);
+    if (countryFilter) feeds = feeds.filter(feed => feed.country === countryFilter);
+    if (kindFilter) feeds = feeds.filter(feed => feed.kind === kindFilter);
+    return jsonResponse({
+      success: true,
+      count: feeds.length,
+      total: PROXY_FEED_REGISTRY.length,
+      kinds: ['socks5', 'http', 'mixed'],
+      // روش‌های خواندن هر فید: خطوط host:port، host:port:CC، host:port|CC|City،
+      // خطوط بس‌شدهٔ آی‌پی، فیدهای JSON، و پروکسی‌های دارای user:pass@
+      supportedFormats: ['host:port', 'scheme://host:port', 'user:pass@host:port', 'host:port:CC', 'host:port|CC|City', 'bare-ip', 'json'],
+      feeds
     });
   }
 
@@ -7603,19 +7817,29 @@ async function handleScannerApi(request, env) {
       // ---- اسکن پروکسی (SOCKS5/HTTP) با منابع کشوری + لیست‌های عمومی ----
       // برای کشور مشخص فقط منابع همان کشور خوانده می‌شود تا نتیجه واقعاً به آن کشور تعلق داشته باشد؛
       // لیست‌های عمومی فقط در حالت «چند کشور» استفاده می‌شوند.
+      //
+      // هر پروکسی قبل از نمایش، handshake واقعی پروتکل را پاس می‌کند (SOCKS5 CONNECT یا
+      // HTTP CONNECT). باز بودن پورت به‌تنهایی معیار نیست: بیشتر پروکسی‌های منقضی پورت
+      // باز دارند ولی ترافیک را عبور نمی‌دهند و همین باعث می‌شد نودهای «آنلاین» کار نکنند.
       const countrySources = multi
         ? pickRotating(Object.keys(COUNTRY_PROXY_SOURCES), 3).flatMap(c => pickRotating(COUNTRY_PROXY_SOURCES[c].urls || [], 1))
-        : pickRotating(COUNTRY_PROXY_SOURCES[code].urls || [], 4);
-      const globalSources = multi
-        ? pickRotating([...GLOBAL_PROXY_SOURCES.socks5, ...GLOBAL_PROXY_SOURCES.http], 3)
-        : [];
-      const sources = [...new Set([...countrySources, ...globalSources])].slice(0, 12);
+        : pickRotating(COUNTRY_PROXY_SOURCES[code].urls || [], 5);
+      // فیدهای با بازده بالا اولویت دارند؛ در حالت کشوری هم دو فید عمومی
+      // با بازده بالا اضافه می‌شود تا استخر تست کوچک نماند.
+      const highYield = pickRotating(HIGH_YIELD_PROXY_SOURCES, multi ? 4 : 2);
+      const sources = [...new Set([...countrySources, ...highYield])].slice(0, 8);
 
-      const lists = await Promise.all(sources.map(src => fetchProxySource(src, 3500)));
+      const feedResults = await Promise.all(sources.map(async src => {
+        const text = await fetchSourceText(src, 4000);
+        const kind = getFeedKind(src);
+        const hint = kind === 'socks5' ? 'SOCKS5' : kind === 'http' ? 'HTTP' : '';
+        return { url: src, reachable: text.length > 0, entries: text ? parseProxyLines(text, hint) : [] };
+      }));
+
       const seen = new Set();
       const candidates = [];
-      for (const list of lists) {
-        for (const p of list) {
+      for (const feed of feedResults) {
+        for (const p of feed.entries) {
           if (family !== 'any' && p.family && p.family !== family && p.family !== 'domain') continue;
           const key = p.host + ':' + p.port;
           if (seen.has(key)) continue;
@@ -7624,53 +7848,76 @@ async function handleScannerApi(request, env) {
         }
       }
 
+      // گزارش وضعیت هر فید — برای این‌که پنل بتواند دلیل نتیجه صفر را نشان دهد
+      const diagnostics = feedResults.map(feed => ({
+        source: feed.url,
+        kind: getFeedKind(feed.url),
+        reachable: feed.reachable,
+        entries: feed.entries.length
+      }));
+      const deadFeeds = diagnostics.filter(item => !item.reachable || item.entries === 0).length;
+
       if (!candidates.length) {
         return jsonResponse({
           success: false, kind, family, country: countryLabel, code,
-          count: 0, sourceCount: sources.length, testedCount: 0, proxies: [],
-          message: 'منبع لیست پروکسی در دسترس نبود یا خالی بود. چند لحظه بعد دوباره تلاش کنید.'
+          count: 0, sourceCount: sources.length, testedCount: 0, proxies: [], diagnostics,
+          message: `از ${sources.length} منبع هیچ ورودی پروکسی خوانده نشد (${deadFeeds} منبع خالی یا در دسترس نبود). چند لحظه بعد دوباره تلاش کنید.`
         });
       }
 
-      const pool = candidates
-        .slice()
-        .sort(() => 0.5 - Math.random())
-        .slice(0, Math.min(candidates.length, limit * 3));
+      // سقف ۴ سوکت هم‌زمان (runtime کلادفلر حداکثر ۶ اتصال هم‌زمان می‌دهد) و
+      // سقف زمانی، تا اسکن هیچ‌وقت با خطای «Too many open connections» یا timeout نکشد.
+      const startedAt = Date.now();
+      const scanDeadline = startedAt + 24000;
+      const pool = shuffleList(candidates).slice(0, Math.min(candidates.length, 45));
+      const verifiedProxies = [];
+      let testedCount = 0;
+      // آمار دلیل ردشدن‌ها — برای این‌که معلوم باشد مشکل «کد» است یا «خشک بودن استخر»
+      const failures = {};
 
-      const probed = await Promise.all(pool.map(async p => {
-        const result = await probeTcp(p.host, p.port, 1800);
-        return { ...p, ...result };
-      }));
+      await runLimited(pool, MAX_PARALLEL_SOCKETS, async candidate => {
+        if (verifiedProxies.length >= limit || Date.now() > scanDeadline) return;
+        testedCount++;
+        const result = await verifyProxyEntry(candidate, 3200);
+        if (result.ok) {
+          verifiedProxies.push({ ...candidate, ...result });
+        } else {
+          const reason = String(result.error || 'unknown').split('-')[0];
+          failures[reason] = (failures[reason] || 0) + 1;
+        }
+      }, scanDeadline);
 
-      const online = probed
-        .filter(p => p.ok)
+      const online = verifiedProxies
         .sort((a, b) => a.latencyMs - b.latencyMs)
         .slice(0, limit);
 
       const proxies = online.map(p => {
-        const isHttp = p.protocol === 'HTTP' || p.protocol === 'HTTPS';
-        const proxyUrl = p.proxy || `${isHttp ? 'http' : 'socks5'}://${p.host}:${p.port}`;
+        const scheme = (p.protocol || 'SOCKS5').toLowerCase() === 'https' ? 'http' : (p.protocol || 'SOCKS5').toLowerCase();
+        const auth = p.username ? `${p.username}:${p.password || ''}@` : '';
         return {
           kind: 'proxy',
           ip: p.host,
           port: p.port,
           name: `${p.host}:${p.port}`,
-          proxy: proxyUrl,
+          proxy: `${scheme}://${auth}${p.host}:${p.port}`,
           country: countryLabel,
-          code,
+          code: p.countryHint && COUNTRY_PROXY_SOURCES[p.countryHint] ? p.countryHint : code,
           family: p.family || '',
           protocol: p.protocol,
           latencyMs: p.latencyMs,
+          verified: true,
           status: 'online'
         };
       });
 
       return jsonResponse({
         success: proxies.length > 0, kind, family, country: countryLabel, code,
-        count: proxies.length, sourceCount: candidates.length, testedCount: probed.length, proxies,
+        count: proxies.length, sourceCount: candidates.length, testedCount, proxies, diagnostics,
+        failures,
+        elapsedMs: Date.now() - startedAt,
         message: proxies.length
-          ? `${proxies.length} پروکسی آنلاین از ${probed.length} اتصال تست‌شده`
-          : `هیچ‌کدام از ${probed.length} پروکسی پاسخ ندادند؛ دوباره تلاش کنید.`
+          ? `${proxies.length} پروکسی تأییدشده (handshake کامل) از ${testedCount} مورد تست‌شده در ${sources.length} منبع`
+          : `از ${testedCount} پروکسی تست‌شده هیچ‌کدام handshake را پاس نکردند${deadFeeds ? ` (${deadFeeds} منبع خالی/۴۰۴)` : ''}؛ دوباره تلاش کنید یا حالت «چند کشور» را انتخاب کنید.`
       });
     } catch (err) {
       return jsonResponse({ success: false, message: 'خطا در اسکنر: ' + (err?.message || err) }, 500);
@@ -10919,14 +11166,21 @@ function renderAdminDashboardHtml(initialData = {}) {
 
     scanRequest({ country: country, limit: limit, kind: kind, family: family })
       .then(function(data) {
+        // خلاصهٔ سلامت منابع و زمان اسکن، تا اگر نتیجه صفر بود دلیلش دیده شود
+        var diag = '';
+        if (data.diagnostics && data.diagnostics.length) {
+          var healthy = data.diagnostics.filter(function(d) { return d.reachable && d.entries > 0; }).length;
+          diag = ' · منابع سالم: ' + healthy + ' از ' + data.diagnostics.length;
+        }
+        if (data.elapsedMs) diag += ' · ' + Math.round(data.elapsedMs / 1000) + 's';
         if (data.success && data.proxies && data.proxies.length) {
           scanResults = data.proxies;
           renderScanRows(data.proxies);
-          status.textContent = data.message || (data.proxies.length + ' مورد آنلاین از ' + data.testedCount + ' تست');
+          status.textContent = (data.message || (data.proxies.length + ' مورد آنلاین از ' + data.testedCount + ' تست')) + diag;
         } else {
           $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">موردی یافت نشد.</td></tr>';
           status.className = 'scan-status err';
-          status.textContent = data.message || 'دریافت لیست یا تست ناموفق بود.';
+          status.textContent = (data.message || 'دریافت لیست یا تست ناموفق بود.') + diag;
         }
       })
       .catch(function() {

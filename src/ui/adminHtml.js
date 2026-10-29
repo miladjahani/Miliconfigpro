@@ -1559,14 +1559,21 @@ export function renderAdminDashboardHtml(initialData = {}) {
 
     scanRequest({ country: country, limit: limit, kind: kind, family: family })
       .then(function(data) {
+        // خلاصهٔ سلامت منابع و زمان اسکن، تا اگر نتیجه صفر بود دلیلش دیده شود
+        var diag = '';
+        if (data.diagnostics && data.diagnostics.length) {
+          var healthy = data.diagnostics.filter(function(d) { return d.reachable && d.entries > 0; }).length;
+          diag = ' · منابع سالم: ' + healthy + ' از ' + data.diagnostics.length;
+        }
+        if (data.elapsedMs) diag += ' · ' + Math.round(data.elapsedMs / 1000) + 's';
         if (data.success && data.proxies && data.proxies.length) {
           scanResults = data.proxies;
           renderScanRows(data.proxies);
-          status.textContent = data.message || (data.proxies.length + ' مورد آنلاین از ' + data.testedCount + ' تست');
+          status.textContent = (data.message || (data.proxies.length + ' مورد آنلاین از ' + data.testedCount + ' تست')) + diag;
         } else {
           $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">موردی یافت نشد.</td></tr>';
           status.className = 'scan-status err';
-          status.textContent = data.message || 'دریافت لیست یا تست ناموفق بود.';
+          status.textContent = (data.message || 'دریافت لیست یا تست ناموفق بود.') + diag;
         }
       })
       .catch(function() {
