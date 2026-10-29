@@ -3,7 +3,7 @@
 // طراحی ۱۰۰٪ مطابق تصاویر 1000050224.jpg و 1000050225.jpg با برند miliconfig
 // ============================================================================
 
-import { BRAND_NAME, BRAND_UPPER, COUNTRY_PROXY_SOURCES } from '../config/defaults.js';
+import { BRAND_NAME, BRAND_UPPER, CF_EDGE_DOMAINS, COUNTRY_PROXY_SOURCES } from '../config/defaults.js';
 import { CLOUD_LOGO_SVG, FAVICON_DATA_URI, SHIELD_LOGO_SVG, icon, stripEmoji } from './icons.js';
 import { formatBytes } from '../core/utils.js';
 
@@ -48,6 +48,7 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     { title: 'فقط پروتکل Trojan (WebSocket + TLS)', badge: 'Trojan', url: `${baseSubUrl}?proto=trojan` },
     { title: 'فقط پروتکل Shadowsocks (بدون فرگمنت)', badge: 'SS', url: `${baseSubUrl}?proto=ss` },
     { title: 'فقط پروتکل xhttp (ضد فیلتر پیشرفته)', badge: 'xhttp', url: `${baseSubUrl}?proto=xhttp` },
+    { title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` },
     { title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` },
     { title: 'پروفایل OpenVPN (خروجی ‎.ovpn)', badge: 'OVPN', url: `${baseSubUrl}?target=ovpn` },
     { title: 'فقط نودهای لبه CDN (Multi-Location)', badge: 'Edge', url: `${baseSubUrl}?scope=edge` },
@@ -513,7 +514,7 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
       <button type="button" class="acc-header" onclick="toggleAcc('accScope')">
         <div class="acc-title-wrap">
           <span class="acc-title">فقط بخشی از نودها را می‌خواهید؟</span>
-          <span class="acc-count">4 گزینه · ${totalNodes} نود در کل</span>
+          <span class="acc-count">5 گزینه · ${totalNodes} نود در کل</span>
         </div>
         <span class="acc-arrow">⌄</span>
       </button>
@@ -557,6 +558,16 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
           <div class="url-copy-box">
             <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}?scope=origin', 'کپی شد')">${icon('copy')}</button>
             <div class="url-text">${baseSubUrl}?scope=origin</div>
+          </div>
+        </div>
+        <div class="client-item">
+          <div class="client-top">
+            <span class="client-name">فقط نودهای دامنه‌محور کلادفلر (${CF_EDGE_DOMAINS.length} دامنهٔ تأییدشده)</span>
+            <span class="tag-green">Domain Edge</span>
+          </div>
+          <div class="url-copy-box">
+            <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}?set=domain', 'کپی شد')">${icon('copy')}</button>
+            <div class="url-text">${baseSubUrl}?set=domain</div>
           </div>
         </div>
       </div>

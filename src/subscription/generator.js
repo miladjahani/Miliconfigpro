@@ -5,6 +5,7 @@
 
 import {
   BRAND_NAME,
+  CF_EDGE_DOMAINS,
   CF_HTTPS_PORTS,
   CF_HTTP_PORTS,
   CONFIG_DEFAULTS,
@@ -680,6 +681,24 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
 // ============================================================================
 // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
 // ============================================================================
+// انتخاب چرخشی از استخر دامنه‌های تأییدشدهٔ کلادفلر؛ هر ۱۵ دقیقه یک پنجرهٔ
+// شروع تازه می‌گیرد تا سابلینک ثابت نماند (stride ۱۳ تا پراکندگی داشته باشد).
+export function pickEdgeDomains(count) {
+  const pool = CF_EDGE_DOMAINS;
+  const wanted = Math.max(1, parseInt(count, 10) || 1);
+  if (!pool.length) return [];
+  const start = Math.floor(Date.now() / (15 * 60 * 1000)) % pool.length;
+  const out = [];
+  const seen = new Set();
+  for (let step = 0; out.length < Math.min(wanted, pool.length) && step < pool.length * 2; step++) {
+    const domain = pool[(start + step * 13) % pool.length];
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    out.push(domain);
+  }
+  return out;
+}
+
 export function buildPanelDomainNodes(workerHost, cfg = {}) {
   const host = normalizeNodeHost(workerHost);
   if (!host) return [];
@@ -1159,6 +1178,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const nodeScope = queryOverrides.scope || userOrConfig?.nodeScope || 'all';
   const wkOverride = (queryOverrides.wk || cfg.wk || '').trim().toUpperCase();
   const protoFilter = (queryOverrides.proto || '').trim().toLowerCase();
+  // ساب‌لینک اختصاصی «دامنه‌های لبهٔ کلادفلر»: ?set=domain
+  // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
+  const domainMode = String(queryOverrides.set || '').trim().toLowerCase() === 'domain';
 
   const evEnabled = protoFilter ? protoFilter === 'vless' : isEnabledValue(cfg.ev, true);
   const etEnabled = protoFilter ? protoFilter === 'trojan' : isEnabledValue(cfg.et, false);
@@ -1184,11 +1206,24 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg, namer));
   }
 
+  // نودهای «دامنهٔ کلادفلر»: آدرس نود فقط دامنه است (بدون آی‌پی). دامنه‌ها
+  // از استخر تأییدشدهٔ CF_EDGE_DOMAINS به‌صورت چرخشی انتخاب می‌شوند.
+  if (domainMode) {
+    const wanted = Math.max(1, parseInt(
+      queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50,
+      10
+    ) || 50);
+    const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
+    const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
+    const domains = pickEdgeDomains(addressCount);
+    appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
+  }
+
   // چندلوکیشن: پروکسی‌های کشوری به‌عنوان زنجیره خروجی سمت ورکر استفاده می‌شوند، نه به‌عنوان آدرس نود.
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
-  if (countryFilter) {
+  if (!domainMode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
       ? ['DE', 'NL', 'US', 'GB', 'TR', 'AE', 'CA', 'SE']
       : (COUNTRY_PROXY_SOURCES[countryFilter] ? [countryFilter] : []);
@@ -1211,12 +1246,12 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const disablePreferred = cfg.yxby === 'yes' || nodeScope === 'origin';
   const enableNative = cfg.ena === 'yes' || nodeScope === 'origin';
 
-  if (enableNative && nodeScope !== 'edge') {
+  if (!domainMode && enableNative && nodeScope !== 'edge') {
     appendFromSource([{ ip: workerHost, isp: 'Origin' }]);
   }
 
   // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
-  if (isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
+  if (!domainMode && isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
     const panelDomainNodes = buildPanelDomainNodes(workerHost, cfg);
     if (panelDomainNodes.length) appendFromSource(panelDomainNodes);
   }
@@ -1225,11 +1260,11 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const hasCustomPreferred = customIps.length > 0 || customDomains.length > 0;
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
-  if (!countryMode && customProxies.length > 0) {
+  if (!domainMode && !countryMode && customProxies.length > 0) {
     appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost));
   }
 
-  if (!disablePreferred && !countryMode) {
+  if (!domainMode && !disablePreferred && !countryMode) {
     if (hasCustomPreferred) {
       if (customIps.length > 0 && cfg.epi === 'yes') {
         appendFromSource(customIps);
@@ -1297,7 +1332,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
 
   // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
   const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
-  const warpLinks = warpAllowed ? await buildWarpFamilyLinks(cfg) : [];
+  const warpLinks = warpAllowed && !domainMode ? await buildWarpFamilyLinks(cfg) : [];
 
   // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
   return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
@@ -1381,6 +1416,7 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     wk: url.searchParams.get('wk') || '',
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
+    set: url.searchParams.get('set') || '',
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };

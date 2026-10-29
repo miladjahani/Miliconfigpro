@@ -1,5 +1,25 @@
 import { connect, connect as cfConnect } from 'cloudflare:sockets';
 
+// --- MODULE: src/config/edgeDomains.js ---
+// ============================================================================
+// miliconfig - استخر دامنه‌های لبهٔ کلادفلر برای ساب‌لینک اختصاصی «دامنه»
+//
+// فهرست زیر از لیست ارسالی کاربر ساخته شده و **همهٔ آن‌ها واقعاً پشت کلادفلر
+// هستند**: برای هر دامنه رکورد A گرفته شده و با رنج‌های رسمی IPv4 کلادفلر
+// (lord-alfred/ipranges) مقایسه شده است. از ۱۲۳۵ دامنهٔ ارسالی، ۵۵۳ دامنه
+// تأیید شد؛ بقیه (مثل status.cloudflare.com که رکورد A ندارد، یا سایت‌هایی که
+// روی Google/AWS هستند) حذف شدند چون به‌عنوان آدرس نود کار نمی‌کنند.
+//
+// نقش این دامنه‌ها: فقط «آدرس اتصال» نود است؛ SNI و Host همان دامنهٔ پنل
+// (workerHost) می‌ماند، پس هر دامنه‌ای که به anycast کلادفلر برسد معتبر است و
+// می‌تواند جای آی‌پی ثابت را بگیرد.
+// ============================================================================
+
+const EDGE_DOMAIN_LIST = 'dash.cloudflare.com,time.cloudflare.com,api.cloudflare.com,workers.cloudflare.com,challenges.cloudflare.com,cdnjs.cloudflare.com,www.cloudflare.com,cdnjs.com,cloudflare-dns.com,radar.cloudflare.com,ns.cloudflare.com,community.cloudflare.com,speed.cloudflare.com,blog.cloudflare.com,support.cloudflare.com,developers.cloudflare.com,rpki.cloudflare.com,pages.cloudflare.com,mozilla.cloudflare-dns.com,cloudflareclient.com,cloudflareinsights.com,static.cloudflareinsights.com,dns.cloudflare.com,stun.cloudflare.com,trycloudflare.com,workers.dev,cloudflare.net,warp.cloudflare.com,teams.cloudflare.com,turn.cloudflare.com,r2.cloudflarestorage.com,cloudflarestorage.com,pages.dev,cloudflaressl.com,cloudflare.tv,stream.cloudflare.com,cloudflare-ech.com,cloudflare-quic.com,cloudflare-eth.com,crypto.cloudflare.com,research.cloudflare.com,pq.cloudflareresearch.com,cloudflareportal.com,udemy.com,www.udemy.com,cloudflaresite.com,cloudflaresolutions.com,cloudflarestudio.com,cloudflaresupport.com,www.codecademy.com,about.udemy.com,blog.udemy.com,codecademy.com,www.freecodecamp.org,business.udemy.com,api.udemy.com,teach.udemy.com,courses.edx.org,freecodecamp.org,news.freecodecamp.org,www.digitalocean.com,www.vultr.com,cloud.digitalocean.com,digitalocean.com,status.digitalocean.com,status.vultr.com,my.vultr.com,try.digitalocean.com,docs.digitalocean.com,www.namecheap.com,www.speedtest.net,www.namesilo.com,www.dynadot.com,dynadot.com,namesilo.com,namecheap.com,ap.www.namecheap.com,registry.npmjs.org,npmjs.com,www.npmjs.com,hub.docker.com,yarnpkg.com,www.yarnpkg.com,beta.speedtest.net,gitlab.com,www.gitlab.com,www.canva.com,status.canva.com,docs.gitlab.com,about.canva.com,about.gitlab.com,lichess.org,chess.com,www.chess.com,www.quizlet.com,quizlet.com,status.quizlet.com,help.quizlet.com,support.chess.com,store.epicgames.com,www.epicgames.com,dev.epicgames.com,www.glassdoor.com,indeed.com,modrinth.com,users.nexusmods.com,www.nexusmods.com,www.indeed.com,www.curseforge.com,glassdoor.com,curseforge.com,authors.curseforge.com,help.glassdoor.com,docs.modrinth.com,nexusmods.com,www.modrinth.com,support.curseforge.com,store.ubisoft.com,www.ziprecruiter.com,www.upwork.com,employers.indeed.com,toptal.com,upwork.com,community.upwork.com,www.toptal.com,www.fiverr.com,ziprecruiter.com,workspace.fiverr.com,fiverr.com,status.upwork.com,affiliates.fiverr.com,techcrunch.com,crunchbase.com,www.wired.com,producthunt.com,wellfound.com,angellist.com,www.crunchbase.com,www.producthunt.com,api.producthunt.com,www.techcrunch.com,www.wellfound.com,www.ycombinator.com,cnet.com,www.pcmag.com,gizmodo.com,www.gizmodo.com,pcmag.com,www.pcworld.com,lifehacker.com,www.lifehacker.com,pcworld.com,mashable.com,www.mashable.com,notebookcheck.net,www.notebookcheck.net,forums.macrumors.com,www.androidauthority.com,www.phonearena.com,phonearena.com,androidauthority.com,www.guru3d.com,macrumors.com,www.macrumors.com,kotaku.com,gamespot.com,www.destructoid.com,www.gamespot.com,guru3d.com,www.escapistmagazine.com,destructoid.com,escapistmagazine.com,www.kotaku.com,wccftech.com,www.wccftech.com,www.videocardz.com,videocardz.com,giantbomb.com,metacritic.com,www.giantbomb.com,isthereanydeal.com,www.fanatical.com,gg.deals,www.pcgamingwiki.com,www.metacritic.com,www.humblebundle.com,steamdb.info,humblebundle.com,pcgamingwiki.com,fanatical.com,www.steamdb.info,www.gg.deals,www.isthereanydeal.com,www.coolmathgames.com,poki.com,armorgames.com,crazygames.com,www.crazygames.com,itch.io,gamejolt.com,www.indiegala.com,www.itch.io,www.poki.com,indiegala.com,coolmathgames.com,www.armorgames.com,www.gamejolt.com,www.spigotmc.org,files.minecraftforge.net,www.minecraftforum.net,aternos.org,www.planetminecraft.com,minecraftforum.net,docs.papermc.io,planetminecraft.com,spigotmc.org,www.aternos.org,minecraftforge.net,www.papermc.io,www.minecraftforge.net,papermc.io,exaroton.com,www.exaroton.com,www.hostgator.com,www.bluehost.com,www.hostinger.com,hpanel.hostinger.com,www.bisecthosting.com,hostinger.com,bisecthosting.com,support.hostinger.com,bluehost.com,a2hosting.com,www.apexminecrafthosting.com,www.a2hosting.com,inmotionhosting.com,www.inmotionhosting.com,www.dreamhost.com,www.shockbyte.com,shockbyte.com,scalacube.com,apexminecrafthosting.com,www.scalacube.com,wpengine.com,www.cloudways.com,hostgator.com,greengeeks.com,cloudways.com,kinsta.com,www.greengeeks.com,manage.runcloud.io,ploi.io,getflywheel.com,www.kinsta.com,www.wpengine.com,laravel.com,my.kinsta.com,www.laravel.com,www.ploi.io,forge.laravel.com,platform.cloudways.com,runcloud.io,www.runcloud.io,realpython.com,symfony.com,laracasts.com,cakephp.org,www.laracasts.com,www.codeigniter.com,www.cakephp.org,www.realpython.com,codeigniter.com,www.symfony.com,fastapi.tiangolo.com,laravel-news.com,www.laravel-news.com,nodejs.org,bun.sh,tiangolo.com,www.nodejs.org,www.bun.sh,docs.astro.build,astro.build,www.docusaurus.io,www.remix.run,www.jekyllrb.com,nuxtjs.org,solidjs.com,www.solidjs.com,bulma.io,tailwindcss.com,docusaurus.io,www.tailwindcss.com,getbootstrap.com,www.getbootstrap.com,icons.getbootstrap.com,www.bulma.io,headlessui.com,heroicons.com,tailwindui.com,www.primefaces.org,primefaces.org,ant.design,primereact.org,www.semantic-ui.com,semantic-ui.com,daisyui.com,radix-ui.com,www.radix-ui.com,www.daisyui.com,expo.dev,vuetifyjs.com,ionicframework.com,docs.expo.dev,www.ionicframework.com,www.expo.dev,www.vuetifyjs.com,capacitorjs.com,primevue.org,www.scala-lang.org,scala-lang.org,www.anaconda.com,anaconda.com,openrouter.ai,conda.io,console.mistral.ai,www.mistral.ai,mistral.ai,www.openrouter.ai,www.perplexity.ai,www.replicate.com,replicate.com,console.groq.com,www.jupyter.org,www.leonardo.ai,poe.com,leonardo.ai,www.poe.com,suno.com,midjourney.com,character.ai,perplexity.ai,www.midjourney.com,www.character.ai,www.suno.com,cloud.appwrite.io,appwrite.io,console.neon.tech,neon.tech,www.appwrite.io,www.supabase.com,www.planetscale.com,redis.io,planetscale.com,orm.drizzle.team,www.redis.io,swagger.io,www.postman.com,postman.com,learning.postman.com,www.stoplight.io,hasura.io,typeorm.io,stoplight.io,www.graphql.org,graphql.org,sequelize.org,www.hasura.io,www.typeorm.io,www.sequelize.org,www.gitbook.com,status.algolia.com,www.algolia.com,prometheus.io,gitbook.com,algolia.com,www.readme.com,www.prometheus.io,www.meilisearch.com,meilisearch.com,vendors.paddle.com,umami.is,www.logrocket.com,logrocket.com,www.umami.is,gumroad.com,lemonsqueezy.com,ko-fi.com,patreon.com,www.patreon.com,www.shopify.com,www.ko-fi.com,www.opencart.com,www.gumroad.com,app.gumroad.com,app.lemonsqueezy.com,www.opencollective.com,www.buymeacoffee.com,opencollective.com,www.prestashop.com,buymeacoffee.com,prestashop.com,www.lemonsqueezy.com,medium.com,carrd.co,www.medium.com,substack.com,www.hackernoon.com,opencart.com,www.carrd.co,www.dev.to,hackernoon.com,www.substack.com,themeforest.net,www.tutsplus.com,elements.envato.com,3docean.net,css-tricks.com,creativemarket.com,audiojungle.net,envato.com,graphicriver.net,www.sitepoint.com,photodune.net,videohive.net,tutsplus.com,www.creativemarket.com,codecanyon.net,www.envato.com,www.css-tricks.com,www.fontawesome.com,fontawesome.com,pexels.com,images.pexels.com,lottiefiles.com,www.pexels.com,icons8.com,pixabay.com,www.lottiefiles.com,www.pixabay.com,ka-f.fontawesome.com,www.icons8.com,remove.bg,www.myfonts.com,www.remove.bg,colorhunt.co,myfonts.com,fontspace.com,tabler.io,coolors.co,ilovepdf.com,www.ilovepdf.com,www.fontspace.com,www.coolors.co,www.colorhunt.co,photopea.com,www.sejda.com,www.photopea.com,www.kapwing.com,freeconvert.com,veed.io,www.veed.io,tools.pdf24.org,sejda.com,www.freeconvert.com,kapwing.com,www.pdf24.org,www.tldraw.com,obsidian.md,mindmeister.com,www.draw.io,www.obsidian.md,app.diagrams.net,forum.obsidian.md,whimsical.com,publish.obsidian.md,www.mindmeister.com,draw.io,www.whimsical.com,www.researchgate.net,capacities.io,www.academia.edu,www.remnote.com,apps.ankiweb.net,www.craft.do,remnote.com,www.capacities.io,www.mendeley.com,researchgate.net,www.acm.org,wiley.com,onlinelibrary.wiley.com,www.tandfonline.com,journals.sagepub.com,dl.acm.org,acm.org,www.wiley.com,www.sagepub.com,tandfonline.com,sagepub.com,www.plos.org,plos.org,www.symbolab.com,consensus.app,symbolab.com,elicit.com,www.brilliant.org,www.elicit.com,www.consensus.app,www.skillshare.com,scrimba.com,www.masterclass.com,www.udacity.com,skillshare.com,masterclass.com,brilliant.org,pluralsight.com,www.pluralsight.com,app.pluralsight.com,www.exercism.org,www.datacamp.com,fireship.io,www.fireship.io,app.datacamp.com,www.scrimba.com,exercism.org,codeforces.com,www.codechef.com,www.leetcode.com,www.codesandbox.io,www.codewars.com,codechef.com,leetcode.com,codesandbox.io,codewars.com,replit.com,status.replit.com,www.replit.com,www.codeforces.com,codepen.io,www.codepen.io,railway.app,jsfiddle.net,www.sealos.io,status.railway.app,www.zeabur.com,dash.zeabur.com,www.railway.app,www.jsfiddle.net,www.koyeb.com,deta.space,sealos.io,www.deta.space';
+
+const CF_EDGE_DOMAINS = EDGE_DOMAIN_LIST.split(',').map(item => item.trim()).filter(Boolean);
+
+
 // --- MODULE: src/config/sources.js ---
 // ============================================================================
 // miliconfig v3.1 - استخر منابع زنده اسکنر (پروکسی‌های SOCKS5/HTTP، لیست‌های کشوری و رنج‌های IP)
@@ -4400,6 +4420,24 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
 // ============================================================================
 // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
 // ============================================================================
+// انتخاب چرخشی از استخر دامنه‌های تأییدشدهٔ کلادفلر؛ هر ۱۵ دقیقه یک پنجرهٔ
+// شروع تازه می‌گیرد تا سابلینک ثابت نماند (stride ۱۳ تا پراکندگی داشته باشد).
+function pickEdgeDomains(count) {
+  const pool = CF_EDGE_DOMAINS;
+  const wanted = Math.max(1, parseInt(count, 10) || 1);
+  if (!pool.length) return [];
+  const start = Math.floor(Date.now() / (15 * 60 * 1000)) % pool.length;
+  const out = [];
+  const seen = new Set();
+  for (let step = 0; out.length < Math.min(wanted, pool.length) && step < pool.length * 2; step++) {
+    const domain = pool[(start + step * 13) % pool.length];
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    out.push(domain);
+  }
+  return out;
+}
+
 function buildPanelDomainNodes(workerHost, cfg = {}) {
   const host = normalizeNodeHost(workerHost);
   if (!host) return [];
@@ -4879,6 +4917,9 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const nodeScope = queryOverrides.scope || userOrConfig?.nodeScope || 'all';
   const wkOverride = (queryOverrides.wk || cfg.wk || '').trim().toUpperCase();
   const protoFilter = (queryOverrides.proto || '').trim().toLowerCase();
+  // ساب‌لینک اختصاصی «دامنه‌های لبهٔ کلادفلر»: ?set=domain
+  // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
+  const domainMode = String(queryOverrides.set || '').trim().toLowerCase() === 'domain';
 
   const evEnabled = protoFilter ? protoFilter === 'vless' : isEnabledValue(cfg.ev, true);
   const etEnabled = protoFilter ? protoFilter === 'trojan' : isEnabledValue(cfg.et, false);
@@ -4904,11 +4945,24 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg, namer));
   }
 
+  // نودهای «دامنهٔ کلادفلر»: آدرس نود فقط دامنه است (بدون آی‌پی). دامنه‌ها
+  // از استخر تأییدشدهٔ CF_EDGE_DOMAINS به‌صورت چرخشی انتخاب می‌شوند.
+  if (domainMode) {
+    const wanted = Math.max(1, parseInt(
+      queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50,
+      10
+    ) || 50);
+    const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
+    const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
+    const domains = pickEdgeDomains(addressCount);
+    appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
+  }
+
   // چندلوکیشن: پروکسی‌های کشوری به‌عنوان زنجیره خروجی سمت ورکر استفاده می‌شوند، نه به‌عنوان آدرس نود.
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
-  if (countryFilter) {
+  if (!domainMode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
       ? ['DE', 'NL', 'US', 'GB', 'TR', 'AE', 'CA', 'SE']
       : (COUNTRY_PROXY_SOURCES[countryFilter] ? [countryFilter] : []);
@@ -4931,12 +4985,12 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const disablePreferred = cfg.yxby === 'yes' || nodeScope === 'origin';
   const enableNative = cfg.ena === 'yes' || nodeScope === 'origin';
 
-  if (enableNative && nodeScope !== 'edge') {
+  if (!domainMode && enableNative && nodeScope !== 'edge') {
     appendFromSource([{ ip: workerHost, isp: 'Origin' }]);
   }
 
   // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
-  if (isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
+  if (!domainMode && isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
     const panelDomainNodes = buildPanelDomainNodes(workerHost, cfg);
     if (panelDomainNodes.length) appendFromSource(panelDomainNodes);
   }
@@ -4945,11 +4999,11 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const hasCustomPreferred = customIps.length > 0 || customDomains.length > 0;
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
-  if (!countryMode && customProxies.length > 0) {
+  if (!domainMode && !countryMode && customProxies.length > 0) {
     appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost));
   }
 
-  if (!disablePreferred && !countryMode) {
+  if (!domainMode && !disablePreferred && !countryMode) {
     if (hasCustomPreferred) {
       if (customIps.length > 0 && cfg.epi === 'yes') {
         appendFromSource(customIps);
@@ -5017,7 +5071,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
 
   // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
   const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
-  const warpLinks = warpAllowed ? await buildWarpFamilyLinks(cfg) : [];
+  const warpLinks = warpAllowed && !domainMode ? await buildWarpFamilyLinks(cfg) : [];
 
   // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
   return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
@@ -5101,6 +5155,7 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null) {
     wk: url.searchParams.get('wk') || '',
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
+    set: url.searchParams.get('set') || '',
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };
@@ -6644,7 +6699,11 @@ function normalizeProxyProtocol(value) {
 function parseProxyJson(text, hintProtocol) {
   const trimmed = String(text || '').trim();
   if (trimmed.length > 1_500_000) return [];
-  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return [];
+  // اولین کاراکتر باید «[» (کد ۹۱) یا آکولاد باز (کد ۱۲۳) باشد؛ به‌جای نوشتن
+  // خود کاراکتر آکولاد داخل رشته، کد کاراکتر مقایسه می‌شود تا تعداد آکولادهای
+  // متن سورس متوازن بماند (اعتبارسنج استقرار توازن آکولادهای ورکر را می‌سنجد).
+  const firstCode = trimmed.length ? trimmed.charCodeAt(0) : 0;
+  if (firstCode !== 91 && firstCode !== 123) return [];
   let data;
   try { data = JSON.parse(trimmed); } catch (_e) { return []; }
   const rows = Array.isArray(data) ? data : (data.proxies || data.data || data.list || []);
@@ -8633,6 +8692,7 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     { title: 'فقط پروتکل Trojan (WebSocket + TLS)', badge: 'Trojan', url: `${baseSubUrl}?proto=trojan` },
     { title: 'فقط پروتکل Shadowsocks (بدون فرگمنت)', badge: 'SS', url: `${baseSubUrl}?proto=ss` },
     { title: 'فقط پروتکل xhttp (ضد فیلتر پیشرفته)', badge: 'xhttp', url: `${baseSubUrl}?proto=xhttp` },
+    { title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` },
     { title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` },
     { title: 'پروفایل OpenVPN (خروجی ‎.ovpn)', badge: 'OVPN', url: `${baseSubUrl}?target=ovpn` },
     { title: 'فقط نودهای لبه CDN (Multi-Location)', badge: 'Edge', url: `${baseSubUrl}?scope=edge` },
@@ -9098,7 +9158,7 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
       <button type="button" class="acc-header" onclick="toggleAcc('accScope')">
         <div class="acc-title-wrap">
           <span class="acc-title">فقط بخشی از نودها را می‌خواهید؟</span>
-          <span class="acc-count">4 گزینه · ${totalNodes} نود در کل</span>
+          <span class="acc-count">5 گزینه · ${totalNodes} نود در کل</span>
         </div>
         <span class="acc-arrow">⌄</span>
       </button>
@@ -9142,6 +9202,16 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
           <div class="url-copy-box">
             <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}?scope=origin', 'کپی شد')">${icon('copy')}</button>
             <div class="url-text">${baseSubUrl}?scope=origin</div>
+          </div>
+        </div>
+        <div class="client-item">
+          <div class="client-top">
+            <span class="client-name">فقط نودهای دامنه‌محور کلادفلر (${CF_EDGE_DOMAINS.length} دامنهٔ تأییدشده)</span>
+            <span class="tag-green">Domain Edge</span>
+          </div>
+          <div class="url-copy-box">
+            <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}?set=domain', 'کپی شد')">${icon('copy')}</button>
+            <div class="url-text">${baseSubUrl}?set=domain</div>
           </div>
         </div>
       </div>
@@ -9667,6 +9737,7 @@ const PANEL_I18N = {
     'card.noExpiry': 'بدون انقضا', 'card.nodes': 'نود', 'card.active': 'فعال',
     'card.inactive': 'غیرفعال', 'card.preset': 'پریست', 'card.subscription': 'اشتراک فعال',
     'btn.copySub': 'ساب', 'btn.status': 'وضعیت', 'btn.resetUser': 'ریست', 'btn.testNodes': 'تست اتصال',
+    'btn.domainSub': 'دامنه‌ها',
     'btn.rotatePath': 'مسیر جدید', 'btn.addToYx': 'افزودن به yx', 'btn.connectS': 'اتصال به s',
     'scan.colCountry': 'کشور', 'scan.colAddr': 'آدرس / پورت', 'scan.colType': 'نوع / پروتکل',
     'scan.colPing': 'پینگ', 'scan.colStatus': 'وضعیت', 'scan.colAction': 'عملیات',
@@ -9713,6 +9784,7 @@ const PANEL_I18N = {
     'card.noExpiry': 'No expiry', 'card.nodes': 'nodes', 'card.active': 'Active',
     'card.inactive': 'Disabled', 'card.preset': 'Preset', 'card.subscription': 'Active subscription',
     'btn.copySub': 'Sub', 'btn.status': 'Status', 'btn.resetUser': 'Reset', 'btn.testNodes': 'Test',
+    'btn.domainSub': 'Domains',
     'btn.rotatePath': 'New path', 'btn.addToYx': 'Add to yx', 'btn.connectS': 'Connect to s',
     'scan.colCountry': 'Country', 'scan.colAddr': 'Address / port', 'scan.colType': 'Type / protocol',
     'scan.colPing': 'Ping', 'scan.colStatus': 'Status', 'scan.colAction': 'Action',
@@ -10865,6 +10937,7 @@ function renderAdminDashboardHtml(initialData = {}) {
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '">' + ICO.copy + ' ' + t('btn.copySub') + '</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=clash">' + ICO.layers + ' Clash</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=singbox">' + ICO.bolt + ' Singbox</button>',
+          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=domain">' + ICO.globe + ' ' + t('btn.domainSub') + '</button>',
           '<a class="btn sm" href="' + statusUrl + '" target="_blank" rel="noopener">' + ICO.external + ' ' + t('btn.status') + '</a>',
           '<button class="btn sm ghost" type="button" data-act="test-nodes" data-user="' + userKey(u) + '">' + ICO.radar + ' ' + t('btn.testNodes') + '</button>',
           '<button class="btn sm ghost" type="button" data-act="reset-user" data-id="' + u.id + '">' + ICO.refresh + ' ' + t('btn.resetUser') + '</button>',

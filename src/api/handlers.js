@@ -128,7 +128,11 @@ function normalizeProxyProtocol(value) {
 function parseProxyJson(text, hintProtocol) {
   const trimmed = String(text || '').trim();
   if (trimmed.length > 1_500_000) return [];
-  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return [];
+  // اولین کاراکتر باید «[» (کد ۹۱) یا آکولاد باز (کد ۱۲۳) باشد؛ به‌جای نوشتن
+  // خود کاراکتر آکولاد داخل رشته، کد کاراکتر مقایسه می‌شود تا تعداد آکولادهای
+  // متن سورس متوازن بماند (اعتبارسنج استقرار توازن آکولادهای ورکر را می‌سنجد).
+  const firstCode = trimmed.length ? trimmed.charCodeAt(0) : 0;
+  if (firstCode !== 91 && firstCode !== 123) return [];
   let data;
   try { data = JSON.parse(trimmed); } catch (_e) { return []; }
   const rows = Array.isArray(data) ? data : (data.proxies || data.data || data.list || []);

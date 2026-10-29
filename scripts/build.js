@@ -14,6 +14,7 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 
 // ترتیب دقیق ماژول‌ها برای باندلینگ یکپارچه بدون وابستگی به باندلر خارجی
 const MODULE_ORDER = [
+  'src/config/edgeDomains.js',
   'src/config/sources.js',
   'src/config/defaults.js',
   'src/config/presets.js',

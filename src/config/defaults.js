@@ -3,6 +3,7 @@
 // مجهز به شادوساکس، فرگمنت، ECH، لیست‌های کشوری، قفل ۳ کاربر و چرخش خودکار آی‌پی
 // ============================================================================
 
+import { CF_EDGE_DOMAINS } from './edgeDomains.js';
 import {
   COUNTRY_EXTRA_PROXY_SOURCES,
   COUNTRY_META,
@@ -293,6 +294,7 @@ export const GLOBAL_PROXY_SOURCES = {
 };
 
 export {
+  CF_EDGE_DOMAINS,
   IP_CANDIDATE_SOURCES,
   IP_RANGE_SOURCES,
   HIGH_YIELD_PROXY_SOURCES,
