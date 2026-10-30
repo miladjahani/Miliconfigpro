@@ -35,6 +35,7 @@ import {
   parseNodePorts
 } from '../config/defaults.js';
 import {
+  buildZip,
   createMiliNodeNamer,
   decodeBase64Utf8,
   encodeBase64Utf8,
@@ -939,25 +940,149 @@ function parseWarpEndpointList(raw, count) {
   return out;
 }
 
-// قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify)
+// ============================================================================
+// AmneziaWG — همان WireGuard با پارامترهای مبهم‌سازی (Jc/Jmin/Jmax/S1/S2/H1..H4)
+// مقادیر پایدار بر اساس سرور و پورت ساخته می‌شوند تا با هر بار تازه‌سازی ساب‌لینک
+// عوض نشوند؛ بازه‌ها مطابق نمونه‌های رسمی AmneziaWG انتخاب شده‌اند.
+// ============================================================================
+function awgHash(text) {
+  let h = 2166136261 >>> 0;
+  const str = String(text || '');
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619) >>> 0;
+  return h >>> 0;
+}
+
+export function buildAmneziaWgParams(config = {}) {
+  const seed = `${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}`;
+  let h = awgHash(seed) || 1;
+  const next = (min, max) => {
+    h = (Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
+    return min + (h % (max - min + 1));
+  };
+  const jmin = next(40, 70);
+  const jmax = jmin + next(950, 1150);
+  const h1 = next(100000, 800000);
+  return {
+    jc: next(3, 8),
+    jmin,
+    jmax,
+    s1: next(20, 60),
+    s2: next(30, 90),
+    h1,
+    h2: h1 + next(1, 4000),
+    h3: h1 + next(4001, 9000),
+    h4: h1 + next(9001, 16000)
+  };
+}
+
+// قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify) + پارامترهای AmneziaWG
 export function buildWireguardLink(config = {}, name = 'WARP') {
   const host = String(config.server || WARP_DEFAULT_HOST);
   const endpoint = host.includes(':') ? `[${host}]` : host;
+  const awg = config.awg === false ? null : buildAmneziaWgParams(config);
   const params = new URLSearchParams();
   params.set('publickey', config.publicKey || WARP_PEER_PUBLIC_KEY);
   params.set('reserved', (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(','));
   params.set('address', `${config.address4 || WARP_DEFAULT_ADDRESS}/32`);
   params.set('mtu', '1280');
   params.set('dns', '1.1.1.1, 1.0.0.1');
+  if (awg) {
+    params.set('awg', '1');
+    params.set('jc', String(awg.jc));
+    params.set('jmin', String(awg.jmin));
+    params.set('jmax', String(awg.jmax));
+    params.set('s1', String(awg.s1));
+    params.set('s2', String(awg.s2));
+    params.set('h1', String(awg.h1));
+    params.set('h2', String(awg.h2));
+    params.set('h3', String(awg.h3));
+    params.set('h4', String(awg.h4));
+  }
   const userInfo = encodeURIComponent(String(config.privateKey || ''));
   return `wireguard://${userInfo}@${endpoint}:${config.port || WARP_DEFAULT_PORT}?${params.toString()}#${encodeURIComponent(name)}`;
 }
 
+// فایل کانفیگ .conf قابل ایمپورت در AmneziaWG / WireGuard
+// (کلیدهای Reserved عمداً به‌صورت کامنت می‌آیند تا پارسر کلاینت خطا ندهد)
+export function buildWireGuardConf(config = {}, name = 'WARP') {
+  const awg = buildAmneziaWgParams(config);
+  const endpointHost = String(config.server || WARP_DEFAULT_HOST);
+  const endpoint = endpointHost.includes(':') ? `[${endpointHost}]` : endpointHost;
+  const reserved = (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(', ');
+  const lines = [
+    `# ${name} — ${BRAND_NAME}`,
+    `# AmneziaWG profile (Jc/Jmin/Jmax/S1/S2/H1-H4)`,
+    `# Reserved (WARP client id): ${reserved}`,
+    '[Interface]',
+    `PrivateKey = ${config.privateKey || ''}`,
+    `Address = ${config.address4 || WARP_DEFAULT_ADDRESS}/32`
+  ];
+  if (config.address6) lines.push(`Address = ${config.address6}`);
+  lines.push('DNS = 1.1.1.1, 1.0.0.1', 'MTU = 1280');
+  lines.push(
+    `Jc = ${awg.jc}`,
+    `Jmin = ${awg.jmin}`,
+    `Jmax = ${awg.jmax}`,
+    `S1 = ${awg.s1}`,
+    `S2 = ${awg.s2}`,
+    `H1 = ${awg.h1}`,
+    `H2 = ${awg.h2}`,
+    `H3 = ${awg.h3}`,
+    `H4 = ${awg.h4}`
+  );
+  lines.push(
+    '[Peer]',
+    `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    `Endpoint = ${endpoint}:${config.port || WARP_DEFAULT_PORT}`
+  );
+  // لایسنس حساب هرگز داخل فایل کاربر نوشته نمی‌شود (نشت کلید پولی)
+  return lines.join('\n') + '\n';
+}
+
+// بستهٔ کانفیگ‌های آمادهٔ WARP برای دانلود (zip) — بدون نیاز به هیچ تنظیمی در پنل:
+// WARP، WARP PRO (اگر لایسنس تنظیم شده باشد) و چندلوکیشن
+const WARP_ML_CONF_COUNT = 6;
+
+export async function buildWarpConfBundle(cfg = {}) {
+  const registered = await fetchWarpRegistration(cfg);
+  const base = registered || buildFallbackWarpConfig();
+  const files = [];
+  files.push({ name: 'WARP.conf', data: buildWireGuardConf(base, 'WARP') });
+  // WARP PRO همیشه هست: با لایسنس پنل اگر تنظیم شده باشد، وگرنه با کلید رایگان
+  files.push({ name: 'WARP-PRO.conf', data: buildWireGuardConf(base, 'WARP PRO') });
+  const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount || WARP_ML_CONF_COUNT);
+  endpoints.forEach((endpoint, idx) => {
+    const label = endpoint.label ? ` ${endpoint.label}` : '';
+    files.push({
+      name: `WARP-ML-${idx + 1}.conf`,
+      data: buildWireGuardConf({ ...base, server: endpoint.host, port: endpoint.port }, `WARP-ML-${idx + 1}${label}`)
+    });
+  });
+  files.push({
+    name: 'README.txt',
+    data: [
+      `${BRAND_NAME} — WARP configs (AmneziaWG)`,
+      '',
+      'Import any .conf into AmneziaWG (Windows/Android/iOS/macOS) or WireGuard.',
+      'Jc/Jmin/Jmax/S1/S2/H1-H4 are AmneziaWG obfuscation parameters.',
+      'WARP-PRO is the same tunnel profile; with a panel WARP+ license it runs on the plus tier.',
+      'WARP-ML-* are the same tunnel from different Cloudflare endpoints.',
+      '',
+      `endpoint: ${base.server}:${base.port}`,
+      `address: ${base.address4}`
+    ].join('\n')
+  });
+  return { config: base, files };
+}
+
 // خانوادهٔ WARP: یک نود WARP، یک نود WARP PRO (با لایسنس) و N نود چندلوکیشن
-export async function buildWarpFamilyLinks(cfg = {}) {
+export async function buildWarpFamilyLinks(cfg = {}, options = {}) {
   const links = [];
-  const wantWarp = isEnabledValue(cfg.warp, true);
-  const wantPro = isEnabledValue(cfg.warpPro, false);
+  // always=true (ساب‌لینک و دانلود بدون تنظیم) → WARP و WARP PRO همیشه ساخته می‌شوند
+  const always = options.always === true;
+  const wantWarp = always || isEnabledValue(cfg.warp, true);
+  const wantPro = always || isEnabledValue(cfg.warpPro, false);
   const wantMl = isEnabledValue(cfg.warpMl, true);
   if (!wantWarp && !wantPro && !wantMl) return links;
 
@@ -968,8 +1093,8 @@ export async function buildWarpFamilyLinks(cfg = {}) {
     links.push(buildWireguardLink(base, 'WARP'));
   }
   if (wantPro) {
-    const licensed = String(cfg.warpLicense || '').trim();
-    links.push(buildWireguardLink(base, licensed ? 'WARP PRO' : 'WARP PRO (بدون لایسنس)'));
+    // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
+    links.push(buildWireguardLink(base, 'WARP PRO'));
   }
   if (wantMl) {
     const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
@@ -1332,7 +1457,10 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
 
   // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
   const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
-  const warpLinks = warpAllowed && !domainMode ? await buildWarpFamilyLinks(cfg) : [];
+  // WARP و WARP PRO بدون نیاز به هیچ تنظیمی همیشه حاضرند؛ فقط حذف کامل آن‌ها
+  // با ?proto=vless (یا پروتکل دیگر) یا ?nowarp=1 ممکن است.
+  const nowarp = String(queryOverrides.nowarp || '') === '1' || cfg.warp === 'no' && cfg.warpPro === 'no';
+  const warpLinks = warpAllowed && !domainMode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
 
   // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
   return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
@@ -1387,6 +1515,32 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
         headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
       });
     }
+    // ?format=zip → همهٔ پروفایل‌ها در یک بستهٔ قابل دانلود؛ در غیر این صورت تک‌فایل .ovpn
+    const wantZip = ['zip', 'bundle', 'pack'].includes(String(url.searchParams.get('format') || '').toLowerCase());
+    if (wantZip) {
+      const used = new Set();
+      const files = ovpnNodes.slice(0, 20).map((node, idx) => {
+        const code = String(node.country || 'ML').toUpperCase();
+        let name = `miliconfig-${code}-${idx + 1}.ovpn`;
+        while (used.has(name)) name = `miliconfig-${code}-${idx + 1}-${Date.now() % 1000}.ovpn`;
+        used.add(name);
+        const header = `# miliconfig OpenVPN - ${code} (${node.server}:${node.port}/${node.proto})\n`;
+        return { name, data: header + node.profile };
+      });
+      files.push({
+        name: 'README.txt',
+        data: `miliconfig — ${files.length} OpenVPN profile(s)\nImport the .ovpn files into OpenVPN Connect / AmneziaVPN / OpenVPN GUI.\n`
+      });
+      return new Response(buildZip(files), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': 'attachment; filename="miliconfig-openvpn.zip"',
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
     const first = ovpnNodes[0];
     const body = [
       `# miliconfig OpenVPN - ${first.country || 'ML'} (${first.server}:${first.port}/${first.proto})`,
@@ -1417,6 +1571,7 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
     set: url.searchParams.get('set') || '',
+    nowarp: url.searchParams.get('nowarp') || '',
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };

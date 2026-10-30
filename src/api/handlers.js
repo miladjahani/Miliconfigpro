@@ -9,7 +9,9 @@ import {
   DIRECT_DOMAINS,
   GLOBAL_PROXY_SOURCES,
   IP_CANDIDATE_SOURCES,
+  IPV6_CANDIDATE_SOURCES,
   IP_RANGE_SOURCES,
+  PROXY_IP_SOURCES,
   MAX_USERS_LIMIT,
   OFFICIAL_DIRECT_IPS,
   OFFICIAL_DIRECT_IPV6,
@@ -1186,6 +1188,10 @@ export async function handleScannerApi(request, env) {
       if (kind === 'ip') {
         const curatedV4 = OFFICIAL_DIRECT_IPS.map(ip => ({ host: ip, port: 443, family: 'ipv4', kind: 'ip' }));
         const curatedV6 = OFFICIAL_DIRECT_IPV6.map(ip => ({ host: ip, port: 443, family: 'ipv6', kind: 'ip' }));
+        // لیست IPv6 واقعیِ منبع چینی خودبه‌روز (bestcfv6) — قبل از ساختن آدرس تصادفی
+        const listedV6 = family === 'ipv6'
+          ? parseIpCandidateLines(await fetchSourceText(pickRotating(IPV6_CANDIDATE_SOURCES, 1)[0], 4000), 'ipv6').map(i => i.host)
+          : [];
 
         // ورکرهای کلادفلر خروجی IPv6 ندارند، بنابراین تست TCP روی IPv6 از این محیط ممکن نیست.
         // در این حالت آدرس‌های Anycast معتبر از رنج‌های زنده کلادفلر نمونه‌گیری می‌شوند و
@@ -1198,6 +1204,12 @@ export async function handleScannerApi(request, env) {
           const ranges = rangeTexts.flatMap(text => parseRangeLines(text)).filter(r => r && r.family === 'ipv6');
           const seenV6 = new Set();
           const picked = [];
+          for (const ip of shuffleList(listedV6)) {
+            if (picked.length >= limit) break;
+            if (seenV6.has(ip)) continue;
+            seenV6.add(ip);
+            picked.push(ip);
+          }
           for (const item of shuffleList(curatedV6)) {
             if (picked.length >= limit) break;
             if (seenV6.has(item.host)) continue;
@@ -1228,7 +1240,7 @@ export async function handleScannerApi(request, env) {
           }));
           return jsonResponse({
             success: proxies.length > 0, kind, family: 'ipv6', country: countryLabel, code,
-            count: proxies.length, sourceCount: ranges.length + curatedV6.length, testedCount: 0,
+            count: proxies.length, sourceCount: ranges.length + curatedV6.length + listedV6.length, testedCount: 0,
             verified: false, proxies,
             attempts: [{ ip: OFFICIAL_DIRECT_IPV6[0], control: 'ipv6', ok: false, latencyMs: ipv6Control.latencyMs, error: ipv6Control.error || '' }],
             message: proxies.length
@@ -1244,8 +1256,10 @@ export async function handleScannerApi(request, env) {
 
         // لیست زنده آی‌پی‌های فرانت‌شده کلادفلر (Z-E-U-S)؛ آدرس‌های تصادفی داخل رنج‌ها
         // از داخل ورکر کلادفلر قابل اتصال نیستند، بنابراین از خود لیست نمونه می‌گیریم.
-        const listSource = pickRotating(IP_CANDIDATE_SOURCES, 1)[0];
-        const listText = listSource && family !== 'ipv6' ? await fetchSourceText(listSource, 5000) : '';
+        // فیدهای همیشه‌به‌روز: آی‌پی‌های تست‌شدهٔ IPDB (BestCF) و پروکسی‌آی‌پی‌های آمادهٔ (BestProxy)
+        const ipListSources = family === 'ipv6' ? [] : [...IP_CANDIDATE_SOURCES, ...PROXY_IP_SOURCES];
+        const listSource = ipListSources.length ? pickRotating(ipListSources, 1)[0] : null;
+        const listText = listSource ? await fetchSourceText(listSource, 5000) : '';
         const listed = listText ? parseIpCandidateLines(listText, family) : [];
 
         const wanted = Math.min(limit * 3, 30);

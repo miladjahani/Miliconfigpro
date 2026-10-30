@@ -328,6 +328,96 @@ export async function sha256Hex(text) {
   return h + h.slice(0, 8);
 }
 
+// ============================================================================
+// ساخت ZIP ساده (روش store، بدون فشرده‌سازی) برای بستهٔ کانفیگ‌ها
+// ورودی: [{ name: 'WARP.conf', data: 'متن' }] → Uint8Array فایل zip
+// ============================================================================
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+export function buildZip(entries = []) {
+  const encoder = new TextEncoder();
+  const files = (Array.isArray(entries) ? entries : [])
+    .filter(entry => entry && entry.name)
+    .map(entry => ({ name: String(entry.name), bytes: encoder.encode(String(entry.data ?? '')) }));
+  if (!files.length) return new Uint8Array(0);
+
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2)) & 0xffff;
+  const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xffff;
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const crc = crc32(file.bytes);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);      // version needed
+    lv.setUint16(6, 0x0800, true);  // utf-8 flag
+    lv.setUint16(8, 0, true);       // store
+    lv.setUint16(10, dosTime, true);
+    lv.setUint16(12, dosDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, file.bytes.length, true);
+    lv.setUint32(22, file.bytes.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    chunks.push(local, file.bytes);
+
+    const header = new Uint8Array(46 + nameBytes.length);
+    const hv = new DataView(header.buffer);
+    hv.setUint32(0, 0x02014b50, true);
+    hv.setUint16(4, 20, true);
+    hv.setUint16(6, 20, true);
+    hv.setUint16(8, 0x0800, true);
+    hv.setUint16(10, 0, true);
+    hv.setUint16(12, dosTime, true);
+    hv.setUint16(14, dosDate, true);
+    hv.setUint32(16, crc, true);
+    hv.setUint32(20, file.bytes.length, true);
+    hv.setUint32(24, file.bytes.length, true);
+    hv.setUint16(28, nameBytes.length, true);
+    hv.setUint32(42, offset, true);
+    header.set(nameBytes, 46);
+    central.push(header);
+
+    offset += local.length + file.bytes.length;
+  }
+
+  const centralSize = central.reduce((sum, item) => sum + item.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+
+  const all = [...chunks, ...central, end];
+  const total = all.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const part of all) { out.set(part, pos); pos += part.length; }
+  return out;
+}
+
 export function formatBytes(bytes = 0) {
   const b = Number(bytes) || 0;
   if (b <= 0) return '0 B';

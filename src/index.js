@@ -16,7 +16,13 @@ import {
   verifyAdminSession
 } from './db/d1.js';
 import { handleWebSocketUpgrade, handleXhttpPostRequest } from './core/runtime.js';
-import { generateUserNodesList, handleSubscriptionResponse } from './subscription/generator.js';
+import {
+  buildWarpConfBundle,
+  buildWireGuardConf,
+  generateUserNodesList,
+  handleSubscriptionResponse
+} from './subscription/generator.js';
+import { buildZip } from './core/utils.js';
 import {
   handleAuthApi,
   handleConfigApi,
@@ -276,6 +282,53 @@ export default {
             if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
           }
           return await handleSubscriptionResponse(request, targetUser, url);
+        }
+
+        // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)
+        // /warp/<token>?format=zip|conf|json — بدون هیچ تنظیمی کار می‌کند؛
+        // حتی بدون توکن (آدرس /warp) هم یک بستهٔ آماده برمی‌گردد.
+        if (pathParts[0] === 'warp') {
+          const warpToken = decodeURIComponent(pathParts.slice(1).join('/'));
+          let warpUser = null;
+          if (warpToken) {
+            const isAdminToken = isAdminAuthorizedPath(warpToken, adminUuid, globalCfg.d);
+            if (!isAdminToken) {
+              warpUser = await getUserByIdOrToken(env, warpToken);
+              if (!warpUser) {
+                return new Response(JSON.stringify({ error: 'شناسه نامعتبر است' }), {
+                  status: 403,
+                  headers: { 'Content-Type': 'application/json; charset=utf-8' }
+                });
+              }
+            }
+          }
+          const warpCfg = { ...globalCfg, ...((warpUser && warpUser.config) || {}) };
+          const format = String(url.searchParams.get('format') || 'zip').toLowerCase();
+          const bundle = await buildWarpConfBundle(warpCfg);
+          if (format === 'conf' || format === 'wg' || format === 'txt') {
+            return new Response(buildWireGuardConf(bundle.config, 'WARP'), {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Content-Disposition': 'attachment; filename="WARP.conf"',
+                'Cache-Control': 'no-store'
+              }
+            });
+          }
+          if (format === 'json') {
+            return new Response(JSON.stringify({ success: true, config: bundle.config, files: bundle.files.map(f => f.name) }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
+            });
+          }
+          return new Response(buildZip(bundle.files), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Disposition': 'attachment; filename="miliconfig-warp.zip"',
+              'Cache-Control': 'no-store'
+            }
+          });
         }
 
         // ۴-هـ: دسترسی به پنل مدیریت ادمین یا صفحه وضعیت کاربر با /{token}

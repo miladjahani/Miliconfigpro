@@ -68,6 +68,13 @@ export function parseShareLink(link) {
         .split(',')
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isFinite(n));
+      // پارامترهای مبهم‌سازی AmneziaWG (اگر در لینک باشند)
+      const awgFields = ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'];
+      const awg = {};
+      for (const key of awgFields) {
+        const value = parseInt(params.get(key), 10);
+        if (Number.isFinite(value)) awg[key] = value;
+      }
       return {
         proto: 'wireguard',
         name: decodeURIComponent(url.hash.substring(1)) || 'WARP',
@@ -79,7 +86,8 @@ export function parseShareLink(link) {
         mtu: parseInt(params.get('mtu') || '1280', 10) || 1280,
         dns: (params.get('dns') || '').split(',').map(s => s.trim()).filter(Boolean),
         server: normalizeHost(url.hostname),
-        port: parseInt(url.port, 10) || (isWarp ? 2408 : 2408)
+        port: parseInt(url.port, 10) || (isWarp ? 2408 : 2408),
+        awg: Object.keys(awg).length ? awg : null
       };
     }
     if (link.startsWith('vless://')) {
@@ -265,6 +273,13 @@ function buildClashWireGuardYaml(node) {
   lines.push("    allowed-ips: ['0.0.0.0/0', '::/0']");
   if (node.reserved && node.reserved.length) lines.push(`    reserved: [${node.reserved.join(', ')}]`);
   lines.push(`    mtu: ${node.mtu || 1280}`);
+  // مبهم‌سازی AmneziaWG برای Mihomo/Clash Meta
+  if (node.awg && Object.keys(node.awg).length) {
+    lines.push('    amnezia-wg-option:');
+    for (const key of ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+      if (Number.isFinite(node.awg[key])) lines.push(`      ${key}: ${node.awg[key]}`);
+    }
+  }
   lines.push('    remote-dns-resolve: true');
   if (node.dns && node.dns.length) lines.push(`    dns: [${node.dns.map(d => quoteYaml(d)).join(', ')}]`);
   lines.push('    udp: true');

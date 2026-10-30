@@ -307,8 +307,25 @@ export function getFeedKind(url) {
 // آی‌پی‌ها
 // ---------------------------------------------------------------------------
 // لیست آی‌پی/دامنه ثابت کلادفلر (هر خط یک آدرس) — نمونه‌گیری زنده برای yx
+// دو منبع آخر (IPDB) از پروژه‌های چینی «بهترین آی‌پی کلادفلر» هستند که به‌صورت
+// خودکار هر چند ساعت به‌روز می‌شوند و آی‌پی‌های واقعاً سالم را نگه می‌دارند؛
+// همین باعث می‌شود تب چندلوکیشن بدون یک بار اسکن هم آی‌پی تازه داشته باشد.
 export const IP_CANDIDATE_SOURCES = [
-  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt'
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'
+];
+
+// آی‌پی‌های IPv6 بهینهٔ کلادفلر (منبع چینی خودبه‌روز)
+export const IPV6_CANDIDATE_SOURCES = [
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv6.txt'
+];
+
+// Proxy-IP های آمادهٔ عبور از کلادفلر (BPB-style) — لیست خودبه‌روز
+export const PROXY_IP_SOURCES = [
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy&country.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/proxy.txt'
 ];
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)

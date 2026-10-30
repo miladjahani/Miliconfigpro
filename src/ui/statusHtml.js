@@ -503,6 +503,12 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
         <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}', 'لینک اشتراک هوشمند کپی شد')">${icon('copy')} کپی ساب‌لینک</button>
         <div class="url-text">${baseSubUrl}</div>
       </div>
+      <!-- دانلود مستقیم کانفیگ‌های آماده: بدون هیچ تنظیمی در پنل -->
+      <div class="toolbar" style="margin-top:10px;">
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
+        <a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>
+      </div>
     </div>
 
     <!-- محدوده نودها -->

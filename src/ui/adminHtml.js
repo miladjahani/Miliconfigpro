@@ -164,7 +164,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
     check: icon('check'),
     clock: icon('clock'),
     power: icon('power'),
-    layers: icon('layers')
+    layers: icon('layers'),
+    download: icon('download')
   });
 
   const ssmethods = ['none'];
@@ -1058,6 +1059,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
           <button class="btn sm ghost" type="button" data-act="copy-master">${icon('copy')} همه لوکیشن‌ها</button>
         </div>
         <div class="window-body">
+          <p class="loc-meta" style="margin: 0 0 12px;">بدون نیاز به اسکنر: هر لوکیشن از منابع داخلی و فیدهای همیشه‌به‌روز ساخته می‌شود؛ فقط لینک را کپی کنید. وارپ و وارپ‌پرو هم آماده و بدون تنظیم با فرمت ZIP قابل دانلود است.</p>
           <div class="loc-grid" id="locGrid"></div>
         </div>
       </div>
@@ -1277,8 +1279,20 @@ export function renderAdminDashboardHtml(initialData = {}) {
     if (!grid) return;
     var base = origin() + '/sub/' + (userKey(state.users[0]) || ADMIN_PATH);
     var countries = INITIAL_DATA.countrySources || {};
+    var token = userKey(state.users[0]) || '';
     var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
-      '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>';
+      '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>' +
+      // وارپ و اپن‌وی‌پی آماده، بدون اسکنر و بدون تنظیم
+      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG · ZIP</div></div>' +
+      '<div class="toolbar">' +
+      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
+      '</div></div>' +
+      '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · ZIP</div></div>' +
+      '<div class="toolbar">' +
+      '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +
+      '</div></div>';
     Object.keys(countries).forEach(function(code) {
       html += '<div class="loc-card"><div><div class="loc-name">' + countries[code].name + '</div><div class="loc-meta">' + code + '</div></div>' +
         '<div class="toolbar">' +

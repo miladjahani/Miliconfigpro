@@ -330,8 +330,25 @@ function getFeedKind(url) {
 // آی‌پی‌ها
 // ---------------------------------------------------------------------------
 // لیست آی‌پی/دامنه ثابت کلادفلر (هر خط یک آدرس) — نمونه‌گیری زنده برای yx
+// دو منبع آخر (IPDB) از پروژه‌های چینی «بهترین آی‌پی کلادفلر» هستند که به‌صورت
+// خودکار هر چند ساعت به‌روز می‌شوند و آی‌پی‌های واقعاً سالم را نگه می‌دارند؛
+// همین باعث می‌شود تب چندلوکیشن بدون یک بار اسکن هم آی‌پی تازه داشته باشد.
 const IP_CANDIDATE_SOURCES = [
-  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt'
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'
+];
+
+// آی‌پی‌های IPv6 بهینهٔ کلادفلر (منبع چینی خودبه‌روز)
+const IPV6_CANDIDATE_SOURCES = [
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv6.txt'
+];
+
+// Proxy-IP های آمادهٔ عبور از کلادفلر (BPB-style) — لیست خودبه‌روز
+const PROXY_IP_SOURCES = [
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy&country.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/proxy.txt'
 ];
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
@@ -1364,6 +1381,96 @@ async function sha256Hex(text) {
   // اگر به هر دلیلی در دسترس نبود، sha224 با پدینگ ۳۲ بایتی برگشت داده می‌شود
   const h = await sha224Hex(String(text || ''));
   return h + h.slice(0, 8);
+}
+
+// ============================================================================
+// ساخت ZIP ساده (روش store، بدون فشرده‌سازی) برای بستهٔ کانفیگ‌ها
+// ورودی: [{ name: 'WARP.conf', data: 'متن' }] → Uint8Array فایل zip
+// ============================================================================
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function buildZip(entries = []) {
+  const encoder = new TextEncoder();
+  const files = (Array.isArray(entries) ? entries : [])
+    .filter(entry => entry && entry.name)
+    .map(entry => ({ name: String(entry.name), bytes: encoder.encode(String(entry.data ?? '')) }));
+  if (!files.length) return new Uint8Array(0);
+
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2)) & 0xffff;
+  const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xffff;
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const crc = crc32(file.bytes);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);      // version needed
+    lv.setUint16(6, 0x0800, true);  // utf-8 flag
+    lv.setUint16(8, 0, true);       // store
+    lv.setUint16(10, dosTime, true);
+    lv.setUint16(12, dosDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, file.bytes.length, true);
+    lv.setUint32(22, file.bytes.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    chunks.push(local, file.bytes);
+
+    const header = new Uint8Array(46 + nameBytes.length);
+    const hv = new DataView(header.buffer);
+    hv.setUint32(0, 0x02014b50, true);
+    hv.setUint16(4, 20, true);
+    hv.setUint16(6, 20, true);
+    hv.setUint16(8, 0x0800, true);
+    hv.setUint16(10, 0, true);
+    hv.setUint16(12, dosTime, true);
+    hv.setUint16(14, dosDate, true);
+    hv.setUint32(16, crc, true);
+    hv.setUint32(20, file.bytes.length, true);
+    hv.setUint32(24, file.bytes.length, true);
+    hv.setUint16(28, nameBytes.length, true);
+    hv.setUint32(42, offset, true);
+    header.set(nameBytes, 46);
+    central.push(header);
+
+    offset += local.length + file.bytes.length;
+  }
+
+  const centralSize = central.reduce((sum, item) => sum + item.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+
+  const all = [...chunks, ...central, end];
+  const total = all.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const part of all) { out.set(part, pos); pos += part.length; }
+  return out;
 }
 
 function formatBytes(bytes = 0) {
@@ -2602,6 +2709,13 @@ function parseShareLink(link) {
         .split(',')
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isFinite(n));
+      // پارامترهای مبهم‌سازی AmneziaWG (اگر در لینک باشند)
+      const awgFields = ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'];
+      const awg = {};
+      for (const key of awgFields) {
+        const value = parseInt(params.get(key), 10);
+        if (Number.isFinite(value)) awg[key] = value;
+      }
       return {
         proto: 'wireguard',
         name: decodeURIComponent(url.hash.substring(1)) || 'WARP',
@@ -2613,7 +2727,8 @@ function parseShareLink(link) {
         mtu: parseInt(params.get('mtu') || '1280', 10) || 1280,
         dns: (params.get('dns') || '').split(',').map(s => s.trim()).filter(Boolean),
         server: normalizeHost(url.hostname),
-        port: parseInt(url.port, 10) || (isWarp ? 2408 : 2408)
+        port: parseInt(url.port, 10) || (isWarp ? 2408 : 2408),
+        awg: Object.keys(awg).length ? awg : null
       };
     }
     if (link.startsWith('vless://')) {
@@ -2799,6 +2914,13 @@ function buildClashWireGuardYaml(node) {
   lines.push("    allowed-ips: ['0.0.0.0/0', '::/0']");
   if (node.reserved && node.reserved.length) lines.push(`    reserved: [${node.reserved.join(', ')}]`);
   lines.push(`    mtu: ${node.mtu || 1280}`);
+  // مبهم‌سازی AmneziaWG برای Mihomo/Clash Meta
+  if (node.awg && Object.keys(node.awg).length) {
+    lines.push('    amnezia-wg-option:');
+    for (const key of ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+      if (Number.isFinite(node.awg[key])) lines.push(`      ${key}: ${node.awg[key]}`);
+    }
+  }
   lines.push('    remote-dns-resolve: true');
   if (node.dns && node.dns.length) lines.push(`    dns: [${node.dns.map(d => quoteYaml(d)).join(', ')}]`);
   lines.push('    udp: true');
@@ -4678,25 +4800,149 @@ function parseWarpEndpointList(raw, count) {
   return out;
 }
 
-// قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify)
+// ============================================================================
+// AmneziaWG — همان WireGuard با پارامترهای مبهم‌سازی (Jc/Jmin/Jmax/S1/S2/H1..H4)
+// مقادیر پایدار بر اساس سرور و پورت ساخته می‌شوند تا با هر بار تازه‌سازی ساب‌لینک
+// عوض نشوند؛ بازه‌ها مطابق نمونه‌های رسمی AmneziaWG انتخاب شده‌اند.
+// ============================================================================
+function awgHash(text) {
+  let h = 2166136261 >>> 0;
+  const str = String(text || '');
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619) >>> 0;
+  return h >>> 0;
+}
+
+function buildAmneziaWgParams(config = {}) {
+  const seed = `${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}`;
+  let h = awgHash(seed) || 1;
+  const next = (min, max) => {
+    h = (Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
+    return min + (h % (max - min + 1));
+  };
+  const jmin = next(40, 70);
+  const jmax = jmin + next(950, 1150);
+  const h1 = next(100000, 800000);
+  return {
+    jc: next(3, 8),
+    jmin,
+    jmax,
+    s1: next(20, 60),
+    s2: next(30, 90),
+    h1,
+    h2: h1 + next(1, 4000),
+    h3: h1 + next(4001, 9000),
+    h4: h1 + next(9001, 16000)
+  };
+}
+
+// قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify) + پارامترهای AmneziaWG
 function buildWireguardLink(config = {}, name = 'WARP') {
   const host = String(config.server || WARP_DEFAULT_HOST);
   const endpoint = host.includes(':') ? `[${host}]` : host;
+  const awg = config.awg === false ? null : buildAmneziaWgParams(config);
   const params = new URLSearchParams();
   params.set('publickey', config.publicKey || WARP_PEER_PUBLIC_KEY);
   params.set('reserved', (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(','));
   params.set('address', `${config.address4 || WARP_DEFAULT_ADDRESS}/32`);
   params.set('mtu', '1280');
   params.set('dns', '1.1.1.1, 1.0.0.1');
+  if (awg) {
+    params.set('awg', '1');
+    params.set('jc', String(awg.jc));
+    params.set('jmin', String(awg.jmin));
+    params.set('jmax', String(awg.jmax));
+    params.set('s1', String(awg.s1));
+    params.set('s2', String(awg.s2));
+    params.set('h1', String(awg.h1));
+    params.set('h2', String(awg.h2));
+    params.set('h3', String(awg.h3));
+    params.set('h4', String(awg.h4));
+  }
   const userInfo = encodeURIComponent(String(config.privateKey || ''));
   return `wireguard://${userInfo}@${endpoint}:${config.port || WARP_DEFAULT_PORT}?${params.toString()}#${encodeURIComponent(name)}`;
 }
 
+// فایل کانفیگ .conf قابل ایمپورت در AmneziaWG / WireGuard
+// (کلیدهای Reserved عمداً به‌صورت کامنت می‌آیند تا پارسر کلاینت خطا ندهد)
+function buildWireGuardConf(config = {}, name = 'WARP') {
+  const awg = buildAmneziaWgParams(config);
+  const endpointHost = String(config.server || WARP_DEFAULT_HOST);
+  const endpoint = endpointHost.includes(':') ? `[${endpointHost}]` : endpointHost;
+  const reserved = (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(', ');
+  const lines = [
+    `# ${name} — ${BRAND_NAME}`,
+    `# AmneziaWG profile (Jc/Jmin/Jmax/S1/S2/H1-H4)`,
+    `# Reserved (WARP client id): ${reserved}`,
+    '[Interface]',
+    `PrivateKey = ${config.privateKey || ''}`,
+    `Address = ${config.address4 || WARP_DEFAULT_ADDRESS}/32`
+  ];
+  if (config.address6) lines.push(`Address = ${config.address6}`);
+  lines.push('DNS = 1.1.1.1, 1.0.0.1', 'MTU = 1280');
+  lines.push(
+    `Jc = ${awg.jc}`,
+    `Jmin = ${awg.jmin}`,
+    `Jmax = ${awg.jmax}`,
+    `S1 = ${awg.s1}`,
+    `S2 = ${awg.s2}`,
+    `H1 = ${awg.h1}`,
+    `H2 = ${awg.h2}`,
+    `H3 = ${awg.h3}`,
+    `H4 = ${awg.h4}`
+  );
+  lines.push(
+    '[Peer]',
+    `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    `Endpoint = ${endpoint}:${config.port || WARP_DEFAULT_PORT}`
+  );
+  // لایسنس حساب هرگز داخل فایل کاربر نوشته نمی‌شود (نشت کلید پولی)
+  return lines.join('\n') + '\n';
+}
+
+// بستهٔ کانفیگ‌های آمادهٔ WARP برای دانلود (zip) — بدون نیاز به هیچ تنظیمی در پنل:
+// WARP، WARP PRO (اگر لایسنس تنظیم شده باشد) و چندلوکیشن
+const WARP_ML_CONF_COUNT = 6;
+
+async function buildWarpConfBundle(cfg = {}) {
+  const registered = await fetchWarpRegistration(cfg);
+  const base = registered || buildFallbackWarpConfig();
+  const files = [];
+  files.push({ name: 'WARP.conf', data: buildWireGuardConf(base, 'WARP') });
+  // WARP PRO همیشه هست: با لایسنس پنل اگر تنظیم شده باشد، وگرنه با کلید رایگان
+  files.push({ name: 'WARP-PRO.conf', data: buildWireGuardConf(base, 'WARP PRO') });
+  const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount || WARP_ML_CONF_COUNT);
+  endpoints.forEach((endpoint, idx) => {
+    const label = endpoint.label ? ` ${endpoint.label}` : '';
+    files.push({
+      name: `WARP-ML-${idx + 1}.conf`,
+      data: buildWireGuardConf({ ...base, server: endpoint.host, port: endpoint.port }, `WARP-ML-${idx + 1}${label}`)
+    });
+  });
+  files.push({
+    name: 'README.txt',
+    data: [
+      `${BRAND_NAME} — WARP configs (AmneziaWG)`,
+      '',
+      'Import any .conf into AmneziaWG (Windows/Android/iOS/macOS) or WireGuard.',
+      'Jc/Jmin/Jmax/S1/S2/H1-H4 are AmneziaWG obfuscation parameters.',
+      'WARP-PRO is the same tunnel profile; with a panel WARP+ license it runs on the plus tier.',
+      'WARP-ML-* are the same tunnel from different Cloudflare endpoints.',
+      '',
+      `endpoint: ${base.server}:${base.port}`,
+      `address: ${base.address4}`
+    ].join('\n')
+  });
+  return { config: base, files };
+}
+
 // خانوادهٔ WARP: یک نود WARP، یک نود WARP PRO (با لایسنس) و N نود چندلوکیشن
-async function buildWarpFamilyLinks(cfg = {}) {
+async function buildWarpFamilyLinks(cfg = {}, options = {}) {
   const links = [];
-  const wantWarp = isEnabledValue(cfg.warp, true);
-  const wantPro = isEnabledValue(cfg.warpPro, false);
+  // always=true (ساب‌لینک و دانلود بدون تنظیم) → WARP و WARP PRO همیشه ساخته می‌شوند
+  const always = options.always === true;
+  const wantWarp = always || isEnabledValue(cfg.warp, true);
+  const wantPro = always || isEnabledValue(cfg.warpPro, false);
   const wantMl = isEnabledValue(cfg.warpMl, true);
   if (!wantWarp && !wantPro && !wantMl) return links;
 
@@ -4707,8 +4953,8 @@ async function buildWarpFamilyLinks(cfg = {}) {
     links.push(buildWireguardLink(base, 'WARP'));
   }
   if (wantPro) {
-    const licensed = String(cfg.warpLicense || '').trim();
-    links.push(buildWireguardLink(base, licensed ? 'WARP PRO' : 'WARP PRO (بدون لایسنس)'));
+    // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
+    links.push(buildWireguardLink(base, 'WARP PRO'));
   }
   if (wantMl) {
     const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
@@ -5071,7 +5317,10 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
 
   // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
   const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
-  const warpLinks = warpAllowed && !domainMode ? await buildWarpFamilyLinks(cfg) : [];
+  // WARP و WARP PRO بدون نیاز به هیچ تنظیمی همیشه حاضرند؛ فقط حذف کامل آن‌ها
+  // با ?proto=vless (یا پروتکل دیگر) یا ?nowarp=1 ممکن است.
+  const nowarp = String(queryOverrides.nowarp || '') === '1' || cfg.warp === 'no' && cfg.warpPro === 'no';
+  const warpLinks = warpAllowed && !domainMode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
 
   // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
   return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
@@ -5126,6 +5375,32 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null) {
         headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
       });
     }
+    // ?format=zip → همهٔ پروفایل‌ها در یک بستهٔ قابل دانلود؛ در غیر این صورت تک‌فایل .ovpn
+    const wantZip = ['zip', 'bundle', 'pack'].includes(String(url.searchParams.get('format') || '').toLowerCase());
+    if (wantZip) {
+      const used = new Set();
+      const files = ovpnNodes.slice(0, 20).map((node, idx) => {
+        const code = String(node.country || 'ML').toUpperCase();
+        let name = `miliconfig-${code}-${idx + 1}.ovpn`;
+        while (used.has(name)) name = `miliconfig-${code}-${idx + 1}-${Date.now() % 1000}.ovpn`;
+        used.add(name);
+        const header = `# miliconfig OpenVPN - ${code} (${node.server}:${node.port}/${node.proto})\n`;
+        return { name, data: header + node.profile };
+      });
+      files.push({
+        name: 'README.txt',
+        data: `miliconfig — ${files.length} OpenVPN profile(s)\nImport the .ovpn files into OpenVPN Connect / AmneziaVPN / OpenVPN GUI.\n`
+      });
+      return new Response(buildZip(files), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': 'attachment; filename="miliconfig-openvpn.zip"',
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
     const first = ovpnNodes[0];
     const body = [
       `# miliconfig OpenVPN - ${first.country || 'ML'} (${first.server}:${first.port}/${first.proto})`,
@@ -5156,6 +5431,7 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null) {
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
     set: url.searchParams.get('set') || '',
+    nowarp: url.searchParams.get('nowarp') || '',
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };
@@ -7757,6 +8033,10 @@ async function handleScannerApi(request, env) {
       if (kind === 'ip') {
         const curatedV4 = OFFICIAL_DIRECT_IPS.map(ip => ({ host: ip, port: 443, family: 'ipv4', kind: 'ip' }));
         const curatedV6 = OFFICIAL_DIRECT_IPV6.map(ip => ({ host: ip, port: 443, family: 'ipv6', kind: 'ip' }));
+        // لیست IPv6 واقعیِ منبع چینی خودبه‌روز (bestcfv6) — قبل از ساختن آدرس تصادفی
+        const listedV6 = family === 'ipv6'
+          ? parseIpCandidateLines(await fetchSourceText(pickRotating(IPV6_CANDIDATE_SOURCES, 1)[0], 4000), 'ipv6').map(i => i.host)
+          : [];
 
         // ورکرهای کلادفلر خروجی IPv6 ندارند، بنابراین تست TCP روی IPv6 از این محیط ممکن نیست.
         // در این حالت آدرس‌های Anycast معتبر از رنج‌های زنده کلادفلر نمونه‌گیری می‌شوند و
@@ -7769,6 +8049,12 @@ async function handleScannerApi(request, env) {
           const ranges = rangeTexts.flatMap(text => parseRangeLines(text)).filter(r => r && r.family === 'ipv6');
           const seenV6 = new Set();
           const picked = [];
+          for (const ip of shuffleList(listedV6)) {
+            if (picked.length >= limit) break;
+            if (seenV6.has(ip)) continue;
+            seenV6.add(ip);
+            picked.push(ip);
+          }
           for (const item of shuffleList(curatedV6)) {
             if (picked.length >= limit) break;
             if (seenV6.has(item.host)) continue;
@@ -7799,7 +8085,7 @@ async function handleScannerApi(request, env) {
           }));
           return jsonResponse({
             success: proxies.length > 0, kind, family: 'ipv6', country: countryLabel, code,
-            count: proxies.length, sourceCount: ranges.length + curatedV6.length, testedCount: 0,
+            count: proxies.length, sourceCount: ranges.length + curatedV6.length + listedV6.length, testedCount: 0,
             verified: false, proxies,
             attempts: [{ ip: OFFICIAL_DIRECT_IPV6[0], control: 'ipv6', ok: false, latencyMs: ipv6Control.latencyMs, error: ipv6Control.error || '' }],
             message: proxies.length
@@ -7815,8 +8101,10 @@ async function handleScannerApi(request, env) {
 
         // لیست زنده آی‌پی‌های فرانت‌شده کلادفلر (Z-E-U-S)؛ آدرس‌های تصادفی داخل رنج‌ها
         // از داخل ورکر کلادفلر قابل اتصال نیستند، بنابراین از خود لیست نمونه می‌گیریم.
-        const listSource = pickRotating(IP_CANDIDATE_SOURCES, 1)[0];
-        const listText = listSource && family !== 'ipv6' ? await fetchSourceText(listSource, 5000) : '';
+        // فیدهای همیشه‌به‌روز: آی‌پی‌های تست‌شدهٔ IPDB (BestCF) و پروکسی‌آی‌پی‌های آمادهٔ (BestProxy)
+        const ipListSources = family === 'ipv6' ? [] : [...IP_CANDIDATE_SOURCES, ...PROXY_IP_SOURCES];
+        const listSource = ipListSources.length ? pickRotating(ipListSources, 1)[0] : null;
+        const listText = listSource ? await fetchSourceText(listSource, 5000) : '';
         const listed = listText ? parseIpCandidateLines(listText, family) : [];
 
         const wanted = Math.min(limit * 3, 30);
@@ -9147,6 +9435,12 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
         <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}', 'لینک اشتراک هوشمند کپی شد')">${icon('copy')} کپی ساب‌لینک</button>
         <div class="url-text">${baseSubUrl}</div>
       </div>
+      <!-- دانلود مستقیم کانفیگ‌های آماده: بدون هیچ تنظیمی در پنل -->
+      <div class="toolbar" style="margin-top:10px;">
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
+        <a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>
+      </div>
     </div>
 
     <!-- محدوده نودها -->
@@ -9841,7 +10135,8 @@ function renderAdminDashboardHtml(initialData = {}) {
     check: icon('check'),
     clock: icon('clock'),
     power: icon('power'),
-    layers: icon('layers')
+    layers: icon('layers'),
+    download: icon('download')
   });
 
   const ssmethods = ['none'];
@@ -10735,6 +11030,7 @@ function renderAdminDashboardHtml(initialData = {}) {
           <button class="btn sm ghost" type="button" data-act="copy-master">${icon('copy')} همه لوکیشن‌ها</button>
         </div>
         <div class="window-body">
+          <p class="loc-meta" style="margin: 0 0 12px;">بدون نیاز به اسکنر: هر لوکیشن از منابع داخلی و فیدهای همیشه‌به‌روز ساخته می‌شود؛ فقط لینک را کپی کنید. وارپ و وارپ‌پرو هم آماده و بدون تنظیم با فرمت ZIP قابل دانلود است.</p>
           <div class="loc-grid" id="locGrid"></div>
         </div>
       </div>
@@ -10954,8 +11250,20 @@ function renderAdminDashboardHtml(initialData = {}) {
     if (!grid) return;
     var base = origin() + '/sub/' + (userKey(state.users[0]) || ADMIN_PATH);
     var countries = INITIAL_DATA.countrySources || {};
+    var token = userKey(state.users[0]) || '';
     var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
-      '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>';
+      '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>' +
+      // وارپ و اپن‌وی‌پی آماده، بدون اسکنر و بدون تنظیم
+      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG · ZIP</div></div>' +
+      '<div class="toolbar">' +
+      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
+      '</div></div>' +
+      '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · ZIP</div></div>' +
+      '<div class="toolbar">' +
+      '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +
+      '</div></div>';
     Object.keys(countries).forEach(function(code) {
       html += '<div class="loc-card"><div><div class="loc-name">' + countries[code].name + '</div><div class="loc-meta">' + code + '</div></div>' +
         '<div class="toolbar">' +
@@ -11785,6 +12093,53 @@ const __MILI_WORKER_EXPORT__ = {
             if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
           }
           return await handleSubscriptionResponse(request, targetUser, url);
+        }
+
+        // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)
+        // /warp/<token>?format=zip|conf|json — بدون هیچ تنظیمی کار می‌کند؛
+        // حتی بدون توکن (آدرس /warp) هم یک بستهٔ آماده برمی‌گردد.
+        if (pathParts[0] === 'warp') {
+          const warpToken = decodeURIComponent(pathParts.slice(1).join('/'));
+          let warpUser = null;
+          if (warpToken) {
+            const isAdminToken = isAdminAuthorizedPath(warpToken, adminUuid, globalCfg.d);
+            if (!isAdminToken) {
+              warpUser = await getUserByIdOrToken(env, warpToken);
+              if (!warpUser) {
+                return new Response(JSON.stringify({ error: 'شناسه نامعتبر است' }), {
+                  status: 403,
+                  headers: { 'Content-Type': 'application/json; charset=utf-8' }
+                });
+              }
+            }
+          }
+          const warpCfg = { ...globalCfg, ...((warpUser && warpUser.config) || {}) };
+          const format = String(url.searchParams.get('format') || 'zip').toLowerCase();
+          const bundle = await buildWarpConfBundle(warpCfg);
+          if (format === 'conf' || format === 'wg' || format === 'txt') {
+            return new Response(buildWireGuardConf(bundle.config, 'WARP'), {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Content-Disposition': 'attachment; filename="WARP.conf"',
+                'Cache-Control': 'no-store'
+              }
+            });
+          }
+          if (format === 'json') {
+            return new Response(JSON.stringify({ success: true, config: bundle.config, files: bundle.files.map(f => f.name) }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
+            });
+          }
+          return new Response(buildZip(bundle.files), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Disposition': 'attachment; filename="miliconfig-warp.zip"',
+              'Cache-Control': 'no-store'
+            }
+          });
         }
 
         // ۴-هـ: دسترسی به پنل مدیریت ادمین یا صفحه وضعیت کاربر با /{token}
