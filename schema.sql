@@ -34,6 +34,15 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at INTEGER NOT NULL
 );
 
+-- استخر پروکسی تأییدشدهٔ هر کشور (تب چندلوکیشن) — خروجی واقعی تست‌شده با trace کلادفلر
+CREATE TABLE IF NOT EXISTS country_proxy_pool (
+  code TEXT NOT NULL,
+  proxy TEXT NOT NULL,
+  unverified INTEGER NOT NULL DEFAULT 0,
+  checked_at INTEGER NOT NULL,
+  PRIMARY KEY (code, proxy)
+);
+
 CREATE TABLE IF NOT EXISTS preferred_nodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ip TEXT NOT NULL,

@@ -46,6 +46,7 @@ import {
   normalizeNodeHost,
   parseAddressAndPort
 } from '../core/utils.js';
+import { verifyCountryProxies } from '../core/proxyGeo.js';
 import {
   generateClashConfig,
   generateLoonConfig,
@@ -263,11 +264,17 @@ export function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost =
   for (let i = 0; i < wanted; i++) {
     const code = countryCodes[(bucket + i) % countryCodes.length];
     const group = byCountry.get(code) || usable;
-    const picked = group[(bucket + i) % group.length];
+    // اگر برای این کشور پروکسی تأییدشده وجود دارد، فقط همان‌ها استفاده می‍شوند تا
+    // خروجی واقعاً از کشور انتخابی باشد؛ پروکسی خام فقط وقتی هیچ تأییدشده‌ای نیست.
+    const verifiedGroup = group.filter(item => item.unverified !== true);
+    const pickFrom = verifiedGroup.length ? verifiedGroup : group;
+    const picked = pickFrom[(bucket + i) % pickFrom.length];
     out.push({
       ip: addressPool[(i * stride) % addressPool.length],
-      isp: `Loc-${picked.country || 'CF'}`,
+      // «?» یعنی پروکسی تأییدشده نبود (کشورش با برچسب نخواند یا هیچ پروکسی سالمی نبود)
+      isp: `Loc-${picked.country || 'CF'}${picked.unverified ? '?' : ''}`,
       country: picked.country || '',
+      unverified: picked.unverified === true,
       proxy: picked.proxy
     });
   }
@@ -464,6 +471,128 @@ export async function fetchPreferredFromUrls(urlListStr = '', defaultPort = '443
     }
   }
   return parsed;
+}
+
+// ============================================================================
+// استخر تأییدشدهٔ هر کشور: پروکسی‌ها از فیدها خوانده و از طریق خودشان تست می‌شوند؛
+// فقط آن‌هایی که loc خروجی‌شان با کد کشور یکی است نگه داشته می‌شوند.
+// نتیجه ۱۰ دقیقه در cache کلادفلر می‌ماند تا هر درخواست ساب‌لینک گران نشود.
+// ============================================================================
+const COUNTRY_VERIFIED_CACHE_MS = 15 * 60 * 1000;
+const COUNTRY_VERIFIED_CANDIDATES = 12;
+const COUNTRY_VERIFIED_TIMEOUT_MS = 1800;
+const COUNTRY_VERIFIED_DEADLINE_MS = 5000;
+const COUNTRY_VERIFIED_CACHE_BASE = 'https://country-verify.miliconfig.internal';
+
+// کشورهای تب چندلوکیشن — همین فهرست در cron هم تازه‌سازی می‌شود
+export const MULTI_COUNTRY_CODES = ['DE', 'NL', 'US', 'GB', 'TR', 'AE', 'CA', 'SE'];
+
+function getCountryCache() {
+  try {
+    return typeof caches !== 'undefined' ? caches.default : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// تازه‌سازی استخر یک کشور (برای cron / پيش‌گرم کردن D1)
+export async function refreshCountryProxyPool(env, code) {
+  const cc = String(code || '').trim().toUpperCase();
+  const urls = (COUNTRY_PROXY_SOURCES[cc]?.urls || []).join(',');
+  if (!env || !cc || !urls) return { code: cc, candidates: 0, verified: 0 };
+  const found = await fetchPreferredFromUrls(urls);
+  const candidates = [];
+  for (const item of found) {
+    if (!item.proxy || candidates.includes(item.proxy)) continue;
+    candidates.push(item.proxy);
+    if (candidates.length >= 16) break;
+  }
+  const results = await verifyCountryProxies(candidates, {
+    need: 8,
+    timeoutMs: 2000,
+    deadline: Date.now() + 8000
+  });
+  const verified = results.filter(item => item.country === cc).map(item => ({ proxy: item.proxy, country: cc }));
+  if (verified.length) await saveCountryProxyPool(env, cc, verified);
+  return { code: cc, candidates: candidates.length, verified: verified.length };
+}
+
+async function getVerifiedCountryProxies(code, urls, options = {}) {
+  const need = Math.max(1, parseInt(options.need, 10) || 4);
+  const verify = options.verify !== false;
+  const deadline = Number(options.deadline) || Date.now() + 3500;
+  const env = options.env || null;
+
+  // ۱) استخر ذخیره‌شده در D1 (تست واقعی قبلی) — سریع‌ترین مسیر و پایهٔ حالت MULTI
+  if (env) {
+    const stored = await loadCountryProxyPool(env, code);
+    const storedVerified = stored.filter(item => !item.unverified);
+    if (storedVerified.length) return storedVerified.slice(0, need);
+  }
+
+  const cache = getCountryCache();
+  const bucket = Math.floor(Date.now() / COUNTRY_VERIFIED_CACHE_MS);
+  const cacheKey = `${COUNTRY_VERIFIED_CACHE_BASE}/${code}/${bucket}/${need}/v${verify ? 1 : 0}`;
+
+  if (cache) {
+    try {
+      const hit = await cache.match(cacheKey);
+      if (hit) {
+        const cached = await hit.json();
+        if (Array.isArray(cached?.list)) return cached.list;
+      }
+    } catch (_e) {}
+  }
+
+  const found = await fetchPreferredFromUrls(urls);
+  const candidates = [];
+  for (const item of found) {
+    if (!item.proxy || candidates.includes(item.proxy)) continue;
+    candidates.push(item.proxy);
+    if (candidates.length >= COUNTRY_VERIFIED_CANDIDATES) break;
+  }
+
+  let verified = [];
+  if (verify && candidates.length) {
+    const results = await verifyCountryProxies(candidates, {
+      need,
+      timeoutMs: COUNTRY_VERIFIED_TIMEOUT_MS,
+      deadline
+    });
+    verified = results.filter(r => r.country === code).map(r => ({ proxy: r.proxy, country: code }));
+  }
+
+  // تأییدشده‌ها اول؛ اگر کمتر از نیاز بودند با پروکسی‌های خام (با برچسب هشدار «?»)
+  // تکمیل می‌شود تا تب کشور خالی نماند.
+  const verifiedSet = new Set(verified.map(v => v.proxy));
+  const topUp = candidates
+    .filter(proxy => !verifiedSet.has(proxy))
+    .slice(0, Math.max(0, need - verified.length))
+    .map(proxy => ({ proxy, country: code, unverified: true }));
+  const list = [...verified, ...topUp];
+
+  // نتیجهٔ تأییدشده در D1 ذخیره می‌شود تا حالت MULTI و درخواست‌های بعدی
+  // بدون تست مجدد و بدون هزینهٔ زمانی از همان استفاده کنند.
+  if (env && verified.length) {
+    try { await saveCountryProxyPool(env, code, verified); } catch (_e) {}
+  }
+
+  // کل لیست (تأییدشده یا پشتیبان) کش می‌شود تا درخواست بعدی سریع باشد
+  if (cache) {
+    try {
+      await cache.put(
+        cacheKey,
+        new Response(JSON.stringify({ list, checkedAt: Date.now() }), {
+          headers: {
+            'content-type': 'application/json',
+            'cache-control': `max-age=${Math.floor(COUNTRY_VERIFIED_CACHE_MS / 1000)}`
+          }
+        })
+      );
+    } catch (_e) {}
+  }
+
+  return list;
 }
 
 function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '') {
@@ -1350,17 +1479,27 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
   if (!domainMode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
-      ? ['DE', 'NL', 'US', 'GB', 'TR', 'AE', 'CA', 'SE']
+      ? MULTI_COUNTRY_CODES.slice()
       : (COUNTRY_PROXY_SOURCES[countryFilter] ? [countryFilter] : []);
-    const proxyPool = [];
-    for (const code of wantedCountries) {
+    // اعتبارسنجی واقعی خروجی برای همهٔ کشورها: تا ۳.۵ ثانیه مهلت، نتیجه ۱۰ دقیقه کش می‌شود
+    // تست واقعی پروکسی فقط برای یک یا دو کشور انجام می‌شود؛ در حالت MULTI تعداد
+    // فیدها و اتصال‌های هم‌زمان از سقف subrequest ورکر می‌گذرد، پس همان رفتار قبلی
+    // (بدون تست) حفظ می‌شود تا تعداد نودها کم نشود.
+    const verifyEnabled = String(queryOverrides.verify || '') !== '0' && wantedCountries.length <= 2;
+    const deadline = Date.now() + COUNTRY_VERIFIED_DEADLINE_MS;
+    const needPerCountry = Math.max(2, Math.min(6, parseInt(cfg.locationNodeCount, 10) || 6));
+    const countryLists = await Promise.all(wantedCountries.map(code => {
       const urls = (COUNTRY_PROXY_SOURCES[code]?.urls || []).join(',');
-      if (!urls) continue;
-      const found = await fetchPreferredFromUrls(urls);
-      for (const item of found) {
-        if (item.proxy) proxyPool.push({ proxy: item.proxy, country: code });
+      if (!urls) return Promise.resolve(null);
+      return getVerifiedCountryProxies(code, urls, { need: needPerCountry, deadline, verify: verifyEnabled, env: queryOverrides.env || null });
+    }));
+    const proxyPool = [];
+    countryLists.forEach((list, idx) => {
+      const code = wantedCountries[idx];
+      for (const item of (list || [])) {
+        proxyPool.push({ proxy: item.proxy, country: code, unverified: item.unverified === true });
       }
-    }
+    });
     const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost);
     if (locationNodes.length > 0) {
       appendFromSource(locationNodes);
@@ -1483,7 +1622,7 @@ export function detectTargetFromRequest(request, url) {
   return 'base64';
 }
 
-export async function handleSubscriptionResponse(request, userOrConfig, url = null) {
+export async function handleSubscriptionResponse(request, userOrConfig, url = null, env = null) {
   if (!url) url = new URL(request.url);
   const workerHost = url.hostname;
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
@@ -1570,8 +1709,10 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     wk: url.searchParams.get('wk') || '',
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
+    verify: url.searchParams.get('verify') || '',
     set: url.searchParams.get('set') || '',
     nowarp: url.searchParams.get('nowarp') || '',
+    env,
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };

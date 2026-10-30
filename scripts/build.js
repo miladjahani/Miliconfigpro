@@ -19,6 +19,7 @@ const MODULE_ORDER = [
   'src/config/defaults.js',
   'src/config/presets.js',
   'src/core/utils.js',
+  'src/core/proxyGeo.js',
   'src/ui/icons.js',
   'src/db/d1.js',
   'src/subscription/converters.js',

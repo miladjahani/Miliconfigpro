@@ -17,10 +17,12 @@ import {
 } from './db/d1.js';
 import { handleWebSocketUpgrade, handleXhttpPostRequest } from './core/runtime.js';
 import {
+  MULTI_COUNTRY_CODES,
   buildWarpConfBundle,
   buildWireGuardConf,
   generateUserNodesList,
-  handleSubscriptionResponse
+  handleSubscriptionResponse,
+  refreshCountryProxyPool
 } from './subscription/generator.js';
 import { buildZip } from './core/utils.js';
 import {
@@ -52,6 +54,24 @@ function isAdminAuthorizedPath(prefixPath, adminUuid, customPath) {
 }
 
 export default {
+  // کرون: هر ۲۰ دقیقه استخر پروکسی تأییدشدهٔ کشورها در D1 تازه می‌شود تا
+  // ساب‌لیک (به‌ویژه حالت MULTI) بدون تست زمان‌بر و با کشور درست سرو شود.
+  async scheduled(_event, env = {}, ctx = {}) {
+    const task = (async () => {
+      const results = [];
+      for (const code of MULTI_COUNTRY_CODES) {
+        try {
+          results.push(await refreshCountryProxyPool(env, code));
+        } catch (_e) {
+          results.push({ code, verified: 0 });
+        }
+      }
+      return results;
+    })();
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(task);
+    return task;
+  },
+
   async fetch(request, env = {}, ctx = {}) {
     try {
       const url = new URL(request.url);
@@ -281,7 +301,7 @@ export default {
             const p = recordUserActivity(env, targetUser.id, 0, 1).catch(() => {});
             if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
           }
-          return await handleSubscriptionResponse(request, targetUser, url);
+          return await handleSubscriptionResponse(request, targetUser, url, env);
         }
 
         // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)

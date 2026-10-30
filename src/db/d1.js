@@ -248,6 +248,14 @@ export async function ensureD1Schema(env = {}, force = false) {
       hour_key TEXT PRIMARY KEY,
       bytes INTEGER NOT NULL DEFAULT 0,
       requests INTEGER NOT NULL DEFAULT 0
+    )`,
+    // استخر پروکسی تأییدشدهٔ هر کشور (خروجی واقعی تست‌شده با trace کلادفلر)
+    `CREATE TABLE IF NOT EXISTS country_proxy_pool (
+      code TEXT NOT NULL,
+      proxy TEXT NOT NULL,
+      unverified INTEGER NOT NULL DEFAULT 0,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (code, proxy)
     )`
   ];
 
@@ -599,6 +607,56 @@ export async function resetGlobalConfig(env = {}) {
 }
 
 // لیست کاربران
+// ── استخر پروکسی تأییدشدهٔ هر کشور (تب چندلوکیشن) ──────────────────────────
+// ساب‌لیک در حالت MULTI فیدها را تست نمی‌کند؛ از همین جدول (که با تست واقعی
+// خروجی پر شده است) استفاده می‌کند تا هم سریع باشد و هم کشور درست بماند.
+// پروکسی‌های عمومی سریع می‌میرند؛ پس استخر ذخیره‌شده حداکثر ۱۲ دقیقه معتبر است
+// و cron هر ۱۰ دقیقه آن را بازسازی می‌کند.
+const COUNTRY_POOL_DEFAULT_TTL_MS = 12 * 60 * 1000;
+
+export async function loadCountryProxyPool(env = {}, code = '', ttlMs = COUNTRY_POOL_DEFAULT_TTL_MS) {
+  const detected = detectD1Binding(env);
+  const cc = String(code || '').trim().toUpperCase();
+  if (!detected || !cc) return [];
+  try {
+    await ensureD1Schema(env);
+    const since = Date.now() - Math.max(60000, Number(ttlMs) || COUNTRY_POOL_DEFAULT_TTL_MS);
+    const res = await detected.db
+      .prepare(`SELECT proxy, unverified FROM country_proxy_pool WHERE code = ? AND checked_at >= ? ORDER BY unverified ASC, checked_at DESC LIMIT 24`)
+      .bind(cc, since)
+      .all();
+    return (res?.results || [])
+      .map(row => ({ proxy: String(row.proxy || ''), unverified: Number(row.unverified) === 1 }))
+      .filter(item => item.proxy);
+  } catch (_e) {
+    return [];
+  }
+}
+
+export async function saveCountryProxyPool(env = {}, code = '', entries = []) {
+  const detected = detectD1Binding(env);
+  const cc = String(code || '').trim().toUpperCase();
+  if (!detected || !cc) return 0;
+  const rows = (Array.isArray(entries) ? entries : [])
+    .filter(item => item && item.proxy)
+    .slice(0, 24);
+  if (!rows.length) return 0;
+  try {
+    await ensureD1Schema(env);
+    const now = Date.now();
+    await detected.db.prepare(`DELETE FROM country_proxy_pool WHERE code = ?`).bind(cc).run();
+    const stmt = detected.db.prepare(
+      `INSERT OR REPLACE INTO country_proxy_pool (code, proxy, unverified, checked_at) VALUES (?, ?, ?, ?)`
+    );
+    for (const row of rows) {
+      await stmt.bind(cc, String(row.proxy), row.unverified ? 1 : 0, now).run();
+    }
+    return rows.length;
+  } catch (_e) {
+    return 0;
+  }
+}
+
 export async function listUsers(env = {}) {
   await ensureD1Schema(env);
   const detectedD1 = detectD1Binding(env);

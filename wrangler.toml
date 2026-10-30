@@ -22,3 +22,7 @@ BRAND = "miliconfig"
 binding = "DB"
 database_name = "miliconfig-db"
 database_id = "edfa4ea1-5c26-42ff-aa89-2a28d1e6bc5a"
+
+# کرون تازه‌سازی استخر پروکسی تأییدشدهٔ کشورها (هر ۲۰ دقیقه)
+[triggers]
+crons = ["*/10 * * * *"]

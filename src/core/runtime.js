@@ -875,6 +875,10 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
   const queryWk = (reqUrl.searchParams.get('wk') || '').toUpperCase();
   const queryRm = reqUrl.searchParams.get('rm') || '';
   const queryS = reqUrl.searchParams.get('s') || '';
+  const queryCc = reqUrl.searchParams.get('cc') || '';
+  // نود کشوری (cc + s): اگر پروکسی از کار بیفتد هرگز بی‌صدا به مسیر مستقیم
+  // کلادفلر سقوط نمی‌کند (رنگ خروجی به کشور دیگری نمی‌پرد)، فقط اتصال بسته می‌شود.
+  const countryProxyLock = Boolean(queryS && /^[A-Za-z]{2}$/.test(queryCc));
 
   // تابع تشخیص کاربر بر اساس UUID در VLESS
   function resolveVlessUser(incomingUuid) {
@@ -1017,7 +1021,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 ...(queryP ? { p: queryP } : {}),
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
-                ...(queryS ? { s: queryS } : {})
+                ...(queryS ? { s: queryS } : {}),
+                ...(countryProxyLock ? { qj: 'only' } : {})
               };
               if (vlessRes.isUDP) {
                 if (vlessRes.port === 53) isDnsSession = true;
@@ -1054,7 +1059,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 ...(queryP ? { p: queryP } : {}),
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
-                ...(queryS ? { s: queryS } : {})
+                ...(queryS ? { s: queryS } : {}),
+                ...(countryProxyLock ? { qj: 'only' } : {})
               };
               await establishOutboundAndPipe(
                 trojanRes.addressType,
@@ -1096,7 +1102,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                   ...(queryP ? { p: queryP } : {}),
                   ...(queryWk ? { wk: queryWk } : {}),
                   ...(queryRm ? { rm: queryRm } : {}),
-                  ...(queryS ? { s: queryS } : {})
+                  ...(queryS ? { s: queryS } : {}),
+                  ...(countryProxyLock ? { qj: 'only' } : {})
                 };
                 await establishOutboundAndPipe(
                   ssRes.addressType,
