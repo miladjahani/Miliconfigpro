@@ -933,18 +933,67 @@ function parseWarpEndpointList(raw, count) {
   const bucket = Math.floor(Date.now() / (10 * 60 * 1000));
   const out = [];
   for (let i = 0; i < wanted; i++) {
-    const host = WARP_ENDPOINT_IPS[(bucket + i) % WARP_ENDPOINT_IPS.length];
-    const port = WARP_ENDPOINT_PORTS[(bucket + i) % WARP_ENDPOINT_PORTS.length];
-    out.push({ host, port, label: '' });
+    const endpoint = iranWarpEndpoint(bucket + i * 3);
+    out.push({ host: endpoint.host, port: endpoint.port, label: '' });
   }
   return out;
 }
 
 // ============================================================================
-// AmneziaWG — همان WireGuard با پارامترهای مبهم‌سازی (Jc/Jmin/Jmax/S1/S2/H1..H4)
-// مقادیر پایدار بر اساس سرور و پورت ساخته می‌شوند تا با هر بار تازه‌سازی ساب‌لینک
-// عوض نشوند؛ بازه‌ها مطابق نمونه‌های رسمی AmneziaWG انتخاب شده‌اند.
+// AmneziaWG — همان WireGuard با پارامترهای مبهم‌سازی، بهینه‌شده برای DPI اپراتورهای ایران:
+// Jc/Jmin/Jmax کوچک، S1-S4 صفر و دو بستهٔ جعلی SIP (I1/I2) که پیش از handshake
+// فرستاده می‌شوند تا الگوی ترافیک شبیه تماس VoIP دیده شود. مقادیر پایدار هستند تا
+// با هر بار تازه‌سازی ساب‌لینک عوض نشوند.
 // ============================================================================
+// بسته‌های جعلی SIP (I1/I2): امضایی که DPI اپراتورهای ایران را رد می‌کند.
+// متن SIP در زمان اجرا به هگز تبدیل می‌شود تا رشتهٔ دستی و خطاپذیر نداشته باشیم.
+const WARP_AWG_SIP_INVITE = [
+  'INVITE sip:bob@biloxi.com SIP/2.0',
+  'Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds',
+  'Max-Forwards: 70',
+  'To: Bob <sip:bob@biloxi.com>',
+  'From: Alice <sip:alice@atlanta.com>;tag=1928301774',
+  'Call-ID: a84b4c76e66710@pc33.atlanta.com',
+  'CSeq: 314159 INVITE',
+  'Contact: <sip:alice@pc33.atlanta.com>',
+  'Content-Type: application/sdp',
+  'Content-Length: 0',
+  '',
+  ''
+].join('\r\n');
+
+const WARP_AWG_SIP_TRYING = [
+  'SIP/2.0 100 Trying',
+  'Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds',
+  'To: Bob <sip:bob@biloxi.com>',
+  'From: Alice <sip:alice@atlanta.com>;tag=1928301774',
+  'Call-ID: a84b4c76e66710@pc33.atlanta.com',
+  'CSeq: 314159 INVITE',
+  'Content-Length: 0',
+  '',
+  ''
+].join('\r\n');
+
+function awgBinaryPacket(text) {
+  let hex = '';
+  for (let i = 0; i < text.length; i++) hex += text.charCodeAt(i).toString(16).padStart(2, '0');
+  return `<b 0x${hex}>`;
+}
+
+const WARP_AWG_I1 = awgBinaryPacket(WARP_AWG_SIP_INVITE);
+const WARP_AWG_I2 = awgBinaryPacket(WARP_AWG_SIP_TRYING);
+
+
+// نقطهٔ پایانی پیش‌فرض وارپ برای ایران (همان host:port که در کانفیگ‌های آزمایش‌شده
+// روی اپراتورهای ایران جواب می‌دهد).
+function iranWarpEndpoint(offset = 0) {
+  const ipv4 = WARP_ENDPOINT_IPS.filter(h => !String(h).includes(':'));
+  const pool = ipv4.length ? ipv4 : WARP_ENDPOINT_IPS;
+  const idx = Math.abs(offset) % pool.length;
+  const port = WARP_ENDPOINT_PORTS[Math.abs(offset) % WARP_ENDPOINT_PORTS.length];
+  return { host: pool[idx], port };
+}
+
 function awgHash(text) {
   let h = 2166136261 >>> 0;
   const str = String(text || '');
@@ -959,15 +1008,19 @@ export function buildAmneziaWgParams(config = {}) {
     h = (Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
     return min + (h % (max - min + 1));
   };
-  const jmin = next(40, 70);
-  const jmax = jmin + next(950, 1150);
-  const h1 = next(100000, 800000);
+  // بازه‌های کوچک (مطابق کانفیگ‌های آزمایش‌شده روی اپراتورهای ایران):
+  // بسته‌های junk کم‌حجم‌ترند تا handshake در شبکه‌های پرافت‌وخیز کامل شود.
+  const jmin = next(40, 60);
+  const jmax = jmin + next(20, 60);
+  const h1 = next(0x100000, 0x7fff0000);
   return {
-    jc: next(3, 8),
+    jc: next(3, 6),
     jmin,
     jmax,
-    s1: next(20, 60),
-    s2: next(30, 90),
+    s1: 0,
+    s2: 0,
+    s3: 0,
+    s4: 0,
     h1,
     h2: h1 + next(1, 4000),
     h3: h1 + next(4001, 9000),
@@ -1011,24 +1064,28 @@ export function buildWireGuardConf(config = {}, name = 'WARP') {
   const reserved = (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(', ');
   const lines = [
     `# ${name} — ${BRAND_NAME}`,
-    `# AmneziaWG profile (Jc/Jmin/Jmax/S1/S2/H1-H4)`,
+    '# AmneziaWG 1.5 profile — Iran-optimized (Jc/Jmin/Jmax/S1-S4 + I1/I2)',
     `# Reserved (WARP client id): ${reserved}`,
     '[Interface]',
     `PrivateKey = ${config.privateKey || ''}`,
     `Address = ${config.address4 || WARP_DEFAULT_ADDRESS}/32`
   ];
   if (config.address6) lines.push(`Address = ${config.address6}`);
-  lines.push('DNS = 1.1.1.1, 1.0.0.1', 'MTU = 1280');
+  lines.push('DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001', 'MTU = 1280');
   lines.push(
     `Jc = ${awg.jc}`,
     `Jmin = ${awg.jmin}`,
     `Jmax = ${awg.jmax}`,
     `S1 = ${awg.s1}`,
     `S2 = ${awg.s2}`,
+    `S3 = ${awg.s3}`,
+    `S4 = ${awg.s4}`,
     `H1 = ${awg.h1}`,
     `H2 = ${awg.h2}`,
     `H3 = ${awg.h3}`,
-    `H4 = ${awg.h4}`
+    `H4 = ${awg.h4}`,
+    `I1 = ${WARP_AWG_I1}`,
+    `I2 = ${WARP_AWG_I2}`
   );
   lines.push(
     '[Peer]',
@@ -1047,10 +1104,13 @@ const WARP_ML_CONF_COUNT = 6;
 export async function buildWarpConfBundle(cfg = {}) {
   const registered = await fetchWarpRegistration(cfg);
   const base = registered || buildFallbackWarpConfig();
+  // نقطهٔ پایانی پیش‌فرض هم روی ingress/پورت بهینهٔ ایران تنظیم می‌شود
+  const primary = iranWarpEndpoint(0);
+  const main = { ...base, server: primary.host, port: primary.port };
   const files = [];
-  files.push({ name: 'WARP.conf', data: buildWireGuardConf(base, 'WARP') });
+  files.push({ name: 'WARP.conf', data: buildWireGuardConf(main, 'WARP') });
   // WARP PRO همیشه هست: با لایسنس پنل اگر تنظیم شده باشد، وگرنه با کلید رایگان
-  files.push({ name: 'WARP-PRO.conf', data: buildWireGuardConf(base, 'WARP PRO') });
+  files.push({ name: 'WARP-PRO.conf', data: buildWireGuardConf(main, 'WARP PRO') });
   const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount || WARP_ML_CONF_COUNT);
   endpoints.forEach((endpoint, idx) => {
     const label = endpoint.label ? ` ${endpoint.label}` : '';
@@ -1064,8 +1124,10 @@ export async function buildWarpConfBundle(cfg = {}) {
     data: [
       `${BRAND_NAME} — WARP configs (AmneziaWG)`,
       '',
-      'Import any .conf into AmneziaWG (Windows/Android/iOS/macOS) or WireGuard.',
-      'Jc/Jmin/Jmax/S1/S2/H1-H4 are AmneziaWG obfuscation parameters.',
+      'Import any .conf into an AmneziaWG 1.5+ client (AmneziaWG app, Hiddify, WG Tunnel, Amnezia).',
+      'Jc/Jmin/Jmax/S1-S4/H1-H4 and I1/I2 are AmneziaWG obfuscation parameters.',
+      'I1/I2 are fake SIP packets used to pass Iranian operators DPI.',
+      'If one endpoint does not connect, try the next WARP-ML-*.conf file (different port).',
       'WARP-PRO is the same tunnel profile; with a panel WARP+ license it runs on the plus tier.',
       'WARP-ML-* are the same tunnel from different Cloudflare endpoints.',
       '',
@@ -1087,7 +1149,10 @@ export async function buildWarpFamilyLinks(cfg = {}, options = {}) {
   if (!wantWarp && !wantPro && !wantMl) return links;
 
   const registered = await fetchWarpRegistration(cfg);
-  const base = registered || buildFallbackWarpConfig();
+  const fallback = registered || buildFallbackWarpConfig();
+  // نودهای WARP/WARP PRO روی ingress و پورت بهینهٔ ایران ساخته می‌شوند
+  const iran = iranWarpEndpoint(0);
+  const base = { ...fallback, server: iran.host, port: iran.port };
 
   if (wantWarp) {
     links.push(buildWireguardLink(base, 'WARP'));
