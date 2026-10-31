@@ -1058,13 +1058,20 @@ function parseWarpEndpointList(raw, count) {
       return { host, port, label: String(labelPart || '').trim() };
     }).filter(x => x.host);
   }
-  const wanted = Math.max(1, Math.min(parseInt(count, 10) || 6, 30));
+  const wanted = Math.max(1, Math.min(parseInt(count, 10) || WARP_ML_CONF_COUNT, 30));
   const bucket = Math.floor(Date.now() / (10 * 60 * 1000));
+  const v4Hosts = WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':'));
+  const v6Hosts = WARP_ENDPOINT_IPS.filter(host => String(host).includes(':'));
   const out = [];
   for (let i = 0; i < wanted; i++) {
-    const host = WARP_ENDPOINT_IPS[(bucket + i) % WARP_ENDPOINT_IPS.length];
+    // ترکیب دو طرفه: هر از گاهی اندپوینت IPv6 هم می‌آید تا کاربر نسخهٔ دوم را هم داشته باشد
+    const useV6 = v6Hosts.length > 0 && wanted >= 4 && i % 3 === 2;
+    const pool = useV6 ? v6Hosts : v4Hosts;
+    const host = useV6
+      ? pool[(bucket + i) % pool.length]
+      : pool[(bucket + i) % pool.length];
     const port = WARP_ENDPOINT_PORTS[(bucket + i) % WARP_ENDPOINT_PORTS.length];
-    out.push({ host, port, label: '' });
+    out.push({ host, port, label: useV6 ? 'IPv6' : '' });
   }
   return out;
 }
@@ -1082,7 +1089,7 @@ function awgHash(text) {
 }
 
 export function buildAmneziaWgParams(config = {}) {
-  const seed = `${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}`;
+  const seed = `${config.seed || ''}:${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}`;
   let h = awgHash(seed) || 1;
   const next = (min, max) => {
     h = (Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
@@ -1090,17 +1097,21 @@ export function buildAmneziaWgParams(config = {}) {
   };
   const jmin = next(40, 70);
   const jmax = jmin + next(950, 1150);
-  const h1 = next(100000, 800000);
+  // سرورهای WARP وایرگارد استاندارد هستند: هدر و پدینگ دستکاری‌شده را رد می‌کنند.
+  // پس برای WARP فقط بسته‌های Junk (Jc) فعال می‌ماند و S/H صفر می‌شود تا هندشیک
+  // واقعاً برقرار شود؛ حالت کامل مبهم‌سازی فقط با obfuscateHandshake فعال می‌شود.
+  const fullObfuscation = config.obfuscateHandshake === true;
+  const h1 = fullObfuscation ? next(100000, 800000) : 0;
   return {
     jc: next(3, 8),
     jmin,
     jmax,
-    s1: next(20, 60),
-    s2: next(30, 90),
+    s1: fullObfuscation ? next(20, 60) : 0,
+    s2: fullObfuscation ? next(30, 90) : 0,
     h1,
-    h2: h1 + next(1, 4000),
-    h3: h1 + next(4001, 9000),
-    h4: h1 + next(9001, 16000)
+    h2: fullObfuscation ? h1 + next(1, 4000) : 0,
+    h3: fullObfuscation ? h1 + next(4001, 9000) : 0,
+    h4: fullObfuscation ? h1 + next(9001, 16000) : 0
   };
 }
 
@@ -1112,20 +1123,20 @@ export function buildWireguardLink(config = {}, name = 'WARP') {
   const params = new URLSearchParams();
   params.set('publickey', config.publicKey || WARP_PEER_PUBLIC_KEY);
   params.set('reserved', (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(','));
-  params.set('address', `${config.address4 || WARP_DEFAULT_ADDRESS}/32`);
-  params.set('mtu', '1280');
-  params.set('dns', '1.1.1.1, 1.0.0.1');
+  const address = String(config.address4 || WARP_DEFAULT_ADDRESS);
+  params.set('address', `${address}/32`);
+  params.set('mtu', String(parseInt(config.mtu, 10) || 1280));
+  params.set('dns', String(config.dns || '1.1.1.1, 1.0.0.1'));
+  if (config.address6) params.set('address6', String(config.address6));
   if (awg) {
     params.set('awg', '1');
     params.set('jc', String(awg.jc));
     params.set('jmin', String(awg.jmin));
     params.set('jmax', String(awg.jmax));
-    params.set('s1', String(awg.s1));
-    params.set('s2', String(awg.s2));
-    params.set('h1', String(awg.h1));
-    params.set('h2', String(awg.h2));
-    params.set('h3', String(awg.h3));
-    params.set('h4', String(awg.h4));
+    // مقادیر صفر در لینک نوشته نمی‌شوند (کلاینت آن‌ها را پیش‌فرض وایرگارد می‌گیرد)
+    for (const key of ['s1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+      if (awg[key] > 0) params.set(key, String(awg[key]));
+    }
   }
   const userInfo = encodeURIComponent(String(config.privateKey || ''));
   return `wireguard://${userInfo}@${endpoint}:${config.port || WARP_DEFAULT_PORT}?${params.toString()}#${encodeURIComponent(name)}`;
@@ -1138,31 +1149,35 @@ export function buildWireGuardConf(config = {}, name = 'WARP') {
   const endpointHost = String(config.server || WARP_DEFAULT_HOST);
   const endpoint = endpointHost.includes(':') ? `[${endpointHost}]` : endpointHost;
   const reserved = (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(', ');
+  const mtu = parseInt(config.mtu, 10) || 1280;
+  const dns = String(config.dns || '1.1.1.1, 1.0.0.1');
+  const family = String(config.server || '').includes(':') ? 'IPv6' : 'IPv4';
   const lines = [
     `# ${name} — ${BRAND_NAME}`,
-    `# AmneziaWG profile (Jc/Jmin/Jmax/S1/S2/H1-H4)`,
+    `# AmneziaWG profile — junk packets only (Jc/Jmin/Jmax) keep WARP handshake intact`,
+    `# endpoint family: ${family} | MTU ${mtu}`,
     `# Reserved (WARP client id): ${reserved}`,
     '[Interface]',
     `PrivateKey = ${config.privateKey || ''}`,
     `Address = ${config.address4 || WARP_DEFAULT_ADDRESS}/32`
   ];
   if (config.address6) lines.push(`Address = ${config.address6}`);
-  lines.push('DNS = 1.1.1.1, 1.0.0.1', 'MTU = 1280');
+  lines.push(`DNS = ${dns}`, `MTU = ${mtu}`);
   lines.push(
     `Jc = ${awg.jc}`,
     `Jmin = ${awg.jmin}`,
-    `Jmax = ${awg.jmax}`,
-    `S1 = ${awg.s1}`,
-    `S2 = ${awg.s2}`,
-    `H1 = ${awg.h1}`,
-    `H2 = ${awg.h2}`,
-    `H3 = ${awg.h3}`,
-    `H4 = ${awg.h4}`
+    `Jmax = ${awg.jmax}`
   );
+  // پارامترهای پدینگ/هدر فقط در حالت مبهم‌سازی کامل نوشته می‌شوند؛ صفر برای
+  // WARP لازم است و گرنه هندشیک وایرگارد استاندارد رد می‌شود.
+  for (const [key, value] of [['S1', awg.s1], ['S2', awg.s2], ['H1', awg.h1], ['H2', awg.h2], ['H3', awg.h3], ['H4', awg.h4]]) {
+    if (value > 0) lines.push(`${key} = ${value}`);
+  }
   lines.push(
     '[Peer]',
     `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
     'AllowedIPs = 0.0.0.0/0, ::/0',
+    'PersistentKeepalive = 25',
     `Endpoint = ${endpoint}:${config.port || WARP_DEFAULT_PORT}`
   );
   // لایسنس حساب هرگز داخل فایل کاربر نوشته نمی‌شود (نشت کلید پولی)
@@ -1170,36 +1185,120 @@ export function buildWireGuardConf(config = {}, name = 'WARP') {
 }
 
 // بستهٔ کانفیگ‌های آمادهٔ WARP برای دانلود (zip) — بدون نیاز به هیچ تنظیمی در پنل:
-// WARP، WARP PRO (اگر لایسنس تنظیم شده باشد) و چندلوکیشن
-const WARP_ML_CONF_COUNT = 6;
+// WARP، WARP PRO، ماتریس کامل اندپوینت‌های IPv4/IPv6 در چند پورت و چند پروفایل
+// مبهم‌سازی. پارامترها بر اساس شناسهٔ کاربر ساخته می‌شوند تا هر کاربر بستهٔ
+// اختصاصی خودش را بگیرد (امضای شبکه‌ای یکسان برای همهٔ کاربران خطرناک است).
+const WARP_ML_CONF_COUNT = 8;
 
-export async function buildWarpConfBundle(cfg = {}) {
+// پروفایل‌های آماده: MTU و DNS متفاوت → رفتار متفاوت در DPI اپراتورها
+const WARP_PROFILE_PRESETS = {
+  balanced: { mtu: 1280, dns: '1.1.1.1, 1.0.0.1' },
+  aggressive: { mtu: 1180, dns: '1.1.1.1' },
+  lite: { mtu: 1380, dns: '1.0.0.1, 1.1.1.1' },
+  mobile: { mtu: 1240, dns: '1.1.1.1, 1.0.0.1' }
+};
+
+function warpEndpointTag(host) {
+  return String(host).replace(/:/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+}
+
+export async function buildWarpConfBundle(cfg = {}, options = {}) {
   const registered = await fetchWarpRegistration(cfg);
   const base = registered || buildFallbackWarpConfig();
-  const files = [];
-  files.push({ name: 'WARP.conf', data: buildWireGuardConf(base, 'WARP') });
-  // WARP PRO همیشه هست: با لایسنس پنل اگر تنظیم شده باشد، وگرنه با کلید رایگان
-  files.push({ name: 'WARP-PRO.conf', data: buildWireGuardConf(base, 'WARP PRO') });
-  const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount || WARP_ML_CONF_COUNT);
-  endpoints.forEach((endpoint, idx) => {
-    const label = endpoint.label ? ` ${endpoint.label}` : '';
-    files.push({
-      name: `WARP-ML-${idx + 1}.conf`,
-      data: buildWireGuardConf({ ...base, server: endpoint.host, port: endpoint.port }, `WARP-ML-${idx + 1}${label}`)
+  const seed = String(options.seed || cfg.wk || BRAND_NAME);
+  const v4Hosts = WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':'));
+  const v6Hosts = WARP_ENDPOINT_IPS.filter(host => String(host).includes(':'));
+  const shift = awgHash(seed) % Math.max(1, v4Hosts.length);
+  const v4Rotated = [...v4Hosts.slice(shift), ...v4Hosts.slice(0, shift)];
+  const ports = WARP_ENDPOINT_PORTS;
+
+  const entries = [];
+  const add = (host, port, preset, kind) => entries.push({ host, port, preset, kind });
+  // ۱) پروفایل اصلی روی اندپوینتی که ثبت‌نام برگرداند
+  add(base.server || WARP_DEFAULT_HOST, base.port || WARP_DEFAULT_PORT, 'balanced', 'primary');
+  add(base.server || WARP_DEFAULT_HOST, WARP_DEFAULT_PORT, 'aggressive', 'primary');
+  // ۲) ماتریس IPv4: چهار آی‌پی × چهار پورت
+  v4Rotated.slice(0, 4).forEach((host, idx) => {
+    ports.forEach((port, pIdx) => {
+      add(host, port, (idx + pIdx) % 2 === 0 ? 'balanced' : 'lite', 'v4');
     });
   });
+  // ۳) اندپوینت‌های IPv6 — تونل دوطرفه (ترافیک v4/v6 از زیرساخت v6 عبور می‌کند)
+  v6Hosts.forEach((host, idx) => {
+    [2408, 500].forEach((port, pIdx) => {
+      add(host, port, (idx + pIdx) % 2 === 0 ? 'mobile' : 'balanced', 'v6');
+    });
+  });
+  // ۴) اندپوینت دامنه‌ای (dual-stack) برای شبکه‌هایی که IP خام را می‌بندند
+  [2408, 1701].forEach((port, idx) => add(WARP_DEFAULT_HOST, port, idx === 0 ? 'balanced' : 'aggressive', 'dns'));
+
+  const files = [];
+  const used = new Set();
+  const pushFile = (fileName, label, entry, presetId) => {
+    const preset = WARP_PROFILE_PRESETS[presetId] || WARP_PROFILE_PRESETS.balanced;
+    let name = fileName;
+    let n = 2;
+    while (used.has(name)) name = fileName.replace(/\.conf$/, `-${n++}.conf`);
+    used.add(name);
+    files.push({
+      name,
+      data: buildWireGuardConf(
+        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, seed: `${seed}:${name}` },
+        label
+      )
+    });
+  };
+
+  pushFile('01-WARP.conf', 'WARP', entries[0], 'balanced');
+  pushFile('02-WARP-PRO.conf', 'WARP PRO', entries[1], 'aggressive');
+  entries.slice(2).forEach(entry => {
+    const tag = `${entry.kind}-${warpEndpointTag(entry.host)}-${entry.port}`;
+    pushFile(
+      `WARP-${tag}-${entry.preset}.conf`,
+      `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port} ${entry.preset}`,
+      entry,
+      entry.preset
+    );
+  });
+  // پنجرهٔ امتحان پروفایل‌ها روی همان اندپوینت اصلی (برای تست MTU/DNS در اپراتور)
+  for (const presetId of Object.keys(WARP_PROFILE_PRESETS)) {
+    pushFile(`WARP-profile-${presetId}.conf`, `WARP ${presetId}`, entries[0], presetId);
+  }
+
+  const links = entries.map(entry => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    return buildWireguardLink(
+      { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, seed: `${seed}:link:${entry.host}:${entry.port}` },
+      `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port}`
+    );
+  });
+  files.push({ name: 'links.txt', data: links.join('\n') + '\n' });
+
+  const endpointList = [
+    `# ${BRAND_NAME} — WARP endpoint matrix`,
+    `# IPv4: ${v4Hosts.length} hosts x ${ports.length} ports`,
+    `# IPv6: ${v6Hosts.length} hosts x 2 ports`,
+    '',
+    ...entries.map(entry => `${entry.kind}\t${entry.host}\t${entry.port}\t${entry.preset}`)
+  ].join('\n');
+  files.push({ name: 'endpoints.txt', data: endpointList + '\n' });
+
   files.push({
     name: 'README.txt',
     data: [
-      `${BRAND_NAME} — WARP configs (AmneziaWG)`,
+      `${BRAND_NAME} — WARP / WARP PRO / multi-location (AmneziaWG)`,
+      '',
+      `files: ${files.length + 1} — IPv4 + IPv6 endpoints, multiple UDP ports, 4 tuning profiles`,
       '',
       'Import any .conf into AmneziaWG (Windows/Android/iOS/macOS) or WireGuard.',
-      'Jc/Jmin/Jmax/S1/S2/H1-H4 are AmneziaWG obfuscation parameters.',
-      'WARP-PRO is the same tunnel profile; with a panel WARP+ license it runs on the plus tier.',
-      'WARP-ML-* are the same tunnel from different Cloudflare endpoints.',
+      'links.txt = same profiles as wireguard:// links (NekoBox/Hiddify/v2rayN).',
+      'Jc/Jmin/Jmax send junk packets before the handshake; S/H stay 0 because',
+      'Cloudflare WARP is a plain WireGuard peer and rejects modified headers.',
+      'If a profile does not connect, try another port (500/1701/4500) or the IPv6 file.',
       '',
       `endpoint: ${base.server}:${base.port}`,
-      `address: ${base.address4}`
+      `address:  ${base.address4}/32${base.address6 ? ' + ' + base.address6 : ''}`,
+      `profile:  ${seed.slice(0, 8)}`
     ].join('\n')
   });
   return { config: base, files };
@@ -1308,7 +1407,7 @@ export function parseOvpnProfileText(profileText, meta = {}) {
 // تبدیل خطوط CSV منبع VPNGate به نودهای OpenVPN
 export function parseOpenVpnList(raw, cfg = {}) {
   if (!isEnabledValue(cfg.ovpn, true)) return [];
-  const limit = Math.max(0, Math.min(parseInt(cfg.ovpnCount, 10) || 4, 12));
+  const limit = Math.max(0, Math.min(parseInt(cfg.ovpnCount, 10) || 8, 24));
   if (limit === 0) return [];
   const countryFilter = String(cfg.ovpnCountries || '')
     .split(',')
@@ -1333,6 +1432,44 @@ export function parseOpenVpnList(raw, cfg = {}) {
     if (items.length >= limit) break;
   }
   return items;
+}
+
+// پروفایل‌های تنظیم کلاینت OpenVPN — هر پروفایل همان تونل است با MTU/DNS متفاوت،
+// تا در هر اپراتور حداقل یکی از پروفایل‌ها بالا بیاید (ضد فیلترینگ عملی).
+const OVPN_TUNING_PRESETS = [
+  { id: 'balanced', mtu: 1400, dns: '1.1.1.1' },
+  { id: 'mtu-safe', mtu: 1340, dns: '1.0.0.1' },
+  { id: 'mobile', mtu: 1240, dns: '1.1.1.1' }
+];
+
+// افزودن تنظیمات امن/ضد DPI به یک پروفایل .ovpn بدون دست زدن به کلیدها و CA
+// (هیچ دایرکتیو امنیتی سرور تغییر نمی‌کند؛ فقط پارامترهای سمت کلاینت تنظیم می‌شوند)
+export function buildOvpnVariant(profileText, node = {}, preset = {}, seed = '') {
+  const text = String(profileText || '').replace(/\r\n/g, '\n').trimEnd();
+  if (!text.includes('remote ')) return text;
+  const presetId = preset.id || 'balanced';
+  // جیتر کوچک بر اساس کاربر: هر کاربر MTU کمی متفاوت دارد (امضای DPI یکسان نباشد)
+  const jitter = awgHash(`${seed}:${node.server || ''}:${node.port || ''}:${presetId}`) % 21;
+  const mtu = Math.max(1100, (parseInt(preset.mtu, 10) || 1400) - jitter);
+  const mssfix = Math.max(1000, mtu - 60);
+  const stripped = text
+    .replace(/^\s*(tun-mtu|mssfix|sndbuf|rcvbuf|persist-tun|nobind|resolv-retry|connect-retry|connect-retry-max|tls-version-min|dhcp-option DNS)\b.*$/gmi, '')
+    .replace(/\n{3,}/g, '\n\n');
+  const extra = [
+    `# --- ${BRAND_NAME} tuning (${presetId}) ---`,
+    `tun-mtu ${mtu}`,
+    `mssfix ${mssfix}`,
+    'sndbuf 0',
+    'rcvbuf 0',
+    'persist-tun',
+    'nobind',
+    'resolv-retry infinite',
+    'connect-retry 1 2',
+    'connect-retry-max 8',
+    'tls-version-min 1.2',
+    `dhcp-option DNS ${preset.dns || '1.1.1.1'}`
+  ];
+  return `${stripped}\n\n${extra.join('\n')}\n`;
 }
 
 function isOvpnCsv(text) {
@@ -1367,11 +1504,12 @@ function pickOpenVpnSources(cfg = {}, limit = 4) {
 
 export async function fetchOpenVpnNodes(cfg = {}, force = false) {
   if (!isEnabledValue(cfg.ovpn, true)) return [];
-  if (!force && openVpnCache.items.length && Date.now() - openVpnCache.at < OPENVPN_CACHE_TTL) {
+  const limit = Math.max(0, Math.min(parseInt(cfg.ovpnCount, 10) || 8, 24));
+  if (limit === 0) return [];
+  // کش فقط وقتی کافی است که به اندازهٔ درخواست پروفایل داشته باشد
+  if (!force && openVpnCache.items.length >= limit && Date.now() - openVpnCache.at < OPENVPN_CACHE_TTL) {
     return openVpnCache.items;
   }
-  const limit = Math.max(0, Math.min(parseInt(cfg.ovpnCount, 10) || 4, 12));
-  if (limit === 0) return [];
 
   const fetchProfile = async (source, index) => {
     try {
@@ -1392,21 +1530,21 @@ export async function fetchOpenVpnNodes(cfg = {}, force = false) {
     }
   };
 
-  const sources = pickOpenVpnSources(cfg, limit);
   const collected = [];
-  const results = await Promise.allSettled(sources.map(fetchProfile));
-  for (const result of results) {
-    if (result.status === 'fulfilled' && Array.isArray(result.value)) collected.push(...result.value);
+  // ۱) فهرست زندهٔ VPNGate: چندین کشور با یک درخواست (پایدارترین منبع)
+  for (const url of OPENVPN_CSV_SOURCES) {
+    const nodes = await fetchProfile({ url, country: '' }, 0);
+    if (nodes.length) {
+      collected.push(...nodes);
+      break;
+    }
   }
-
-  // پشتیبان: لیست CSV ونگیت (در برخی شبکه‌های خروجی کلودفلر در دسترس نیست)
-  if (!collected.length) {
-    for (const url of OPENVPN_CSV_SOURCES) {
-      const nodes = await fetchProfile({ url, country: '' }, 0);
-      if (nodes.length) {
-        collected.push(...nodes);
-        break;
-      }
+  // ۲) پروفایل‌های خام مخزن برای تنوع بیشتر کشورها (با چرخش دوره‌ای)
+  if (collected.length < limit) {
+    const sources = pickOpenVpnSources(cfg, limit - collected.length + 2);
+    const results = await Promise.allSettled(sources.map(fetchProfile));
+    for (const result of results) {
+      if (result.status === 'fulfilled' && Array.isArray(result.value)) collected.push(...result.value);
     }
   }
 
@@ -1658,17 +1796,39 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     const wantZip = ['zip', 'bundle', 'pack'].includes(String(url.searchParams.get('format') || '').toLowerCase());
     if (wantZip) {
       const used = new Set();
-      const files = ovpnNodes.slice(0, 20).map((node, idx) => {
+      const files = [];
+      const seed = String(userOrConfig?.uuid || cfg.wk || BRAND_NAME);
+      ovpnNodes.slice(0, 10).forEach((node, idx) => {
         const code = String(node.country || 'ML').toUpperCase();
-        let name = `miliconfig-${code}-${idx + 1}.ovpn`;
-        while (used.has(name)) name = `miliconfig-${code}-${idx + 1}-${Date.now() % 1000}.ovpn`;
-        used.add(name);
-        const header = `# miliconfig OpenVPN - ${code} (${node.server}:${node.port}/${node.proto})\n`;
-        return { name, data: header + node.profile };
+        for (const preset of OVPN_TUNING_PRESETS) {
+          let name = `${BRAND_NAME}-${code}-${String(idx + 1).padStart(2, '0')}-${preset.id}.ovpn`;
+          while (used.has(name)) name = name.replace(/\.ovpn$/, `-${Date.now() % 997}.ovpn`);
+          used.add(name);
+          const header = `# ${BRAND_NAME} OpenVPN — ${code} ${node.server}:${node.port}/${node.proto} (${preset.id})\n`;
+          files.push({ name, data: header + buildOvpnVariant(node.profile, node, preset, seed) });
+        }
+      });
+      files.push({
+        name: 'servers.txt',
+        data: [
+          `# ${BRAND_NAME} OpenVPN servers in this bundle`,
+          ...ovpnNodes.slice(0, 10).map((node, idx) =>
+            `${String(idx + 1).padStart(2, '0')}\t${node.country || 'ML'}\t${node.server}\t${node.port}\t${node.proto}\t${node.cipher}`
+          )
+        ].join('\n') + '\n'
       });
       files.push({
         name: 'README.txt',
-        data: `miliconfig — ${files.length} OpenVPN profile(s)\nImport the .ovpn files into OpenVPN Connect / AmneziaVPN / OpenVPN GUI.\n`
+        data: [
+          `${BRAND_NAME} — ${files.length} OpenVPN profile(s)`,
+          '',
+          'هر سرور در سه پروفایل تنظیم شده ارائه می‌شود (balanced / mtu-safe / mobile).',
+          'اگر یکی وصل نشد، پروفایل بعدی همان کشور را امتحان کنید.',
+          'Import into OpenVPN Connect / AmneziaVPN / OpenVPN GUI.',
+          'Username/password for public VPNGate servers: vpn / vpn',
+          '',
+          `profiles: ${ovpnNodes.length} servers x ${OVPN_TUNING_PRESETS.length} tuning presets`
+        ].join('\n')
       });
       return new Response(buildZip(files), {
         status: 200,
@@ -1682,9 +1842,9 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     }
     const first = ovpnNodes[0];
     const body = [
-      `# miliconfig OpenVPN - ${first.country || 'ML'} (${first.server}:${first.port}/${first.proto})`,
-      `# ${ovpnNodes.length} پروفایل در این ساب‌لینک موجود است`,
-      first.profile
+      `# ${BRAND_NAME} OpenVPN - ${first.country || 'ML'} (${first.server}:${first.port}/${first.proto})`,
+      `# ${ovpnNodes.length} سرور در این ساب‌لینک موجود است؛ برای بستهٔ کامل ?format=zip`,
+      buildOvpnVariant(first.profile, first, OVPN_TUNING_PRESETS[0], String(userOrConfig?.uuid || cfg.wk || BRAND_NAME))
     ].join('\n');
     return new Response(body, {
       status: 200,

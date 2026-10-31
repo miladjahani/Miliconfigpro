@@ -507,6 +507,7 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
       <div class="toolbar" style="margin-top:10px;">
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>
         <a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>
       </div>
     </div>

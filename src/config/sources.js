@@ -401,19 +401,20 @@ export const WARP_ENDPOINT_IPS = [
 
 const AUTO_OVPN = file => `https://raw.githubusercontent.com/9xN/auto-ovpn/main/configs/${file}`;
 
+// فقط فایل‌هایی که واقعاً در مخزن موجودند (بقیه 404 می‌شدند و کل لیست را خالی می‌کردند)
 export const OPENVPN_RAW_PROFILE_SOURCES = [
   AUTO_OVPN('server_0_JP.ovpn'),
-  AUTO_OVPN('server_48_US.ovpn'),
-  AUTO_OVPN('server_20_GB.ovpn'),
-  AUTO_OVPN('server_12_KR.ovpn'),
-  AUTO_OVPN('server_40_TH.ovpn'),
-  AUTO_OVPN('server_63_FR.ovpn'),
-  AUTO_OVPN('server_66_BR.ovpn'),
-  AUTO_OVPN('server_71_RU.ovpn'),
-  AUTO_OVPN('server_29_RO.ovpn'),
-  AUTO_OVPN('server_23_TH.ovpn'),
-  AUTO_OVPN('server_93_RU.ovpn'),
-  AUTO_OVPN('server_59_KR.ovpn')
+  AUTO_OVPN('server_92_US.ovpn'),
+  AUTO_OVPN('server_81_AT.ovpn'),
+  AUTO_OVPN('server_66_AR.ovpn'),
+  AUTO_OVPN('server_70_LA.ovpn'),
+  AUTO_OVPN('server_42_VN.ovpn'),
+  AUTO_OVPN('server_36_TH.ovpn'),
+  AUTO_OVPN('server_50_TH.ovpn'),
+  AUTO_OVPN('server_69_TH.ovpn'),
+  AUTO_OVPN('server_20_RU.ovpn'),
+  AUTO_OVPN('server_83_RU.ovpn'),
+  AUTO_OVPN('server_14_KR.ovpn')
 ];
 
 export const OPENVPN_CSV_SOURCES = [

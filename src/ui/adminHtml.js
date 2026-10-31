@@ -1283,12 +1283,13 @@ export function renderAdminDashboardHtml(initialData = {}) {
     var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
       '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>' +
       // وارپ و اپن‌وی‌پی آماده، بدون اسکنر و بدون تنظیم
-      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG · ZIP</div></div>' +
+      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG · IPv4+IPv6 · 31 فایل</div></div>' +
       '<div class="toolbar">' +
       '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.download + ' ZIP</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
       '</div></div>' +
-      '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · ZIP</div></div>' +
+      '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · 3 پروفایل تنظیم · ZIP</div></div>' +
       '<div class="toolbar">' +
       '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.download + ' ZIP</a>' +
       '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +

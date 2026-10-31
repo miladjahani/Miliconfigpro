@@ -324,7 +324,20 @@ export default {
           }
           const warpCfg = { ...globalCfg, ...((warpUser && warpUser.config) || {}) };
           const format = String(url.searchParams.get('format') || 'zip').toLowerCase();
-          const bundle = await buildWarpConfBundle(warpCfg);
+          // پارامترهای مبهم‌سازی و ترتیب اندپوینت‌ها با شناسهٔ کاربر ساخته می‌شود
+          // تا بستهٔ هر کاربر منحصر به فرد باشد.
+          const bundle = await buildWarpConfBundle(warpCfg, { seed: warpUser?.uuid || 'public' });
+          if (format === 'links') {
+            const linksFile = bundle.files.find(file => file.name === 'links.txt');
+            return new Response(linksFile ? linksFile.data : '', {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Content-Disposition': 'attachment; filename="miliconfig-warp-links.txt"',
+                'Cache-Control': 'no-store'
+              }
+            });
+          }
           if (format === 'conf' || format === 'wg' || format === 'txt') {
             return new Response(buildWireGuardConf(bundle.config, 'WARP'), {
               status: 200,

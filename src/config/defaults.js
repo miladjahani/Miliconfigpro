@@ -105,12 +105,12 @@ export const CONFIG_DEFAULTS = {
   warp: 'yes',
   warpPro: 'no',
   warpMl: 'yes',
-  warpCount: 6,
+  warpCount: 8,
   warpLicense: '', // لایسنس WARP+ برای نود WARP PRO
   warpEndpoint: '', // لیست سفارشی نقاط پایانی: ip:port#برچسب,ip2:port2#برچسب (خالی = نقاط پایانی رسمی کلادفلر)
   // — OpenVPN (پروفایل‌های عمومی زنده از VPNGate)
   ovpn: 'yes',
-  ovpnCount: 4,
+  ovpnCount: 8,
   ovpnCountries: '',
   ovpnSource: '' // آدرس‌های سفارشی ‎.ovpn‎ (کاما) — خالی = منابع پیش‌فرض
 };
@@ -481,8 +481,8 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
     return Math.min(max, Math.max(min, n));
   };
   snap.pdCount = clampInt(snap.pdCount, 0, 20, 2);
-  snap.warpCount = clampInt(snap.warpCount, 1, 30, 6);
-  snap.ovpnCount = clampInt(snap.ovpnCount, 0, 12, 4);
+  snap.warpCount = clampInt(snap.warpCount, 1, 30, 8);
+  snap.ovpnCount = clampInt(snap.ovpnCount, 0, 24, 8);
   snap.warpLicense = String(snap.warpLicense || '').trim();
   snap.warpEndpoint = String(snap.warpEndpoint || '').trim();
   snap.ovpnCountries = String(snap.ovpnCountries || '').trim().toUpperCase();
