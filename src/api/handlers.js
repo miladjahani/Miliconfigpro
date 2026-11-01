@@ -25,6 +25,7 @@ import {
   checkForUpdate,
   fetchLatestBundle,
   inferScriptName,
+  inspectUpdateTarget,
   resolveAccountId,
   verifyUpdateToken
 } from '../core/updater.js';
@@ -686,6 +687,12 @@ export async function handleUpdateApi(request, env) {
   const { token, source } = await resolveUpdateToken(env);
   const hostScriptName = new URL(request.url).hostname;
 
+  const url = new URL(request.url);
+  if (request.method === 'GET' && url.searchParams.get('diagnose') === '1') {
+    const diag = await inspectUpdateTarget(cfg, env, { token, hostScriptName });
+    return jsonResponse({ ...diag, tokenSource: source });
+  }
+
   if (request.method === 'GET') {
     const info = await checkForUpdate(cfg, env, { token, scriptName: inferScriptName(hostScriptName) });
     return jsonResponse({ ...info, tokenSource: source });
@@ -704,7 +711,10 @@ export async function handleUpdateApi(request, env) {
         token,
         hostScriptName
       });
-      if (result.success) {
+      // مسیرهای نسبی پاسخ را کامل کن تا پنل بتواند مستقیم دانلود/گزارش کند
+      const origin = new URL(request.url).origin;
+      if (result?.downloadPath) result.downloadUrl = origin + result.downloadPath;
+      if (result?.success) {
         await addAuditLog(env, 'بروزرسانی نسخه', `از ${result.from || '?'} به ${result.to || '?'}`, clientIp).catch(() => {});
       }
       return jsonResponse(result, result.success ? 200 : 400);

@@ -186,6 +186,58 @@ export function inferScriptName(hostname = '') {
   return '';
 }
 
+async function cfGet(path, token) {
+  try {
+    const response = await fetch('https://api.cloudflare.com/client/v4' + path, {
+      headers: { Authorization: 'Bearer ' + token, 'User-Agent': 'miliconfig-updater' }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success === false) {
+      return { ok: false, detail: cloudflareErrorDetail(response.status, data) };
+    }
+    return { ok: true, result: data.result };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+// نام اسکریپت وقتی دامنه workers.dev نیست (دامنهٔ اختصاصی یا مسیر سفارشی):
+// از Custom Domains و Routes خود حساب پیدا می‌شود و در آخر اگر حساب فقط یک
+// اسکریپت داشته باشد همان انتخاب می‌شود.
+export async function resolveScriptName(accountId, token, hostname = '') {
+  const host = String(hostname || '').trim().toLowerCase();
+  if (!accountId || !token) return { scriptName: '', source: '' };
+  if (host) {
+    const domains = await cfGet(`/accounts/${encodeURIComponent(accountId)}/workers/domains`, token);
+    if (domains.ok && Array.isArray(domains.result)) {
+      const hit = domains.result.find(d => String(d.hostname || '').toLowerCase() === host);
+      if (hit && hit.service) return { scriptName: hit.service, source: 'دامنهٔ اختصاصی' };
+    }
+    const routes = await cfGet(`/accounts/${encodeURIComponent(accountId)}/workers/routes`, token);
+    if (routes.ok && Array.isArray(routes.result)) {
+      const hit = routes.result.find(r => {
+        const pattern = String(r.pattern || '').toLowerCase();
+        if (!pattern) return false;
+        if (pattern.startsWith(host)) return true;
+        const base = pattern.replace(/\/\*$/, '').replace(/\*.*$/, '').replace(/^\*\./, '');
+        return Boolean(base) && (host === base || host.endsWith('.' + base));
+      });
+      if (hit && hit.script) return { scriptName: hit.script, source: 'مسیر (Route)' };
+    }
+  }
+  const scripts = await cfGet(`/accounts/${encodeURIComponent(accountId)}/workers/scripts`, token);
+  if (scripts.ok && Array.isArray(scripts.result) && scripts.result.length === 1) {
+    const only = scripts.result[0];
+    const name = only?.id || only?.name || '';
+    if (name) return { scriptName: name, source: 'تنها اسکریپت حساب' };
+  }
+  return {
+    scriptName: '',
+    source: '',
+    error: 'نام اسکریپت پیدا نشد؛ متغیر WORKER_NAME را روی ورکر با نام دقیق اسکریپت تنظیم کنید.'
+  };
+}
+
 // ---------------------------------------------------------------------------
 // بررسی نسخه
 // ---------------------------------------------------------------------------
@@ -252,20 +304,43 @@ function normalizeBinding(binding = {}) {
   return out;
 }
 
-async function fetchExistingBindings(accountId, scriptName, token) {
+// تنظیمات فعلی اسکریپت: هم بایندینگ‌ها و هم compatibility_date/flags را می‌دهد
+// تا نسخهٔ تازه با همان محیط اجرا مستقر شود.
+async function fetchScriptSettings(accountId, scriptName, token) {
   try {
     const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/bindings`,
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/settings`,
       { headers: { Authorization: 'Bearer ' + token, 'User-Agent': 'miliconfig-updater' } }
     );
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success) {
-      return { ok: false, error: 'دسترسی به تنظیمات ورکر ممکن نشد (کد ' + response.status + ')' };
+    if (!response.ok || data.success === false) {
+      const detail = cloudflareErrorDetail(response.status, data);
+      return { ok: false, error: 'دسترسی به تنظیمات ورکر ممکن نشد: ' + detail.message, cloudflare: detail };
     }
-    return { ok: true, bindings: Array.isArray(data.result) ? data.result : [] };
+    const settings = data.result || {};
+    return { ok: true, settings, bindings: Array.isArray(settings.bindings) ? settings.bindings : [] };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
   }
+}
+
+// پیام و کد خطای کلادفلر را بدون لاپوشانی برمی‌گرداند (برای گزارش دقیق به کاربر)
+function cloudflareErrorDetail(status, data) {
+  const first = (Array.isArray(data?.errors) && data.errors[0]) || {};
+  const code = first.code || status;
+  const message = first.message || (status ? `HTTP ${status}` : 'خطای نامشخص');
+  const hints = {
+    10000: 'توکن معتبر نیست یا منقضی شده است (Authentication error).',
+    10007: 'دسترسی توکن کافی نیست؛ Workers Scripts:Edit لازم است.',
+    10062: 'حجم اسکریپت از سقف پلن کلادفلر بیشتر است.',
+    10063: 'فرمت/محتوای اسکریپت پذیرفته نشد.',
+    10066: 'محدودیت تعداد اسکریپت‌های پلن پر شده است.',
+    10021: 'یکی از بایندینگ‌ها برای این حساب معتبر نیست.',
+    10090: 'ورکر به محدودیت پلن خورده است.',
+    7000: 'شناسه یا نام حساب/اسکریپت پیدا نشد.',
+    7003: 'مسیر درخواست پیدا نشد؛ نام اسکریپت (WORKER_NAME) را بررسی کنید.'
+  };
+  return { ok: false, status, code, message, hint: hints[Number(code)] || '' };
 }
 
 // دریافت باندل تازه (برای دانلود مستقیم فایل نسخهٔ جدید از پنل)
@@ -282,9 +357,10 @@ export async function fetchLatestBundle(env = {}) {
 export async function applyUpdate(cfg = {}, env = {}, options = {}) {
   const token = String(options.token || env?.CF_API_TOKEN || '').trim();
   const hostScriptName = String(options.hostScriptName || '').trim();
-  const scriptName = String(
+  let scriptName = String(
     cfg.cfScriptName || env.CF_SCRIPT_NAME || env.WORKER_NAME || inferScriptName(hostScriptName) || ''
   ).trim();
+  let scriptSource = scriptName ? 'تنظیمات ورکر/پنل' : '';
 
   if (!token) {
     // هیچ ورودی حساب کلودفلر از کاربر خواسته نمی‌شود؛ نسخهٔ تازه به‌صورت
@@ -292,35 +368,67 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
     const info = await checkForUpdate(cfg, env, { force: true });
     const latest = info?.latest || '';
     const target = inferScriptName(hostScriptName) || 'نام-ورکر-شما';
+    const mirror = mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0];
     return {
       success: false,
       needsManualDeploy: true,
       latest,
-      downloadUrl: mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0],
-      command: `curl -fsSL ${mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0]} -o _worker.js && npx wrangler deploy _worker.js --name ${target}`,
+      // فایل از همین پنل و با Content-Disposition دانلود می‌شود، نه باز شدن فایل خام
+      downloadPath: '/api/update-bundle',
+      fileName: 'miliconfig-worker.js',
+      mirrorUrl: mirror,
+      command: `curl -fsSL ${mirror} -o _worker.js && npx wrangler deploy _worker.js --name ${target}`,
       error: latest
-        ? `نسخهٔ ${latest} آماده است؛ نصب خودکار بدون کلید ورکر انجام نمی‌شود. فایل نسخهٔ تازه را دانلود کنید یا دستور آماده را اجرا کنید.`
-        : 'نصب خودکار روی این استقرار ممکن نیست؛ فایل نسخهٔ تازه را دانلود کنید یا دستور آماده را اجرا کنید.',
+        ? `نسخهٔ ${latest} آماده است؛ نصب خودکار بدون کلید ورکر انجام نمی‌شود. فایل نسخهٔ تازه دانلود شد — آن را در داشبورد کلادفلر روی همین ورکر مستقر کنید.`
+        : 'نصب خودکار روی این استقرار ممکن نیست؛ فایل نسخهٔ تازه دانلود شد تا خودتان روی ورکر مستقر کنید.',
+      steps: [
+        'فایل نسخهٔ تازه (miliconfig-worker.js) ذخیره شد.',
+        'در داشبورد کلادفلر → Workers & Pages → همین ورکر → Edit code → محتوای فایل را جای‌گذاری کنید.',
+        'دکمهٔ Deploy را بزنید. بایندینگ‌ها و D1 دست‌نخورده می‌مانند.',
+        'برای نصب یک‌کلیکی، کلید CF_API_TOKEN را در متغیرهای همین ورکر تعریف کنید.'
+      ],
       missing: []
     };
   }
-  if (!scriptName) {
-    return {
-      success: false,
-      error: 'نام اسکریپت Workers مشخص نیست؛ متغیر WORKER_NAME را روی ورکر تنظیم کنید.',
-      missing: ['CF_SCRIPT_NAME']
-    };
-  }
-
   const info = await checkForUpdate(cfg, env, { force: true, token, scriptName });
   if (!info.success && !options.force) return { success: false, error: info.error };
   if (info.success && !info.updateAvailable && !options.force) {
     return { success: true, alreadyLatest: true, message: `نسخهٔ نصب‌شده (${info.current}) به‌روز است.` };
   }
 
+  // قبل از هر تغییری، معتبر بودن کلید بررسی می‌شود تا خطا شفاف گزارش شود
+  const tokenCheck = await verifyUpdateToken(token);
+  if (!tokenCheck.valid) {
+    return {
+      success: false,
+      error: 'کلید CF_API_TOKEN معتبر نیست: ' + (tokenCheck.error || 'دسترسی کافی ندارد') + ' — کلیدی با دسترسی Workers Scripts:Edit و Account Settings:Read بسازید.',
+      diagnose: true
+    };
+  }
+
   const account = await resolveAccountId(token, String(cfg.cfAccountId || env.CF_ACCOUNT_ID || '').trim());
   if (!account.accountId) {
-    return { success: false, error: 'Account ID پیدا نشد: ' + (account.error || 'توکن را بررسی کنید') };
+    return {
+      success: false,
+      error: 'Account ID پیدا نشد: ' + (account.error || 'توکن را بررسی کنید') + ' — کلید را با دسترسی Account Settings:Read بسازید یا CF_ACCOUNT_ID را روی ورکر تعریف کنید.',
+      diagnose: true
+    };
+  }
+
+  // روی دامنهٔ اختصاصی، نام اسکریپت از دامنه/مسیرهای خود حساب پیدا می‌شود
+  if (!scriptName) {
+    const resolved = await resolveScriptName(account.accountId, token, hostScriptName);
+    if (resolved.scriptName) {
+      scriptName = resolved.scriptName;
+      scriptSource = resolved.source || '';
+    } else {
+      return {
+        success: false,
+        error: resolved.error || 'نام اسکریپت Workers مشخص نیست؛ متغیر WORKER_NAME را روی ورکر تنظیم کنید.',
+        missing: ['WORKER_NAME'],
+        diagnose: true
+      };
+    }
   }
 
   const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
@@ -333,26 +441,44 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
     return { success: false, error: 'باندل دریافتی معتبر نیست (حجم غیرمنتظره).' };
   }
 
-  // بایندینگ‌های فعلی حفظ می‌شوند تا D1 و متغیرها بعد از آپدیت از بین نروند
-  const current = await fetchExistingBindings(account.accountId, scriptName, token);
+  // بایندینگ‌ها و تنظیمات فعلی حفظ می‌شوند تا D1 و متغیرها بعد از آپدیت از بین نروند
+  const current = await fetchScriptSettings(account.accountId, scriptName, token);
   if (!current.ok) {
-    return { success: false, error: 'قبل از آپدیت باید دسترسی خواندن تنظیمات ورکر وجود داشته باشد: ' + current.error };
+    return {
+      success: false,
+      error: 'قبل از آپدیت باید دسترسی خواندن تنظیمات ورکر وجود داشته باشد: ' + current.error,
+      cloudflare: current.cloudflare || null
+    };
   }
   const bindings = [];
+  const keepTypes = new Set(['secret_text']);
   for (const raw of current.bindings) {
-    if (['CF_API_TOKEN', 'CF_ACCOUNT_ID'].includes(raw?.name)) continue;
+    // مقادیر محرمانه هرگز در بدنهٔ آپلود نمی‌روند؛ با keep_bindings سر جایشان می‌مانند
     if (raw?.type === 'secret_text') continue;
     const normalized = normalizeBinding(raw);
-    if (normalized) bindings.push(normalized);
+    if (normalized) {
+      bindings.push(normalized);
+    } else if (raw?.type) {
+      // بایندینگ‌هایی که نمی‌توانیم بازسازی کنیم حذف نمی‌شوند؛ نوعشان نگه داشته می‌شود
+      keepTypes.add(String(raw.type));
+    }
   }
-  bindings.push({ type: 'secret_text', name: 'CF_API_TOKEN', text: token });
-  bindings.push({ type: 'secret_text', name: 'CF_ACCOUNT_ID', text: account.accountId });
 
   const moduleName = `worker_${Math.random().toString(36).slice(2, 10)}.js`;
+  const settings = current.settings || {};
+  const compatFlags = Array.isArray(settings.compatibility_flags) ? settings.compatibility_flags : [];
   const metadata = {
     main_module: moduleName,
-    compatibility_date: '2024-09-23',
-    bindings
+    compatibility_date: settings.compatibility_date || '2024-09-23',
+    ...(compatFlags.length ? { compatibility_flags: compatFlags } : {}),
+    bindings,
+    // کلیدهای محرمانه و بایندینگ‌های خاص موجود دست‌نخورده می‌مانند
+    keep_bindings: [...keepTypes],
+    ...(settings.placement && settings.placement.mode ? { placement: { mode: settings.placement.mode } } : {}),
+    ...(settings.limits && settings.limits.cpu_ms ? { limits: { cpu_ms: settings.limits.cpu_ms } } : {}),
+    ...(settings.observability && settings.observability.enabled ? { observability: { enabled: true } } : {}),
+    // اگر ورکر فایل‌های استاتیک دارد، دست‌نخورده بمانند
+    ...(settings.assets ? { keep_assets: true } : {})
   };
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }), 'metadata.json');
@@ -369,8 +495,14 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.success === false) {
-      const detail = (data.errors && data.errors[0] && data.errors[0].message) || `HTTP ${response.status}`;
-      return { success: false, error: 'آپلود به کلادفلر ناموفق بود: ' + detail };
+      const detail = cloudflareErrorDetail(response.status, data);
+      return {
+        success: false,
+        error: 'آپلود به کلادفلر ناموفق بود: ' + detail.message + (detail.hint ? ' — ' + detail.hint : ''),
+        cloudflare: detail,
+        scriptName,
+        accountTail: account.accountId.slice(-6)
+      };
     }
     return {
       success: true,
@@ -379,6 +511,7 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
       to: info.latest || currentVersionLabel(),
       bytes: bundle.text.length,
       scriptName,
+      scriptSource,
       accountDetected: account.detected,
       mirrors: bundle.url,
       message: `نسخهٔ ${info.latest || 'تازه'} روی اسکریپت «${scriptName}» مستقر شد${account.detected ? ' (Account ID خودکار شناسایی شد)' : ''}.`
@@ -386,6 +519,99 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
   } catch (err) {
     return { success: false, error: 'خطای شبکه در آپلود: ' + (err?.message || String(err)) };
   }
+}
+
+// ---------------------------------------------------------------------------
+// تشخیص نصب خودکار: دقیقاً می‌گوید کدام مرحله می‌شکند و چرا
+// ---------------------------------------------------------------------------
+
+export async function inspectUpdateTarget(cfg = {}, env = {}, options = {}) {
+  const token = String(options.token || env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  const hostname = String(options.hostScriptName || '').trim();
+  const configured = String(cfg.cfScriptName || env?.CF_SCRIPT_NAME || env?.WORKER_NAME || '').trim();
+  const inferred = inferScriptName(hostname);
+  const scriptName = configured || inferred;
+  const accountHint = String(cfg.cfAccountId || env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || '').trim();
+  const result = {
+    success: true,
+    hostname,
+    tokenPresent: Boolean(token),
+    tokenValid: false,
+    tokenStatus: '',
+    tokenError: '',
+    accountId: '',
+    accountTail: '',
+    accountDetected: false,
+    accountError: '',
+    scriptName,
+    scriptSource: configured ? 'ورکر (CF_SCRIPT_NAME / WORKER_NAME / preset)' : (inferred ? 'از دامنهٔ workers.dev' : ''),
+    bindings: [],
+    bindingCount: 0,
+    bindingsError: '',
+    compatibilityDate: '',
+    compatibilityFlags: [],
+    current: currentVersionLabel(),
+    latest: '',
+    updateAvailable: false,
+    canAutoDeploy: false,
+    steps: []
+  };
+
+  if (!token) {
+    result.steps.push('کلید CF_API_TOKEN روی ورکر تعریف نشده است، پس نصب خودکار از داخل پنل ممکن نیست؛ فایل نسخهٔ تازه را دانلود کنید و مستقر کنید.');
+    return result;
+  }
+
+  const verify = await verifyUpdateToken(token);
+  result.tokenValid = verify.valid === true;
+  result.tokenStatus = verify.status || '';
+  result.tokenError = verify.error || '';
+  if (!verify.valid) {
+    result.steps.push('کلید موجود معتبر نیست یا منقضی شده؛ یک API Token با دسترسی Workers Scripts:Edit بسازید.');
+    return result;
+  }
+  result.steps.push('کلید معتبر است.');
+
+  const account = await resolveAccountId(token, accountHint);
+  result.accountId = account.accountId || '';
+  result.accountTail = account.accountId ? account.accountId.slice(-6) : '';
+  result.accountDetected = account.detected === true;
+  result.accountError = account.error || '';
+  if (!result.accountId) {
+    result.steps.push('Account ID پیدا نشد: کلید به account:read دسترسی ندارد؛ کلید را کامل‌تر بسازید یا CF_ACCOUNT_ID را روی ورکر تعریف کنید.');
+    return result;
+  }
+
+  if (!result.scriptName) {
+    const resolved = await resolveScriptName(result.accountId, token, hostname);
+    if (resolved.scriptName) {
+      result.scriptName = resolved.scriptName;
+      result.scriptSource = resolved.source || '';
+      result.steps.push('نام اسکریپت از ' + (resolved.source || 'حساب') + ' شناسایی شد.');
+    } else {
+      result.steps.push(resolved.error || 'نام اسکریپت مشخص نیست؛ متغیر WORKER_NAME یا CF_SCRIPT_NAME را روی ورکر تعریف کنید.');
+      return result;
+    }
+  }
+
+  const settings = await fetchScriptSettings(result.accountId, result.scriptName, token);
+  if (!settings.ok) {
+    result.bindingsError = settings.error || '';
+    result.steps.push('خواندن تنظیمات اسکریپت ناموفق بود: ' + (settings.error || '') + (settings.cloudflare?.hint ? ' — ' + settings.cloudflare.hint : ''));
+    return result;
+  }
+  result.bindings = settings.bindings.map(b => ({ name: b.name, type: b.type }));
+  result.bindingCount = result.bindings.length;
+  result.compatibilityDate = settings.settings?.compatibility_date || '';
+  result.compatibilityFlags = Array.isArray(settings.settings?.compatibility_flags) ? settings.settings.compatibility_flags : [];
+
+  const info = await checkForUpdate(cfg, env, { token, scriptName: result.scriptName });
+  result.current = info.current;
+  result.latest = info.latest || '';
+  result.updateAvailable = info.updateAvailable === true;
+  result.canAutoDeploy = true;
+  result.steps.push('همهٔ پیش‌نیازها آماده است؛ دکمهٔ «نصب خودکار» نسخهٔ ' + (result.latest || 'تازه') + ' را مستقر می‌کند.');
+  return result;
 }
 
 // در کرون: اگر بروزرسانی خودکار روشن و توکن موجود باشد، نسخهٔ تازه مستقر می‌شود

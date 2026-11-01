@@ -914,7 +914,11 @@ export function renderAdminDashboardHtml(initialData = {}) {
               <button class="btn sm" type="button" data-act="download-update">${icon('download')} دانلود فایل نسخهٔ تازه</button>
               <button class="btn sm" type="button" data-act="copy-update-cmd">${icon('copy')} کپی دستور استقرار</button>
               <button class="btn sm primary" type="button" data-act="apply-update">${icon('bolt')} نصب خودکار</button>
+              <button class="btn sm ghost" type="button" data-act="diagnose-update">${icon('terminal')} تشخیص نصب خودکار</button>
               <button class="btn sm ghost" type="button" data-act="disable-autoupdate">${icon('close')} خاموش کردن</button>
+            </div>
+            <div class="adv-box" id="updDiagBox" style="display:none;margin-top:10px;">
+              <div class="loc-meta" id="updDiagBody" style="line-height:2;"></div>
             </div>
             <div class="loc-meta" style="margin-top:8px;line-height:1.9;">
               بروزرسانی هیچ ورودی از حساب کلادفلر نمی‌خواهد. اگر این ورکر به گیت‌هاب وصل باشد، نسخهٔ تازه خودکار مستقر می‌شود؛ وگرنه فایل تازه را دانلود کنید یا دستور آمادهٔ استقرار را اجرا کنید.
@@ -1881,11 +1885,75 @@ export function renderAdminDashboardHtml(initialData = {}) {
       .catch(function() { if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err'); });
   }
 
-  // بروزرسانی بدون هیچ ورودی حسابی: فایل نسخهٔ تازه یا دستور آمادهٔ استقرار
+  // بروزرسانی بدون هیچ ورودی حسابی: فایل نسخهٔ تازه به‌صورت دانلود ذخیره می‌شود
+  // (قبلاً فایل خام _worker.js در تب جدید باز می‌شد و کاربر یک صفحهٔ کد می‌دید)
   function downloadUpdateBundle() {
-    var base = origin() + '/api/update-bundle';
-    window.open(base, '_blank');
-    showToast('دانلود فایل نسخهٔ تازه شروع شد', 'ok');
+    var link = document.createElement('a');
+    link.href = origin() + '/api/update-bundle';
+    link.setAttribute('download', 'miliconfig-worker.js');
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast('فایل نسخهٔ تازه دانلود شد', 'ok');
+  }
+
+  // گزارش گام‌به‌گام وضعیت نصب خودکار (فقط خواندنی؛ چیزی را تغییر نمی‌دهد)
+  function updateDiagRow(label, value, state) {
+    var color = state === false ? 'var(--danger)' : state === true ? 'var(--neon)' : 'var(--text)';
+    return '<div><b style="color:' + color + '">' + label + ':</b> ' + (value || '—') + '</div>';
+  }
+
+  function showUpdateBox(title, lines) {
+    var box = $('updDiagBox');
+    var body = $('updDiagBody');
+    if (!box || !body) return;
+    var html = title ? '<b>' + title + '</b>' : '';
+    if (lines && lines.length) {
+      html += '<div style="margin-top:' + (title ? '6px' : '0') + '">' + lines.join('<br>') + '</div>';
+    }
+    body.innerHTML = html;
+    box.style.display = 'block';
+  }
+
+  function renderUpdateDiagnose(d) {
+    if (!d || d.success === false) {
+      showUpdateBox('تشخیص ناموفق بود', [(d && (d.error || d.message)) || 'پاسخ نامعتبر از سرور']);
+      return;
+    }
+    var lines = [];
+    lines.push(updateDiagRow('کلید CF_API_TOKEN', d.tokenPresent ? 'تعریف شده روی ورکر' : 'تعریف نشده', d.tokenPresent));
+    if (d.tokenPresent) {
+      lines.push(updateDiagRow('اعتبار کلید', d.tokenValid ? ('معتبر' + (d.tokenStatus ? ' (' + d.tokenStatus + ')' : '')) : ('نامعتبر — ' + (d.tokenError || 'دلیل نامشخص')), d.tokenValid));
+    }
+    if (d.accountId) {
+      lines.push(updateDiagRow('Account ID', '…' + d.accountTail + (d.accountDetected ? ' (خودکار شناسایی شد)' : ''), true));
+    } else if (d.accountError) {
+      lines.push(updateDiagRow('Account ID', d.accountError, false));
+    }
+    lines.push(updateDiagRow('اسکریپت هدف', d.scriptName || 'تشخیص داده نشد', Boolean(d.scriptName)));
+    if (d.scriptSource) lines.push(updateDiagRow('منبع نام اسکریپت', d.scriptSource));
+    if (d.bindingCount) {
+      lines.push(updateDiagRow('بایندینگ‌های فعلی', d.bindingCount + ' مورد (' + (d.bindings || []).map(function(b) { return b.type; }).join(', ') + ')'));
+    } else if (d.bindingsError) {
+      lines.push(updateDiagRow('بایندینگ‌های فعلی', d.bindingsError, false));
+    }
+    if (d.compatibilityDate) {
+      lines.push(updateDiagRow('تاریخ سازگاری', d.compatibilityDate + ((d.compatibilityFlags || []).length ? ' · ' + d.compatibilityFlags.join(', ') : '')));
+    }
+    lines.push(updateDiagRow('نسخه', d.current + ' → ' + (d.latest || 'نامشخص'), d.updateAvailable ? null : true));
+    var steps = d.steps || [];
+    if (steps.length) {
+      lines.push('<div style="margin-top:6px">' + steps.map(function(s) { return '• ' + s; }).join('<br>') + '</div>');
+    }
+    showUpdateBox('نتیجهٔ تشخیص نصب خودکار', lines);
+  }
+
+  function diagnoseUpdate() {
+    showToast('در حال بررسی پیش‌نیازهای نصب خودکار...', 'ok');
+    api('/api/update?diagnose=1&t=' + Date.now())
+      .then(renderUpdateDiagnose)
+      .catch(function() { showToast('خطای شبکه در تشخیص نصب خودکار', 'err'); });
   }
 
   function copyUpdateCommand() {
@@ -1936,13 +2004,14 @@ export function renderAdminDashboardHtml(initialData = {}) {
           showToast(data.message || 'نسخهٔ تازه مستقر شد', 'ok');
           setTimeout(function() { location.reload(); }, 2500);
         } else if (data.needsManualDeploy) {
-          // بدون کلید ورکر: فایل نسخهٔ تازه یا دستور آماده
-          if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
-          var cmd = data.command || '';
-          if (cmd) copyText(cmd, 'دستور استقرار کپی شد');
-          showToast(data.error || 'فایل نسخهٔ تازه و دستور استقرار آماده شد', 'err');
+          // بدون کلید ورکر: فایل به‌صورت دانلود ذخیره می‌شود (نه باز شدن فایل خام)
+          downloadUpdateBundle();
+          showUpdateBox(data.error || 'نصب خودکار در دسترس نیست', data.steps || []);
+          showToast('فایل نسخهٔ تازه ذخیره شد؛ راهنمای استقرار زیر کارت است', 'err');
         } else {
           showToast(data.error || data.message || 'بروزرسانی ناموفق بود', 'err');
+          if (data.error) showUpdateBox('خطای نصب خودکار', [data.error]);
+          if (data.diagnose) setTimeout(diagnoseUpdate, 600);
         }
       })
       .catch(function() { showToast('خطای شبکه در بروزرسانی', 'err'); })
@@ -2271,6 +2340,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
     else if (act === 'apply-update') { applyUpdateNow(); }
+    else if (act === 'diagnose-update') { diagnoseUpdate(); }
     else if (act === 'download-update') { downloadUpdateBundle(); }
     else if (act === 'copy-update-cmd') { copyUpdateCommand(); }
     else if (act === 'enable-autoupdate') { enableAutoUpdate(); }
