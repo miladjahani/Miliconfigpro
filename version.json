@@ -1,0 +1,15 @@
+{
+  "version": "3.2.0",
+  "build": "2026-11-01.1",
+  "publishedAt": "2026-11-01T00:00:00Z",
+  "bundle": "https://raw.githubusercontent.com/miladjahani/Miliconfigpro/main/_worker.js",
+  "repo": "https://github.com/miladjahani/Miliconfigpro",
+  "notes": [
+    "استخر لبهٔ ترکیبی cfnew + Z-E-U-S (IPv4/IPv6/دامنه/ECH) با تازه‌سازی خودکار",
+    "همه ترکیب‌ها در ساب: هر آدرس هم TLS و هم HTTP، هر چهار پروتکل + WARP + OpenVPN",
+    "یک مسیر ساخت کاربر با تنظیمات کامل و ویرایش‌پذیر",
+    "صفحه وضعیت همیشه با تنظیمات همان کاربر هماهنگ است",
+    "بروزرسانی خودکار از داخل پنل (بدون بازکردن کلادفلر)",
+    "سایدبار موبایل به‌صورت لیست کشویی مرتب"
+  ]
+}

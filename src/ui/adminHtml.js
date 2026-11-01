@@ -649,10 +649,108 @@ export function renderAdminDashboardHtml(initialData = {}) {
     .dock-item { min-width: 60px; padding: 7px 6px; font-size: 0.62rem; }
     .dock-item .mi { width: 19px; height: 19px; }
   }
+
+  /* ---------- mobile drawer (کشوی منو) ---------- */
+  .menu-btn { display: none; }
+  .nav-drawer {
+    display: none;
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    z-index: 80;
+    max-height: 88vh;
+    overflow-y: auto;
+    background: #060b09;
+    border-bottom: 1px solid var(--line-strong);
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 26px 60px rgba(0, 0, 0, 0.66);
+    transform: translateY(-102%);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.26s ease, opacity 0.2s ease, visibility 0.26s;
+    padding-bottom: 12px;
+  }
+  body.light-mode .nav-drawer { background: #ffffff; }
+  .nav-drawer.is-open { transform: none; opacity: 1; visibility: visible; }
+  .drawer-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(2, 5, 4, 0.6);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .drawer-backdrop.is-open { opacity: 1; pointer-events: auto; }
+  .drawer-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: inherit;
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer-head .mili-shield-svg { width: 30px; height: 30px; }
+  .drawer-title { font-size: 0.92rem; font-weight: 800; }
+  .drawer-close { margin-inline-start: auto; }
+  .drawer-group {
+    padding: 14px 18px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: var(--muted-2);
+    text-transform: uppercase;
+  }
+  .drawer-list { display: flex; flex-direction: column; }
+  .drawer-item {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line);
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+    transition: background 0.16s, color 0.16s;
+  }
+  .drawer-item:last-child { border-bottom: 0; }
+  .drawer-item .mi { width: 21px; height: 21px; color: var(--muted); flex: none; }
+  .drawer-item .drawer-label { flex: 1; }
+  .drawer-item .drawer-hint { font-size: 0.68rem; color: var(--muted-2); font-weight: 500; }
+  .drawer-item:hover, .drawer-item:focus-visible { background: var(--neon-soft); }
+  .drawer-item.is-active { color: var(--neon); background: var(--neon-soft); }
+  .drawer-item.is-active .mi { color: var(--neon); }
+  .drawer-item.danger { color: var(--danger); }
+  .drawer-item.danger .mi { color: var(--danger); }
+
+  /* قواعد موبایل آخرین بلوک استایل هستند تا بر قواعد پایهٔ بالا اولویت داشته باشند */
+  @media (max-width: 820px) {
+    .dock-wrap { display: none; }
+    .topbar > .icon-btn:not(.menu-btn) { display: none; }
+    .topbar > .chip:not(.mobile-keep) { display: none; }
+    .menu-btn { display: inline-flex; }
+    .nav-drawer { display: block; }
+    .drawer-backdrop { display: block; }
+    .toast { bottom: 24px; }
+  }
 </style>
 </head>
 <body>
   <header class="topbar">
+    <button class="icon-btn menu-btn" type="button" data-act="toggle-drawer" aria-controls="navDrawer" aria-expanded="false" title="منو">${icon('menu')}</button>
     <div class="brand">
       ${SHIELD_LOGO_SVG}
       <div class="brand-text">
@@ -662,7 +760,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     </div>
     <div class="topbar-spacer"></div>
     <div class="chip hide-sm" id="storageChip"><span class="dot"></span><span id="storageText">حافظه</span></div>
-    <div class="chip"><span id="userChipText">0 / ${MAX_USERS_LIMIT}</span><span>کاربر</span></div>
+    <div class="chip mobile-keep"><span id="userChipText">0 / ${MAX_USERS_LIMIT}</span><span>کاربر</span></div>
     <div class="chip hide-sm" id="clockChip">--:--</div>
     <button class="icon-btn" type="button" data-act="toggle-theme" id="themeBtn" title="حالت روز / شب">${icon('bolt')}<span class="hide-sm" data-i18n="top.theme">حالت روز</span></button>
     <button class="icon-btn" type="button" data-act="toggle-lang" id="langBtn" title="زبان"><span data-i18n="top.lang">English</span></button>
@@ -672,7 +770,38 @@ export function renderAdminDashboardHtml(initialData = {}) {
     <button class="icon-btn danger" type="button" data-act="logout" title="خروج">${icon('logout')}</button>
   </header>
 
-  <main class="main">
+  <!-- کشوی منوی موبایل: لیست کامل و مرتب؛ با دکمهٔ بالا باز/بسته می‌شود -->
+  <div class="drawer-backdrop" id="drawerBackdrop" data-act="close-drawer"></div>
+  <nav class="nav-drawer" id="navDrawer" aria-label="منوی اصلی" aria-hidden="true">
+    <div class="drawer-head">
+      ${SHIELD_LOGO_SVG}
+      <div>
+        <div class="drawer-title">${BRAND_NAME}OS</div>
+        <div class="brand-ver">${BRAND_UPPER} v${VERSION.replace(/^v/i, '')}</div>
+      </div>
+      <button class="icon-btn drawer-close" type="button" data-act="close-drawer" title="بستن">${icon('close')}</button>
+    </div>
+    <div class="drawer-group">صفحه‌ها</div>
+    <div class="drawer-list">
+      <button class="drawer-item is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span class="drawer-label">داشبورد</span><span class="drawer-hint">وضعیت زنده</span></button>
+      <button class="drawer-item" type="button" data-tab="users">${icon('users')}<span class="drawer-label">کاربران</span><span class="drawer-hint">ساخت و مدیریت</span></button>
+      <button class="drawer-item" type="button" data-tab="scanner">${icon('radar')}<span class="drawer-label">اسکنر</span><span class="drawer-hint">آی‌پی و پروکسی</span></button>
+      <button class="drawer-item" type="button" data-tab="locations">${icon('globe')}<span class="drawer-label">چندلوکیشن</span><span class="drawer-hint">کشورها</span></button>
+      <button class="drawer-item" type="button" data-tab="settings">${icon('settings')}<span class="drawer-label">تنظیمات</span><span class="drawer-hint">همه گزینه‌ها</span></button>
+    </div>
+    <div class="drawer-group">نسخه</div>
+    <div class="drawer-list">
+      <button class="drawer-item" type="button" data-act="check-update">${icon('refresh')}<span class="drawer-label">بررسی بروزرسانی</span><span class="drawer-hint" id="drawerVersion">v${VERSION.replace(/^v/i, '')}</span></button>
+    </div>
+    <div class="drawer-group">دسترسی</div>
+    <div class="drawer-list">
+      <a class="drawer-item" href="${SUPPORT_URL}" target="_blank" rel="noopener">${icon('signal')}<span class="drawer-label">پشتیبانی</span><span class="drawer-hint">${TELEGRAM_SUPPORT}</span></a>
+      <button class="drawer-item" type="button" data-act="open-password">${icon('key')}<span class="drawer-label">تغییر رمز مدیر</span></button>
+      <button class="drawer-item" type="button" data-act="toggle-theme">${icon('bolt')}<span class="drawer-label">حالت روز / شب</span></button>
+      <button class="drawer-item" type="button" data-act="toggle-lang">${icon('globe')}<span class="drawer-label">تغییر زبان</span><span class="drawer-hint" id="drawerLangHint">EN</span></button>
+      <button class="drawer-item danger" type="button" data-act="logout">${icon('logout')}<span class="drawer-label">خروج</span></button>
+    </div>
+  </nav>
     <section class="panel is-active" data-panel="dashboard">
       <div class="window">
         <div class="window-head">
@@ -723,6 +852,23 @@ export function renderAdminDashboardHtml(initialData = {}) {
                 <button class="btn ghost" type="button" data-act="go-settings">${icon('settings')} <span data-i18n="nav.settings">تنظیمات</span></button>
               </div>
             </div>
+          </div>
+
+          <!-- نسخه و بروزرسانی: این بخش نسخهٔ نصب‌شده را با گیت‌هاب مقایسه می‌کند -->
+          <div class="card" id="updateCard" style="margin-top:16px;">
+            <h3>${icon('refresh')} نسخه و بروزرسانی</h3>
+            <div class="kv"><span>نسخهٔ نصب‌شده</span><b class="mono">v${VERSION.replace(/^v/i, '')}</b></div>
+            <div class="kv"><span>آخرین نسخهٔ گیت‌هاب</span><b class="mono" id="updLatest">—</b></div>
+            <div class="kv"><span>وضعیت</span><b id="updState">بررسی نشده</b></div>
+            <div class="toolbar" style="margin-top:10px;flex-wrap:wrap;">
+              <button class="btn sm" type="button" data-act="check-update">${icon('refresh')} بررسی بروزرسانی</button>
+              <button class="btn sm primary" type="button" data-act="apply-update">${icon('download')} بروزرسانی خودکار</button>
+            </div>
+            <div class="loc-meta" style="margin-top:8px;line-height:1.9;">
+              بروزرسانی خودکار به کلید <b class="mono">CF_API_TOKEN</b> (دسترسی Workers Scripts:Edit) و تنظیم <b class="mono">cfAccountId</b> و <b class="mono">cfScriptName</b> در تب تنظیمات نیاز دارد.
+              اگر پروژه به گیت‌هاب وصل باشد، هر push به main خودکار مستقر می‌شود و نیازی به این کار نیست.
+            </div>
+            <ul id="updNotes" class="loc-meta" style="margin:8px 0 0;padding-inline-start:18px;display:none;"></ul>
           </div>
         </div>
       </div>
@@ -913,6 +1059,20 @@ export function renderAdminDashboardHtml(initialData = {}) {
             <div class="switch-row">
               <div class="switch-meta">${icon('lock')}<div><b>OpenVPN</b><span>پروفایل‌های زندهٔ VPNGate (چندکشوری)</span></div></div>
               <label class="switch"><input type="checkbox" data-key="ovpn"><i></i></label>
+            </div>
+            <div class="switch-row">
+              <div class="switch-meta">${icon('refresh')}<div><b>بروزرسانی خودکار نسخه</b><span>با توکن کلادفلر، نسخهٔ تازهٔ گیت‌هاب خودکار مستقر می‌شود</span></div></div>
+              <label class="switch"><input type="checkbox" data-key="autoUpdate"><i></i></label>
+            </div>
+            <div class="field">
+              <label>Cloudflare Account ID</label>
+              <input type="text" data-key="cfAccountId" placeholder="مثلاً 5f3c...">
+              <span class="hint">برای بروزرسانی خودکار؛ این مقدار محرمانه نیست.</span>
+            </div>
+            <div class="field">
+              <label>نام اسکریپت Workers</label>
+              <input type="text" data-key="cfScriptName" placeholder="miliconfig-worker-v5">
+              <span class="hint">همان نامی که در ورکر یا wrangler تنظیم شده است. توکن را در بخش Keys با نام CF_API_TOKEN اضافه کنید.</span>
             </div>
             <div class="field">
               <label>تعداد نود دامنهٔ پنل</label>
@@ -1235,9 +1395,34 @@ export function renderAdminDashboardHtml(initialData = {}) {
     document.querySelectorAll('.dock-item').forEach(function(b) {
       b.classList.toggle('is-active', b.getAttribute('data-tab') === name);
     });
+    document.querySelectorAll('.drawer-item[data-tab]').forEach(function(b) {
+      b.classList.toggle('is-active', b.getAttribute('data-tab') === name);
+    });
+    toggleDrawer(false);
     if (history.replaceState) history.replaceState(null, '', '#' + name);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  // کشوی منوی موبایل: باز/بسته شدن با انیمیشن به سمت پایین
+  function toggleDrawer(open) {
+    var drawer = $('navDrawer');
+    var backdrop = $('drawerBackdrop');
+    if (!drawer) return;
+    var next = open === undefined ? !drawer.classList.contains('is-open') : !!open;
+    drawer.classList.toggle('is-open', next);
+    drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
+    if (backdrop) backdrop.classList.toggle('is-open', next);
+    var btn = document.querySelector('[data-act="toggle-drawer"]');
+    if (btn) btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+    document.body.style.overflow = next ? 'hidden' : '';
+  }
+
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') toggleDrawer(false);
+  });
+  window.addEventListener('resize', function() {
+    if (window.innerWidth > 820) toggleDrawer(false);
+  });
 
   function renderMetrics() {
     var users = state.users || [];
@@ -1523,6 +1708,63 @@ export function renderAdminDashboardHtml(initialData = {}) {
         }
       })
       .catch(function() { showToast('خطای شبکه در ساخت کاربر', 'err'); });
+  }
+
+  // ---------- نسخه و بروزرسانی ----------
+  function renderUpdateInfo(info, silent) {
+    var latest = $('updLatest');
+    var stateEl = $('updState');
+    var notesEl = $('updNotes');
+    var drawerVersion = $('drawerVersion');
+    if (latest) latest.textContent = info && info.latest ? 'v' + info.latest : '—';
+    if (drawerVersion && info && info.current) drawerVersion.textContent = 'v' + info.current;
+    if (!stateEl) return;
+    if (!info || info.success === false) {
+      stateEl.textContent = 'بررسی ناموفق';
+      if (!silent) showToast((info && info.error) || 'بررسی بروزرسانی ناموفق بود', 'err');
+      return;
+    }
+    if (info.updateAvailable) {
+      stateEl.textContent = 'نسخهٔ تازه موجود است';
+      stateEl.style.color = 'var(--warn)';
+      if (!silent) showToast('نسخهٔ ' + info.latest + ' آماده است', 'ok');
+    } else {
+      stateEl.textContent = 'به‌روز است';
+      stateEl.style.color = 'var(--neon)';
+      if (!silent) showToast('نسخهٔ نصب‌شده به‌روز است', 'ok');
+    }
+    if (notesEl) {
+      var notes = info.notes || [];
+      notesEl.innerHTML = notes.map(function(n) { return '<li>' + n + '</li>'; }).join('');
+      notesEl.style.display = notes.length ? 'block' : 'none';
+    }
+    if (info.updateAvailable && !info.autoApplyAvailable) {
+      stateEl.textContent += ' — کلید CF_API_TOKEN یا حساب/اسکریپت تنظیم نشده';
+    }
+  }
+
+  function checkUpdate(silent) {
+    api('/api/update?t=' + Date.now())
+      .then(function(info) { renderUpdateInfo(info, silent); })
+      .catch(function() { if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err'); });
+  }
+
+  function applyUpdateNow() {
+    if (!confirm('نسخهٔ تازهٔ گیت‌هاب روی همین ورکر مستقر شود؟')) return;
+    var btn = document.querySelector('[data-act="apply-update"]');
+    if (btn) btn.disabled = true;
+    showToast('در حال دریافت و استقرار نسخهٔ تازه...', 'ok');
+    api('/api/update', { method: 'POST', body: JSON.stringify({ action: 'apply' }) })
+      .then(function(data) {
+        if (data.success) {
+          showToast(data.message || 'نسخهٔ تازه مستقر شد', 'ok');
+          setTimeout(function() { location.reload(); }, 2500);
+        } else {
+          showToast(data.error || data.message || 'بروزرسانی ناموفق بود', 'err');
+        }
+      })
+      .catch(function() { showToast('خطای شبکه در بروزرسانی', 'err'); })
+      .finally(function() { if (btn) btn.disabled = false; });
   }
 
   function deleteUser(id) {
@@ -1843,6 +2085,10 @@ export function renderAdminDashboardHtml(initialData = {}) {
     if (act === 'copy') { copyText(el.getAttribute('data-url') || '', 'لینک کپی شد'); }
     else if (act === 'copy-master') { copyText(masterSub(), 'سابلینک اصلی کپی شد'); }
     else if (act === 'open-create') { openModal('createModal'); applyPresetToForm(); }
+    else if (act === 'toggle-drawer') { toggleDrawer(); }
+    else if (act === 'close-drawer') { toggleDrawer(false); }
+    else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
+    else if (act === 'apply-update') { applyUpdateNow(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }
@@ -1924,6 +2170,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
   renderMetrics();
   tickClock();
   setInterval(tickClock, 30000);
+  // بررسی بی‌صدای نسخه در پس‌زمینه (خروجی ۱۰ دقیقه کش می‌شود)
+  setTimeout(function() { checkUpdate(true); }, 1200);
 
   var hash = (window.location.hash || '').replace('#', '');
   if (hash && document.querySelector('[data-panel="' + hash + '"]')) showPanel(hash);

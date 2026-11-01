@@ -19,6 +19,7 @@ const MODULE_ORDER = [
   'src/config/defaults.js',
   'src/config/presets.js',
   'src/core/utils.js',
+  'src/core/updater.js',
   'src/core/proxyGeo.js',
   'src/core/edgePool.js',
   'src/ui/icons.js',

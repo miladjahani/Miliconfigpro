@@ -20,6 +20,7 @@ import {
   getFeedKind
 } from '../config/defaults.js';
 import { USER_PRESETS } from '../config/presets.js';
+import { applyUpdate, checkForUpdate } from '../core/updater.js';
 import { isValidDomain, isValidIpAddress, normalizeNodeHost, parseAddressAndPort } from '../core/utils.js';
 import {
   addAuditLog,
@@ -639,7 +640,38 @@ export async function handleConfigApi(request, env) {
   return jsonResponse({ error: 'Method not allowed' }, 405);
 }
 
-// ۲. مدیریت کامل کاربران در دیتابیس D1 (/api/users)
+// ۲. بروزرسانی نسخه: بررسی و استقرار نسخهٔ تازه از گیت‌هاب روی همین اسکریپت (/api/update)
+export async function handleUpdateApi(request, env) {
+  if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
+  const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+  const cfg = await loadGlobalConfig(env);
+
+  if (request.method === 'GET') {
+    const info = await checkForUpdate(cfg, env);
+    return jsonResponse(info);
+  }
+
+  if (request.method === 'POST') {
+    let body = {};
+    try { body = await request.json(); } catch (_e) {}
+    const action = String(body?.action || 'check').toLowerCase();
+    if (action === 'check') {
+      return jsonResponse(await checkForUpdate(cfg, env, { force: true }));
+    }
+    if (action === 'apply') {
+      const result = await applyUpdate(cfg, env, { force: body?.force === true });
+      if (result.success) {
+        await addAuditLog(env, 'بروزرسانی نسخه', `از ${result.from || '?'} به ${result.to || '?'}`, clientIp).catch(() => {});
+      }
+      return jsonResponse(result, result.success ? 200 : 400);
+    }
+    return jsonResponse({ success: false, error: 'action نامعتبر است' }, 400);
+  }
+
+  return jsonResponse({ error: 'Method not allowed' }, 405);
+}
+
+// ۳. مدیریت کامل کاربران در دیتابیس D1 (/api/users)
 export async function handleUsersApi(request, env) {
   if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
   const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';

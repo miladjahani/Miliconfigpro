@@ -17,6 +17,7 @@ import {
 } from './db/d1.js';
 import { handleWebSocketUpgrade, handleXhttpPostRequest } from './core/runtime.js';
 import { warmEdgePool } from './core/edgePool.js';
+import { autoUpdateIfEnabled } from './core/updater.js';
 import {
   MULTI_COUNTRY_CODES,
   buildWarpConfBundle,
@@ -33,6 +34,7 @@ import {
   handlePreferredIpsApi,
   handlePublicUserStatusApi,
   handleScannerApi,
+  handleUpdateApi,
   handleUsersApi
 } from './api/handlers.js';
 import { renderLoginGatewayHtml } from './ui/loginHtml.js';
@@ -68,6 +70,13 @@ export default {
         results.push({ edgePool: await warmEdgePool() });
       } catch (e) {
         results.push({ edgePool: null, edgeError: e?.message || String(e) });
+      }
+      // بروزرسانی خودکار نسخه (فقط اگر مدیر روشن کرده و توکن کلادفلر ست شده باشد)
+      try {
+        const cfg = await loadGlobalConfig(env);
+        results.push({ update: await autoUpdateIfEnabled(cfg, env) });
+      } catch (e) {
+        results.push({ update: { skipped: 'error', message: e?.message || String(e) } });
       }
       for (const code of MULTI_COUNTRY_CODES) {
         try {
@@ -158,6 +167,9 @@ export default {
         }
         if (apiSubPath === 'users') {
           return await handleUsersApi(request, env);
+        }
+        if (apiSubPath === 'update') {
+          return await handleUpdateApi(request, env);
         }
         if (apiSubPath === 'preferred-ips') {
           return await handlePreferredIpsApi(request, env, true);

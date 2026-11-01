@@ -35,7 +35,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.1';
+export const VERSION = 'v3.2.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
@@ -114,13 +114,17 @@ export const CONFIG_DEFAULTS = {
   ovpn: 'yes',
   ovpnCount: 8,
   ovpnCountries: '',
-  ovpnSource: '' // آدرس‌های سفارشی ‎.ovpn‎ (کاما) — خالی = منابع پیش‌فرض
+  ovpnSource: '', // آدرس‌های سفارشی ‎.ovpn‎ (کاما) — خالی = منابع پیش‌فرض
+  // — بروزرسانی نسخه: امکان استقرار نسخهٔ تازه از داخل پنل
+  autoUpdate: 'no', // yes = کرون در صورت وجود توکن، نسخهٔ گیت‌هاب را خودکار مستقر می‌کند
+  cfAccountId: '', // Account ID کلادفلر (غیرمحرمانه)
+  cfScriptName: '' // نام اسکریپت Workers که باید به‌روز شود (غیرمحرمانه)
 };
 
 export const BOOLEAN_CONFIG_KEYS = [
   'ev', 'et', 'ex', 'es', 'ech', 'ena', 'epd', 'epi', 'egi',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag',
-  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn'
+  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate'
 ];
 
 export const ENV_KEY_MAPPING = {
@@ -178,7 +182,10 @@ export const ENV_KEY_MAPPING = {
   ovpn: ['ovpn', 'OVPN', 'OPENVPN'],
   ovpnCount: ['ovpnCount', 'OVPNCOUNT', 'OPENVPN_NODE_COUNT'],
   ovpnCountries: ['ovpnCountries', 'OVPNCOUNTRIES', 'OPENVPN_COUNTRIES'],
-  ovpnSource: ['ovpnSource', 'OVPNSOURCE', 'OPENVPN_SOURCE']
+  ovpnSource: ['ovpnSource', 'OVPNSOURCE', 'OPENVPN_SOURCE'],
+  autoUpdate: ['autoUpdate', 'AUTOUPDATE', 'AUTO_UPDATE'],
+  cfAccountId: ['cfAccountId', 'CFACCOUNTID', 'CF_ACCOUNT_ID'],
+  cfScriptName: ['cfScriptName', 'CFSCRIPTNAME', 'CF_SCRIPT_NAME']
 };
 
 export const FRAGMENT_PRESETS = {
@@ -494,6 +501,9 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   snap.warpEndpoint = String(snap.warpEndpoint || '').trim();
   snap.ovpnCountries = String(snap.ovpnCountries || '').trim().toUpperCase();
   snap.ovpnSource = String(snap.ovpnSource || '').trim();
+  snap.autoUpdate = normalizeSwitch(snap.autoUpdate, false);
+  snap.cfAccountId = String(snap.cfAccountId || '').trim();
+  snap.cfScriptName = String(snap.cfScriptName || '').trim();
   snap.supportChannel = TELEGRAM_SUPPORT;
   snap.brand = BRAND_NAME;
   return snap;

@@ -1,6 +1,6 @@
-# miliconfig v3.1 — مرکز کنترل زیرساخت پروکسی روی Cloudflare Workers & Pages + D1
+# miliconfig v3.2.0 — مرکز کنترل زیرساخت پروکسی روی Cloudflare Workers & Pages + D1
 
-![Version](https://img.shields.io/badge/version-v3.1--D1-b5ff4d?style=flat-square&labelColor=0b140b)
+![Version](https://img.shields.io/badge/version-v3.2.0--D1-b5ff4d?style=flat-square&labelColor=0b140b)
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%26%20Pages-84cc16?style=flat-square&labelColor=0b140b)
 ![Cloudflare D1](https://img.shields.io/badge/Database-Cloudflare%20D1%20Auto--Migrate-a3e635?style=flat-square&labelColor=0b140b)
 ![Obfuscation](https://img.shields.io/badge/Security-Advanced%20Obfuscation%20(Zero%201101)-b5ff4d?style=flat-square&labelColor=0b140b)
@@ -47,6 +47,22 @@
    - **Build command**: `npm run build` (یا خالی بگذارید)
    - **Build output directory**: `dist` (اگر Build command را خالی گذاشتید می‌توانید `/` یا `dist` یا `public` قرار دهید)
 3. پس از استقرار، از بخش **Settings -> Functions -> D1 database bindings** دیتابیس D1 خود را با نام `DB` متصل کنید.
+
+---
+
+## بروزرسانی نسخه‌های نصب‌شده (از v3.2.0 به بعد)
+
+سه مسیر وجود دارد، به ترتیب سادگی:
+
+1. **اتصال گیت‌هاب (خودکارترین راه):** اگر Worker/Pages به همین مخزن وصل باشد، هر push به `main` خودکار مستقر می‌شود و کاری لازم نیست.
+2. **بروزرسانی از داخل پنل:** در داشبورد کارت «نسخه و بروزرسانی» را ببینید. یک‌بار این‌ها را ست کنید:
+   - متغیر محرمانهٔ `CF_API_TOKEN` (توکن کلادفلر با دسترسی *Workers Scripts: Edit*)
+   - `cfAccountId` و `cfScriptName` در تب تنظیمات (نام اسکریپت همان Worker شماست)
+
+   بعد از آن دکمهٔ «بروزرسانی خودکار» نسخهٔ تازهٔ `_worker.js` را از گیت‌هاب می‌گیرد و روی همان اسکریپت آپلود می‌کند؛ با روشن کردن سوییچ `autoUpdate` این کار در کرون هم انجام می‌شود.
+3. **نسخه‌های قدیمی‌تر از v3.2.0:** چون کد بروزرسانی را ندارند، فقط با یک‌بار استقرار مجدد (Deploy از گیت‌هاب یا paste کردن `_worker.js`) به‌روز می‌شوند. داده‌های مشترک (لیست آی‌پی/دامنه) از منابع آنلاین حتی در نسخه‌های قدیمی تازه می‌مانند.
+
+فهرست نسخه در `version.json` مخزن نگه‌داری می‌شود؛ برای فورک‌های خصوصی می‌توانید آدرس آن را با `UPDATE_MANIFEST_URL` و `UPDATE_BUNDLE_URL` جایگزین کنید.
 
 ---
 
