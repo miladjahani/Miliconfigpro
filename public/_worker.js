@@ -1629,13 +1629,14 @@ const UPDATE_MANIFEST_PATH = 'version.json';
 const UPDATE_BUNDLE_PATH = '_worker.js';
 const UPDATE_REPO_URL = 'https://github.com/' + UPDATE_REPO;
 
-// چند آینه: اگر raw.githubusercontent فیلتر باشد، jsDelivr و githack امتحان می‌شوند
-function mirrorUrls(path) {
+// چند آینه: اگر raw.githubusercontent فیلتر یا کش‌شده باشد، jsDelivr و githack هم امتحان می‌شوند
+function mirrorUrls(path, options = {}) {
   const clean = String(path || '').replace(/^\/+/, '');
+  const bust = options.bust ? `?cb=${Date.now()}` : '';
   return [
-    `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}`,
-    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}`,
-    `https://raw.githack.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}`
+    `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}${bust}`,
+    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}${bust}`,
+    `https://raw.githack.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}${bust}`
   ];
 }
 
@@ -1693,21 +1694,38 @@ async function fetchTextWithFallback(paths, options = {}) {
   return null;
 }
 
+// مانیفست از همهٔ آینه‌ها همزمان خوانده و «بالاترین نسخه» انتخاب می‌شود؛
+// چون CDN گیت‌هاب گاهی چند دقیقه نسخهٔ قدیمی را نگه می‌دارد و اگر فقط اولین
+// پاسخ سالم را بگیریم، نسخهٔ تازه دیده نمی‌شود.
 async function fetchManifest(force = false, env = {}) {
   if (!force && manifestCache.value && Date.now() - manifestCache.at < MANIFEST_CACHE_MS) {
     return manifestCache.value;
   }
   const custom = String(env?.UPDATE_MANIFEST_URL || '').trim();
-  const result = await fetchTextWithFallback(custom ? [custom, ...mirrorUrls(UPDATE_MANIFEST_PATH)] : mirrorUrls(UPDATE_MANIFEST_PATH));
-  if (!result) return null;
-  try {
-    const manifest = JSON.parse(result.text);
-    if (!manifest || !manifest.version) return null;
-    manifestCache = { at: Date.now(), value: manifest };
-    return manifest;
-  } catch (_e) {
-    return null;
-  }
+  const urls = custom
+    ? [custom, ...mirrorUrls(UPDATE_MANIFEST_PATH, { bust: true })]
+    : mirrorUrls(UPDATE_MANIFEST_PATH, { bust: true });
+  const results = await Promise.all(urls.map(async url => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4500);
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'miliconfig-updater', 'Cache-Control': 'no-cache' },
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data && data.version ? data : null;
+    } catch (_e) {
+      return null;
+    }
+  }));
+  const valid = results.filter(Boolean);
+  if (!valid.length) return null;
+  const best = valid.reduce((top, item) => (compareVersions(item.version, top.version) > 0 ? item : top));
+  manifestCache = { at: Date.now(), value: best };
+  return best;
 }
 
 // ---------------------------------------------------------------------------
@@ -1892,7 +1910,7 @@ async function applyUpdate(cfg = {}, env = {}, options = {}) {
 
   const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
   const bundle = await fetchTextWithFallback(
-    customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH)] : mirrorUrls(UPDATE_BUNDLE_PATH),
+    customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })] : mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true }),
     { timeout: 20000 }
   );
   if (!bundle) return { success: false, error: 'دریافت باندل تازه از گیت‌هاب و آینه‌ها ناموفق بود.' };
