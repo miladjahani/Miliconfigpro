@@ -228,9 +228,33 @@ const COUNTRY_META = {
   SK: { name: 'اسلواکی', flag: '🇸🇰' }
 };
 
+// ============================================================================
+// Z-E-U-S (panel-zeus/Z-E-U-S) — منبع رسمی دامنه، IPv4، IPv6 و پروکسی کشوری
+// ساختار مخزن: ips.txt (IPv4 بهینه)، ip6.txt (IPv6 بهینه)، dom.txt (دامنه‌های
+// لبه)، ech_dom.txt (دامنه‌های دارای ECH)، proxy/<CC>.txt (پروکسی هر کشور) و
+// proxy_vip/<CC>.txt (پروکسی VIP هر کشور، فهرستش در vip-list).
+// ============================================================================
+const ZEUS_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+
+const ZEUS_SOURCES = {
+  ipv4: ZEUS_BASE + 'ips.txt',
+  ipv6: ZEUS_BASE + 'ip6.txt',
+  domains: ZEUS_BASE + 'dom.txt',
+  echDomains: ZEUS_BASE + 'ech_dom.txt',
+  echDns: ZEUS_BASE + 'ech_dns.txt',
+  proxyAll: ZEUS_BASE + 'proxy/ALL.txt',
+  vipIndex: ZEUS_BASE + 'vip-list',
+  proxyCountry: code => ZEUS_BASE + `proxy/${String(code).toUpperCase()}.txt`,
+  vipCountry: code => ZEUS_BASE + `proxy_vip/${String(code).toUpperCase()}.txt`
+};
+
 // فقط این کشورها در مخزن Z-E-U-S فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
-const ZEUS_VIP_COUNTRIES = new Set(['CA', 'DE', 'GB', 'TH', 'TR', 'US']);
+const ZEUS_VIP_COUNTRIES = [
+  'AD', 'AL', 'CA', 'DE', 'FI', 'FR', 'GB', 'IT', 'MC', 'MX',
+  'NL', 'NO', 'RO', 'SE', 'TH', 'TR', 'US'
+];
 const zeusVip = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
+const zeusProxy = code => raw(`panel-zeus/Z-E-U-S/main/proxy/${code}.txt`);
 
 // کدام کشورها در کدام قالب کشوری فایل دارند (بازبینی اکتبر ۲۰۲۶).
 // برای کشورهای غایب، ساختن آدرس فقط یک ۴۰۴ و یک subrequest هدر است.
@@ -259,7 +283,9 @@ function buildCountryFeeds(code) {
   if (available.clearHttp.has(cc)) feeds.push(raw(`ClearProxy/checked-proxy-list/main/http/raw/country/${cc}.txt`));
   if (available.trioSocks.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/socks5.txt`));
   if (available.trioHttp.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/http.txt`));
-  if (ZEUS_VIP_COUNTRIES.has(cc)) feeds.unshift(zeusVip(cc));
+  // منبع Z-E-U-S اولویت دارد: پروکسی‌های VIP و معمولی همان کشور در مخزن z-e-u-s
+  if (ZEUS_VIP_COUNTRIES.includes(cc)) feeds.unshift(zeusVip(cc));
+  feeds.unshift(zeusProxy(cc));
   return feeds;
 }
 
@@ -341,15 +367,92 @@ const IP_CANDIDATE_SOURCES = [
 
 // آی‌پی‌های IPv6 بهینهٔ کلادفلر (منبع چینی خودبه‌روز)
 const IPV6_CANDIDATE_SOURCES = [
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ip6.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv6.txt'
+];
+
+// دامنه‌های لبهٔ کلادفلر (برای نودهای دامنه‌محور و SNI جایگزین)
+// z-e-u-s: dom.txt (دامنه‌های سالم) و ech_dom.txt (دامنه‌های دارای ECH)
+// cfnew: فهرست دامنه‌های ترجیحی + فهرست آنلاین bestip
+const ZEUS_DOMAIN_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+const DOMAIN_CANDIDATE_SOURCES = [
+  ZEUS_DOMAIN_BASE + 'dom.txt',
+  ZEUS_DOMAIN_BASE + 'ech_dom.txt',
+  'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt'
 ];
 
 // Proxy-IP های آمادهٔ عبور از کلادفلر (BPB-style) — لیست خودبه‌روز
 const PROXY_IP_SOURCES = [
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy&country.txt',
-  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/proxy.txt'
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/proxy.txt',
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy/ALL.txt'
 ];
+
+// ============================================================================
+// cfnew (byJoey/cfnew) — منابع ترجیحی خود مخزن، برای وقتی که هیچ تنظیمی نشده
+// ============================================================================
+
+// ۲۱ دامنهٔ ترجیحی cfnew (همان آرایهٔ const 直连域名列表 در سورس ورکر)
+const CFNEW_PREFERRED_DOMAINS = [
+  'cloudflare.182682.xyz',
+  'speed.marisalnc.com',
+  'freeyx.cloudflare88.eu.org',
+  'bestcf.top',
+  'cdn.2020111.xyz',
+  'cfip.cfcdn.vip',
+  'cf.0sm.com',
+  'cf.090227.xyz',
+  'cf.zhetengsha.eu.org',
+  'cloudflare.9jy.cc',
+  'cf.zerone-cdn.pp.ua',
+  'cfip.1323123.xyz',
+  'cnamefuckxxs.yuchen.icu',
+  'cloudflare-ip.mofashi.ltd',
+  '115155.xyz',
+  'cname.xirancdn.us',
+  'f3058171cad.002404.xyz',
+  '8.889288.xyz',
+  'cdn.tzpro.xyz',
+  'cf.877771.xyz',
+  'xn--b6gac.eu.org'
+];
+
+// ۱۰ آی‌پی «اتصال رسمی» cfnew (هر کدام در یک /24 متفاوت)
+const CFNEW_DIRECT_IPS = [
+  '172.71.218.190',
+  '162.158.228.87',
+  '162.158.189.134',
+  '162.158.26.63',
+  '162.158.25.86',
+  '162.158.29.216',
+  '162.158.218.160',
+  '162.158.227.214',
+  '172.69.118.198',
+  '172.69.119.150'
+];
+
+// ProxyIP های cfnew (بازشدهٔ const 备用地址列表) — خروجی از منطقهٔ دلخواه
+const CFNEW_PROXY_IPS = [
+  { domain: 'ProxyIP.HK.CMLiussss.net', region: 'HK' },
+  { domain: 'ProxyIP.US.CMLiussss.net', region: 'US' },
+  { domain: 'ProxyIP.SG.CMLiussss.net', region: 'SG' },
+  { domain: 'ProxyIP.JP.CMLiussss.net', region: 'JP' },
+  { domain: 'ProxyIP.KR.CMLiussss.net', region: 'KR' },
+  { domain: 'ProxyIP.DE.CMLiussss.net', region: 'DE' },
+  { domain: 'ProxyIP.SE.CMLiussss.net', region: 'SE' },
+  { domain: 'ProxyIP.NL.CMLiussss.net', region: 'NL' },
+  { domain: 'ProxyIP.FI.CMLiussss.net', region: 'FI' },
+  { domain: 'ProxyIP.GB.CMLiussss.net', region: 'GB' },
+  { domain: 'ProxyIP.Oracle.cmliussss.net', region: 'Oracle' },
+  { domain: 'ProxyIP.DigitalOcean.CMLiussss.net', region: 'DigitalOcean' },
+  { domain: 'ProxyIP.Vultr.CMLiussss.net', region: 'Vultr' },
+  { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' }
+];
+
+// فهرست آنلاین دامنه/آی‌پی ترجیحی که خود cfnew هم استفاده می‌کند
+const CFNEW_EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
+const CFNEW_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
 const IP_RANGE_SOURCES = {
@@ -521,7 +624,9 @@ const CONFIG_DEFAULTS = {
   ipRotation: 15, // چرخش خودکار آی‌پی به دقیقه (۰ = خاموش)
   locationNodeCount: 8, // تعداد نود چندلوکیشن که در ساب‌لینک کشوری ساخته می‌شود
   frag: 'yes', // کلید روشن/خاموش فرگمنت (شادوساکس فرگمنت ندارد)
-  ports: '443,2053,2087,8443', // پورت‌های نودهای ساب‌لینک (لیست جداشده با کاما)
+  ports: '443,2053,2087,8443', // پورت‌های TLS نودهای ساب‌لینک (لیست جداشده با کاما)
+  // پورت‌های بدون TLS که به‌عنوان «حالت دوم» هر نود ساخته می‌شوند؛ خالی = هیچ نود HTTP‌ای ساخته نشود
+  httpPorts: '80,8080',
   adminPasswordHash: '', // هش رمز عبور مدیر
   supportChannel: TELEGRAM_SUPPORT,
   // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
@@ -588,6 +693,7 @@ const ENV_KEY_MAPPING = {
   fragmentPreset: ['fragmentPreset', 'FRAGMENT_PRESET'],
   frag: ['frag', 'FRAG', 'FRAGMENT_ENABLED'],
   ports: ['ports', 'PORTS', 'NODE_PORTS'],
+  httpPorts: ['httpPorts', 'HTTPPORTS', 'HTTP_PORTS', 'NODE_HTTP_PORTS'],
   ipRotation: ['ipRotation', 'IP_ROTATION', 'ROTATION_MINUTES'],
   locationNodeCount: ['locationNodeCount', 'LOCATION_NODE_COUNT'],
   pd: ['pd', 'PD', 'PANEL_DOMAIN_NODES'],
@@ -878,6 +984,10 @@ function normalizeEffectiveConfig(rawConfig = {}) {
   snap.fp = snap.fp || 'chrome';
   snap.patt = snap.patt || '/?ed=2048';
   snap.ports = parseNodePorts(snap.ports).join(',');
+  // پورت‌های HTTP اختیاری‌اند؛ مقدار خالی یعنی فقط نودهای TLS ساخته شوند
+  snap.httpPorts = String(snap.httpPorts == null ? CONFIG_DEFAULTS.httpPorts : snap.httpPorts).trim()
+    ? parseNodePorts(snap.httpPorts).filter(port => CF_HTTP_PORTS.includes(port)).join(',')
+    : '';
   const clampInt = (val, min, max, dflt) => {
     const n = parseInt(val, 10);
     if (!Number.isFinite(n)) return dflt;
@@ -1598,6 +1708,364 @@ async function verifyCountryProxies(proxies = [], options = {}) {
   const workers = Array.from({ length: Math.min(6, list.length) }, () => worker().catch(() => {}));
   await Promise.all(workers);
   return verified;
+}
+
+
+// --- MODULE: src/core/edgePool.js ---
+// ============================================================================
+// miliconfig - استخر یکپارچه منابع لبهٔ کلادفلر
+//
+// منابع (طبق درخواست کاربر، هر دو مخزن کامل مطالعه شده‌اند):
+//   • cfnew  (byJoey/cfnew)          → ۲۱ دامنهٔ ترجیحی، ۱۰ آی‌پی اتصال رسمی،
+//                                       ۱۴ ProxyIP منطقه‌ای، فهرست آنلاین bestip
+//   • Z-E-U-S (panel-zeus/Z-E-U-S)   → ips.txt (IPv4)، ip6.txt (IPv6)،
+//                                       dom.txt (دامنه لبه)، ech_dom.txt و
+//                                       ech_dns.txt (دامنه/DNS برای ECH)
+//
+// قواعد مهم:
+//   ۱) آی‌پی‌ها با رنج‌های رسمی کلادفلر فیلتر می‌شوند؛ لیست‌های عمومی حاوی
+//      آی‌پی‌های غیرکلادفلر هم هستند و آدرس‌کردن آن‌ها نود را خراب می‌کند.
+//   ۲) پاسخ فوری از فهرست داخلی ساخته می‌شود و لیست‌های تازه در پس‌زمینه
+//      (waitUntil) جایگزین می‌شوند؛ مسیر ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
+//   ۳) نتیجه ۳۰ دقیقه در حافظهٔ ایزوله و در Cache API نگه داشته می‌شود.
+// ============================================================================
+
+
+const POOL_TTL_MS = 30 * 60 * 1000;
+const POOL_FETCH_TIMEOUT_MS = 2500;
+const POOL_MAX_CHARS = 200000;
+const POOL_MAX_ITEMS = 240;
+const POOL_CACHE_BASE = 'https://edge-pool.miliconfig.internal';
+
+// رنج‌های رسمی کلادفلر (cloudflare.com/ips-v4 و ips-v6)
+const CF_IPV4_CIDRS = [
+  '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+  '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+  '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+  '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22'
+];
+const CF_IPV6_CIDRS = [
+  '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+  '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32'
+];
+
+function poolIpv4ToInt(ip) {
+  const parts = String(ip).split('.');
+  if (parts.length !== 4) return -1;
+  let value = 0;
+  for (const part of parts) {
+    const n = Number(part);
+    if (!Number.isInteger(n) || n < 0 || n > 255) return -1;
+    value = value * 256 + n;
+  }
+  return value;
+}
+
+const IPV4_RANGES = CF_IPV4_CIDRS.map(cidr => {
+  const [base, bits] = cidr.split('/');
+  const prefix = Number(bits) || 32;
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return { base: poolIpv4ToInt(base) & mask, mask };
+});
+
+function isCloudflareIpv4(ip) {
+  const value = poolIpv4ToInt(ip);
+  if (value < 0) return false;
+  return IPV4_RANGES.some(range => (value & range.mask) === range.base);
+}
+
+function isCloudflareIpv6(ip) {
+  const text = String(ip || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!text.includes(':')) return false;
+  const expanded = poolExpandIpv6(text);
+  if (!expanded) return false;
+  return CF_IPV6_CIDRS.some(cidr => {
+    const [base, bits] = cidr.split('/');
+    const prefixBits = Number(bits) || 128;
+    const baseExpanded = poolExpandIpv6(base.toLowerCase());
+    if (!baseExpanded) return false;
+    return expanded.slice(0, prefixBits) === baseExpanded.slice(0, prefixBits);
+  });
+}
+
+// تبدیل IPv6 به رشتهٔ ۱۲۸ بیتی (هر کاراکتر یک بیت) برای مقایسهٔ پیشوندی
+function poolExpandIpv6(input) {
+  const [headRaw, tailRaw] = String(input).split('::');
+  const head = headRaw ? headRaw.split(':').filter(Boolean) : [];
+  const tail = tailRaw ? tailRaw.split(':').filter(Boolean) : [];
+  if (head.length + tail.length > 8) return '';
+  const groups = [
+    ...head,
+    ...Array(Math.max(0, 8 - head.length - tail.length)).fill('0'),
+    ...tail
+  ];
+  let bits = '';
+  for (const group of groups) {
+    const n = parseInt(group || '0', 16);
+    if (!Number.isFinite(n)) return '';
+    bits += n.toString(2).padStart(16, '0');
+  }
+  return bits;
+}
+
+function isCloudflareAddress(host) {
+  if (isValidIpAddress(host) || /^\d{1,3}(\.\d{1,3}){3}$/.test(String(host))) {
+    return String(host).includes(':') ? isCloudflareIpv6(host) : isCloudflareIpv4(host);
+  }
+  return false;
+}
+
+async function readPoolTextLimited(response, maxChars) {
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const text = await response.text();
+    return text.slice(0, maxChars);
+  }
+  const decoder = new TextDecoder();
+  let out = '';
+  let done = false;
+  while (!done && out.length < maxChars) {
+    const chunk = await reader.read();
+    done = chunk.done;
+    if (chunk.value) out += decoder.decode(chunk.value, { stream: !done });
+  }
+  try { reader.cancel(); } catch (_e) {}
+  return out.slice(0, maxChars);
+}
+
+async function poolFetchText(url, timeout = POOL_FETCH_TIMEOUT_MS) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!response.ok) return '';
+    return await readPoolTextLimited(response, POOL_MAX_CHARS);
+  } catch (_e) {
+    return '';
+  }
+}
+
+function poolPushUnique(list, seen, value, limit = POOL_MAX_ITEMS) {
+  if (list.length >= limit) return;
+  if (!value || seen.has(value)) return;
+  seen.add(value);
+  list.push(value);
+}
+
+// فهرست داخلی فوری — همیشه در دسترس، بدون هیچ درخواست شبکه‌ای
+function poolBuiltin() {
+  const ipv4 = [];
+  const ipv4Seen = new Set();
+  for (const ip of CFNEW_DIRECT_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
+  for (const ip of OFFICIAL_DIRECT_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
+
+  const ipv6 = [];
+  const ipv6Seen = new Set();
+  for (const ip of OFFICIAL_DIRECT_IPV6) poolPushUnique(ipv6, ipv6Seen, ip);
+
+  const domains = [];
+  const domainSeen = new Set();
+  for (const domain of CFNEW_PREFERRED_DOMAINS) poolPushUnique(domains, domainSeen, domain, 120);
+  for (const item of DIRECT_DOMAINS) poolPushUnique(domains, domainSeen, item.domain, 120);
+
+  const echDomains = [];
+  const echSeen = new Set();
+  for (const domain of ECH_DOMAINS) poolPushUnique(echDomains, echSeen, domain, 60);
+
+  const proxyIps = CFNEW_PROXY_IPS.map(item => ({ ...item, port: 443 }))
+    .concat(FALLBACK_PROXY_IPS.map(item => ({ ...item })));
+
+  return { ipv4, ipv6, domains, echDomains, echDns: [], proxyIps, origin: 'builtin' };
+}
+
+// ادغام لیست‌های تازه در استخر داخلی؛ آی‌پی‌های خارج از رنج کلادفلر دور ریخته می‌شوند
+function poolMergeFetched(builtin, fetched) {
+  const v4Seen = new Set(builtin.ipv4);
+  const v6Seen = new Set(builtin.ipv6);
+  const domSeen = new Set(builtin.domains);
+  const echSeen = new Set(builtin.echDomains);
+  const dnsSeen = new Set(builtin.echDns);
+  const out = {
+    ipv4: [...builtin.ipv4],
+    ipv6: [...builtin.ipv6],
+    domains: [...builtin.domains],
+    echDomains: [...builtin.echDomains],
+    echDns: [...builtin.echDns],
+    proxyIps: builtin.proxyIps,
+    origin: 'live'
+  };
+
+  for (const item of fetched.ipv4) {
+    if (!isValidIpAddress(item) || !isCloudflareIpv4(item)) continue;
+    poolPushUnique(out.ipv4, v4Seen, item, POOL_MAX_ITEMS);
+  }
+  for (const item of fetched.ipv6) {
+    if (!isValidIpAddress(item) || !isCloudflareIpv6(item)) continue;
+    poolPushUnique(out.ipv6, v6Seen, item, POOL_MAX_ITEMS);
+  }
+  for (const item of fetched.domains) {
+    if (!isValidDomain(item)) continue;
+    poolPushUnique(out.domains, domSeen, item, 160);
+  }
+  for (const item of fetched.echDomains) {
+    if (!isValidDomain(item)) continue;
+    poolPushUnique(out.echDomains, echSeen, item, 80);
+  }
+  for (const item of fetched.echDns) {
+    if (!isValidIpAddress(item)) continue;
+    poolPushUnique(out.echDns, dnsSeen, item, 40);
+  }
+  return out;
+}
+
+// پارس خطوط «یک آدرس در هر خط»؛ خطوط host:port#برچسب هم پشتیبانی می‌شوند
+function poolParseAddressLines(text) {
+  const hosts = [];
+  const domains = [];
+  for (const rawLine of String(text || '').split(/[\r\n]+/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith('*')) continue;
+    const hashIdx = line.indexOf('#');
+    if (hashIdx > -1) line = line.slice(0, hashIdx).trim();
+    line = line.replace(/^[a-z0-9+.-]+:\/\//i, '');
+    if (line.includes('@')) line = line.split('@').pop();
+    line = line.split('/')[0].trim();
+    if (line.startsWith('[')) line = line.replace(/^\[|\].*$/g, '');
+    else {
+      const colon = line.lastIndexOf(':');
+      if (colon > -1 && /^\d+$/.test(line.slice(colon + 1))) line = line.slice(0, colon);
+    }
+    if (!line) continue;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(line) || line.includes(':')) hosts.push(line);
+    else if (isValidDomain(line) || line.includes('.')) domains.push(line);
+  }
+  return { hosts, domains };
+}
+
+let memoryPool = { at: 0, value: null };
+let inflight = null;
+
+function poolGetCache() {
+  try {
+    return typeof caches !== 'undefined' ? caches.default : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function poolFetchFresh() {
+  const [ips, ip6, dom, echDom, echDns, edgeList] = await Promise.all([
+    poolFetchText(ZEUS_SOURCES.ipv4),
+    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || ZEUS_SOURCES.ipv6),
+    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || ZEUS_SOURCES.domains),
+    poolFetchText(ZEUS_SOURCES.echDomains),
+    poolFetchText(ZEUS_SOURCES.echDns),
+    poolFetchText(CFNEW_EDGE_LIST_URL, 2000)
+  ]);
+  const v4Parsed = poolParseAddressLines(ips);
+  const v6Parsed = poolParseAddressLines(ip6);
+  const domParsed = poolParseAddressLines(dom);
+  const echParsed = poolParseAddressLines(echDom);
+  const edgeParsed = poolParseAddressLines(edgeList);
+  const dnsParsed = poolParseAddressLines(echDns);
+  return {
+    ipv4: v4Parsed.hosts,
+    ipv6: v6Parsed.hosts,
+    domains: [...domParsed.domains, ...edgeParsed.domains, ...edgeParsed.hosts],
+    echDomains: echParsed.domains,
+    echDns: dnsParsed.hosts
+  };
+}
+
+// استخر لبه برای یک درخواست ساب‌لینک. مسیر پیش‌فرض: پاسخ فوری از استخر داخلی و
+// در صورت داشتن waitUntil، تازه‌سازی در پس‌زمینه (بدون تأخیر برای کاربر).
+async function getEdgePool(cfg = {}, options = {}) {
+  const now = Date.now();
+  if (memoryPool.value && now - memoryPool.at < POOL_TTL_MS) return memoryPool.value;
+
+  const builtin = poolBuiltin();
+
+  const refresh = async () => {
+    if (inflight) return inflight;
+    inflight = (async () => {
+      try {
+        const fetched = await poolFetchFresh();
+        const merged = poolMergeFetched(builtin, fetched);
+        memoryPool = { at: Date.now(), value: merged };
+        const cache = poolGetCache();
+        if (cache) {
+          try {
+            await cache.put(
+              `${POOL_CACHE_BASE}/v1`,
+              new Response(JSON.stringify(merged), {
+                headers: {
+                  'content-type': 'application/json',
+                  'cache-control': `max-age=${Math.floor(POOL_TTL_MS / 1000)}`
+                }
+              })
+            );
+          } catch (_e) {}
+        }
+        return merged;
+      } catch (_e) {
+        return builtin;
+      } finally {
+        inflight = null;
+      }
+    })();
+    return inflight;
+  };
+
+  // ورکر: تازه‌سازی پس‌زمینه تا اولین بازدید کاربر هم کند نشود
+  if (options.waitUntil) {
+    try { options.waitUntil(refresh()); } catch (_e) {}
+  } else if (options.awaitRefresh !== false && options.allowNetwork !== false && !memoryPool.value) {
+    // فقط وقتی هیچ استخری در حافظه نیست و امکان شبکه هست، منتظر می‌مانیم
+    const merged = await Promise.race([
+      refresh(),
+      new Promise(resolve => setTimeout(() => resolve(builtin), POOL_FETCH_TIMEOUT_MS + 300))
+    ]);
+    return merged || builtin;
+  }
+
+  return builtin;
+}
+
+// تازه‌سازی اجباری (کرون) — خروجی خلاصه برای لاگ
+async function warmEdgePool() {
+  const builtin = poolBuiltin();
+  const fetched = await poolFetchFresh();
+  const merged = poolMergeFetched(builtin, fetched);
+  memoryPool = { at: Date.now(), value: merged };
+  return {
+    ipv4: merged.ipv4.length,
+    ipv6: merged.ipv6.length,
+    domains: merged.domains.length,
+    echDomains: merged.echDomains.length,
+    echDns: merged.echDns.length
+  };
+}
+
+// انتخاب چرخشی با پرهیز از تکرار، برای نودهای ساب‌لینک
+function pickFromPool(pool = [], count = 1, options = {}) {
+  const list = Array.isArray(pool) ? pool.filter(Boolean) : [];
+  const wanted = Math.max(1, parseInt(count, 10) || 1);
+  if (!list.length) return [];
+  const stride = Math.max(1, Math.floor(list.length / wanted));
+  const bucket = Math.floor(Date.now() / (options.windowMs || 15 * 60 * 1000));
+  const start = options.seed !== undefined
+    ? Math.abs(Number(options.seed) || 0) % list.length
+    : bucket % list.length;
+  const out = [];
+  for (let i = 0; i < wanted && i < list.length; i++) {
+    const item = list[(start + i * stride) % list.length];
+    if (!out.includes(item)) out.push(item);
+  }
+  return out;
 }
 
 
@@ -4188,18 +4656,22 @@ function buildFragmentValue(cfg = {}) {
   return `${length},${interval},${packets || 'tlshello'}`;
 }
 
-// انتخاب پورت نود از لیست پنل (ports) — هر نود یک پورت، به‌صورت چرخشی
-function chooseNodePort(cfg = {}, item = {}, index = 0) {
+// همه حالت‌های پورت یک آدرس: یک پورت TLS + یک پورت HTTP (اگر تنظیم شده باشد).
+// با همین، هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ بدون TLS دارد و اگر یکی در
+// شبکهٔ کاربر فیلتر باشد دیگری کار می‌کند.
+function buildPortVariants(cfg = {}, item = {}, index = 0) {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const explicit = Number(item?.port) || 0;
   if (explicit) {
-    return { port: explicit, tls: !CF_HTTP_PORTS.includes(explicit) };
+    return [{ port: explicit, tls: !CF_HTTP_PORTS.includes(explicit) }];
   }
-  let ports = parseNodePorts(cfg.ports);
-  if (disableNonTls) ports = ports.filter(p => !CF_HTTP_PORTS.includes(p));
-  if (!ports.length) ports = [443];
-  const port = ports[Math.abs(index) % ports.length];
-  return { port, tls: !CF_HTTP_PORTS.includes(port) };
+  const tlsPorts = parseNodePorts(cfg.ports).filter(port => !CF_HTTP_PORTS.includes(port));
+  const httpPorts = disableNonTls ? [] : parseNodePorts(cfg.httpPorts || '')
+    .filter(port => CF_HTTP_PORTS.includes(port));
+  const out = [];
+  if (tlsPorts.length) out.push({ port: tlsPorts[Math.abs(index) % tlsPorts.length], tls: true });
+  if (httpPorts.length) out.push({ port: httpPorts[Math.abs(index) % httpPorts.length], tls: false });
+  return out.length ? out : [{ port: 443, tls: true }];
 }
 
 // چیدمان متناوب آی‌پی‌ها و دامنه‌های پیش‌فرض CFnew: هر ۲ آی‌پی، یک دامنه،
@@ -4644,13 +5116,13 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port, tls } = chooseNodePort(cfg, item, idx);
 
     // مسیر یکتا برای نوع نود + کشور؛ پروکسی خروجی هم داخل همان مسیر به ورکر داده می‌شود
     const itemPath = buildNodePath('vless', cfg, wkOverride, item);
+    const baseName = namer(item);
 
-    {
-      const nodeName = namer(item);
+    for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
+      const nodeName = tls ? baseName : `${baseName} · HTTP`;
       if (tls) {
         const params = new URLSearchParams({
           encryption: 'none',
@@ -4712,7 +5184,8 @@ function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port } = chooseNodePort(cfg, item, idx);
+    // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همیشه نسخهٔ TLS انتخاب می‌شود
+    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
     const nodeName = namer(item);
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${workerHost};path=${itemPath};tls`;
@@ -4763,32 +5236,34 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port, tls } = chooseNodePort(cfg, item, idx);
 
     {
-      const nodeName = namer(item);
+      const baseName = namer(item);
       const itemPath = buildNodePath('trojan', cfg, wkOverride, item);
-      if (tls) {
-        const params = new URLSearchParams({
-          security: 'tls',
-          sni: workerHost,
-          fp: cfg.fp || 'chrome',
-          type: 'ws',
-          host: workerHost,
-          path: itemPath
-        });
-        if (alpn) params.set('alpn', alpn);
-        if (echValue) params.set('ech', echValue);
-        if (fragmentValue) params.set('fragment', fragmentValue);
-        links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
-      } else {
-        const params = new URLSearchParams({
-          security: 'none',
-          type: 'ws',
-          host: workerHost,
-          path: itemPath
-        });
-        links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+      for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
+        const nodeName = tls ? baseName : `${baseName} · HTTP`;
+        if (tls) {
+          const params = new URLSearchParams({
+            security: 'tls',
+            sni: workerHost,
+            fp: cfg.fp || 'chrome',
+            type: 'ws',
+            host: workerHost,
+            path: itemPath
+          });
+          if (alpn) params.set('alpn', alpn);
+          if (echValue) params.set('ech', echValue);
+          if (fragmentValue) params.set('fragment', fragmentValue);
+          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        } else {
+          const params = new URLSearchParams({
+            security: 'none',
+            type: 'ws',
+            host: workerHost,
+            path: itemPath
+          });
+          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        }
       }
     }
   }
@@ -4808,7 +5283,7 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port } = chooseNodePort(cfg, item, idx);
+    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
     const nodeName = namer(item);
     // مسیر یکتای xHTTP + کشور + پروکسی خروجی
     let xhttpPath = `/${shortPath}?nt=xhttp`;
@@ -5601,6 +6076,9 @@ async function fetchOpenVpnNodes(cfg = {}, force = false) {
 async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
+  // استخر لبهٔ ترکیبی cfnew + Z-E-U-S: پاسخ فوری از فهرست داخلی و تازه‌سازی
+  // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
+  const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
   const userUuid = String(userOrConfig?.uuid || queryOverrides.uuid || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase();
   const nodeScope = queryOverrides.scope || userOrConfig?.nodeScope || 'all';
   const wkOverride = (queryOverrides.wk || cfg.wk || '').trim().toUpperCase();
@@ -5642,7 +6120,11 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     ) || 50);
     const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
     const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
-    const domains = pickEdgeDomains(addressCount);
+    // اول دامنه‌های واقعی منابع (ز-یو-اس / cfnew / bestip) و بعد استخر تأییدشدهٔ داخلی
+    const domains = [...new Set([
+      ...pickFromPool(edgePool.domains, Math.ceil(addressCount / 2)),
+      ...pickEdgeDomains(addressCount)
+    ])].slice(0, addressCount);
     appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
   }
 
@@ -5712,11 +6194,20 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     } else {
       // دامنه‌های پیش‌فرض CFnew همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
       // چیده می‌شوند تا با سقف کم نود هم حتماً در سایلینک باشند.
+      // آی‌پی‌های تازه از استخر cfnew/Z-E-U-S (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
+      const pooledAddresses = [
+        ...pickFromPool(edgePool.ipv4, 8),
+        ...(cfg.ipv6 === 'no' ? [] : pickFromPool(edgePool.ipv6, 4))
+      ];
       const staticIpNodes = cfg.epi === 'yes'
-        ? getStaticCfAddresses(cfg).map(ip => ({ ip, isp: 'CF-Static' }))
+        ? pooledAddresses.map(ip => ({ ip, isp: 'CF-Fast' }))
         : [];
+      const pooledDomains = [...new Set([
+        ...pickFromPool(edgePool.domains, 8),
+        ...DIRECT_DOMAINS.map(d => d.domain)
+      ])];
       const domainNodes = cfg.epd === 'yes'
-        ? DIRECT_DOMAINS.map(d => ({ ip: d.domain, isp: d.name || d.domain }))
+        ? pooledDomains.map(domain => ({ ip: domain, isp: domain }))
         : [];
       if (staticIpNodes.length || domainNodes.length) {
         appendFromSource(interleaveAddresses(staticIpNodes, domainNodes));
@@ -5795,7 +6286,7 @@ function detectTargetFromRequest(request, url) {
   return 'base64';
 }
 
-async function handleSubscriptionResponse(request, userOrConfig, url = null, env = null) {
+async function handleSubscriptionResponse(request, userOrConfig, url = null, env = null, ctx = null) {
   if (!url) url = new URL(request.url);
   const workerHost = url.hostname;
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
@@ -5908,6 +6399,7 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
     set: url.searchParams.get('set') || '',
     nowarp: url.searchParams.get('nowarp') || '',
     env,
+    waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null,
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };
@@ -9457,15 +9949,37 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
   locationsList.unshift({ code: 'MULTI', title: 'چند کشور (MULTI)', url: `${baseSubUrl}?country=MULTI` });
 
 
+  // لینک‌های این صفحه باید دقیقاً با تنظیمات همین کاربر هماهنگ باشند:
+  // فقط پروتکل‌ها و بخش‌هایی که در پنل برای او روشن است نمایش داده می‌شوند.
+  const userCfg = normalizeEffectiveConfig(user.config || {});
+  const warpEnabled = isEnabledValue(userCfg.warp, true) || isEnabledValue(userCfg.warpPro, false);
+  const ovpnEnabled = isEnabledValue(userCfg.ovpn, true);
   const protoCombos = [
-    { title: 'اتصال هوشمند (همه نودها × همه پروتکل‌ها)', badge: 'Base64', url: baseSubUrl },
-    { title: 'فقط پروتکل VLESS (WebSocket + TLS)', badge: 'VLESS', url: `${baseSubUrl}?proto=vless` },
-    { title: 'فقط پروتکل Trojan (WebSocket + TLS)', badge: 'Trojan', url: `${baseSubUrl}?proto=trojan` },
-    { title: 'فقط پروتکل Shadowsocks (بدون فرگمنت)', badge: 'SS', url: `${baseSubUrl}?proto=ss` },
-    { title: 'فقط پروتکل xhttp (ضد فیلتر پیشرفته)', badge: 'xhttp', url: `${baseSubUrl}?proto=xhttp` },
-    { title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` },
-    { title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` },
-    { title: 'پروفایل OpenVPN (خروجی ‎.ovpn)', badge: 'OVPN', url: `${baseSubUrl}?target=ovpn` },
+    { title: 'اتصال هوشمند (همه نودها × همه پروتکل‌ها)', badge: 'Base64', url: baseSubUrl }
+  ];
+  if (isEnabledValue(userCfg.ev, true)) {
+    protoCombos.push({ title: 'فقط پروتکل VLESS (WebSocket + TLS)', badge: 'VLESS', url: `${baseSubUrl}?proto=vless` });
+  }
+  if (isEnabledValue(userCfg.et, true)) {
+    protoCombos.push({ title: 'فقط پروتکل Trojan (WebSocket + TLS)', badge: 'Trojan', url: `${baseSubUrl}?proto=trojan` });
+  }
+  if (isEnabledValue(userCfg.es, true)) {
+    protoCombos.push({ title: 'فقط پروتکل Shadowsocks (بدون فرگمنت)', badge: 'SS', url: `${baseSubUrl}?proto=ss` });
+  }
+  if (isEnabledValue(userCfg.ex, true)) {
+    protoCombos.push({ title: 'فقط پروتکل xhttp (ضد فیلتر پیشرفته)', badge: 'xhttp', url: `${baseSubUrl}?proto=xhttp` });
+  }
+  if (isEnabledValue(userCfg.epd, true)) {
+    protoCombos.push({ title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` });
+  }
+  if (isEnabledValue(userCfg.warp, true) || isEnabledValue(userCfg.warpPro, false)) {
+    protoCombos.push({ title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` });
+  }
+  if (isEnabledValue(userCfg.ovpn, true)) {
+    protoCombos.push({ title: 'پروفایل OpenVPN (خروجی ‎.ovpn)', badge: 'OVPN', url: `${baseSubUrl}?target=ovpn` });
+    protoCombos.push({ title: 'بستهٔ کامل OpenVPN (ZIP چندفایلی)', badge: 'OVPN-ZIP', url: `${baseSubUrl}?target=ovpn&format=zip` });
+  }
+  protoCombos.push(
     { title: 'فقط نودهای لبه CDN (Multi-Location)', badge: 'Edge', url: `${baseSubUrl}?scope=edge` },
     { title: 'فقط سرور اصلی (بدون CDN)', badge: 'Origin', url: `${baseSubUrl}?scope=origin` },
     { title: 'کانفیگ اختصاصی Clash Meta / Mihomo', badge: 'YAML', url: `${baseSubUrl}?target=clash` },
@@ -9474,7 +9988,7 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     { title: 'کانفیگ اختصاصی Quantumult X', badge: 'QuanX', url: `${baseSubUrl}?target=quanx` },
     { title: 'کانفیگ اختصاصی Loon', badge: 'Loon', url: `${baseSubUrl}?target=loon` },
     { title: 'متن خام لینک‌ها (Raw Plaintext)', badge: 'RAW', url: `${baseSubUrl}?target=raw` }
-  ];
+  );
 
   const safeNodesJson = JSON.stringify(nodes).replace(/</g, '\\u003c');
 
@@ -9918,12 +10432,12 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
         <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}', 'لینک اشتراک هوشمند کپی شد')">${icon('copy')} کپی ساب‌لینک</button>
         <div class="url-text">${baseSubUrl}</div>
       </div>
-      <!-- دانلود مستقیم کانفیگ‌های آماده: بدون هیچ تنظیمی در پنل -->
+      <!-- دانلود مستقیم کانفیگ‌های آماده — فقط بخش‌هایی که برای این کاربر روشن است -->
       <div class="toolbar" style="margin-top:10px;">
-        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
+        ${warpEnabled ? `<a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
-        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>
-        <a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>` : ''}
+        ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
       </div>
     </div>
 
@@ -11340,6 +11854,11 @@ function renderAdminDashboardHtml(initialData = {}) {
               <input type="text" data-key="ports" placeholder="443,2053,2087,8443">
               <span class="hint">لیست پورت‌ها با کاما — مجاز: ${CF_PORT_CHOICES.map(p => p.port).join(' , ')}. پورت HTTP فقط وقتی ECH خاموش است استفاده می‌شود.</span>
             </div>
+            <div class="field">
+              <label>پورت‌های HTTP (حالت دوم هر نود)</label>
+              <input type="text" data-key="httpPorts" placeholder="80,8080">
+              <span class="hint">هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ HTTP می‌گیرد؛ خالی بگذارید تا فقط نودهای TLS ساخته شوند.</span>
+            </div>
           </div>
 
           <div class="group-title" style="margin-top: 22px;">${icon('bolt')} <span data-i18n="settings.extra">دامنهٔ پنل، WARP و OpenVPN</span></div>
@@ -11540,22 +12059,39 @@ function renderAdminDashboardHtml(initialData = {}) {
         <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" value="0"></div>
         <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" value="0"></div>
         <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" value="${Number(config.subNodeCount) || 50}"></div>
-        <details class="adv-box">
-          <summary data-i18n="modal.advanced">تنظیمات منحصر به فرد این کاربر</summary>
+        
+        <details class="adv-box" open>
+          <summary data-i18n="modal.advanced">تنظیمات کامل این کاربر (همه گزینه‌ها واقعی و روی ساب اثر دارند)</summary>
+          <div class="loc-meta" style="margin:8px 0 0;">با انتخاب پریست، مقادیر زیر پر می‌شوند و هر کدام را می‌توانید جداگانه تغییر دهید؛ ساب‌لینک و صفحه وضعیت دقیقاً از همین مقادیر ساخته می‌شوند.</div>
           <div class="form-grid" style="margin-top:10px;">
-            <div class="field"><label>VLESS</label><select id="cfgEv"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>Trojan</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>VLESS (WebSocket)</label><select id="cfgEv"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>Trojan (WebSocket)</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label>Shadowsocks</label><select id="cfgEs"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>xHTTP</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>ECH</label><select id="cfgEch"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>فرگمنت</label><select id="cfgFrag"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label data-i18n="field.dns">DNS سفارشی</label>
-              <select id="cfgDNS">${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}</select>
+            <div class="field"><label>xHTTP (ضد فیلتر)</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
+            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
+            <div class="field"><label>IPv4</label><select id="cfgIpv4"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
+            <div class="field"><label>IPv6</label><select id="cfgIpv6"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
+            <div class="field"><label>آی‌پی ثابت / لبهٔ CDN (epi)</label><select id="cfgEpi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>دامنه‌های لبه (epd)</label><select id="cfgEpd"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>لیست ترجیحی آنلاین (egi)</label><select id="cfgEgi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>WARP</label><select id="cfgWarp"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>WARP PRO</label><select id="cfgWarpPro"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>OpenVPN</label><select id="cfgOvpn"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>فرگمنت TLS</label><select id="cfgFrag"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>پریست فرگمنت</label>
+              <select id="cfgFragPreset">${Object.entries(FRAGMENT_PRESETS).map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('')}</select>
             </div>
+            <div class="field"><label>ECH</label><select id="cfgEch"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label data-i18n="field.echDomain">دامنه ECH</label>
               <select id="cfgEchDomain">${ECH_DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('')}</select>
             </div>
-            <div class="field"><label data-i18n="field.ports">پورت‌های نود</label><input type="text" id="cfgPorts" value="${config.ports || '443,2053,2087,8443'}"></div>
+            <div class="field"><label data-i18n="field.dns">DNS سفارشی</label>
+              <select id="cfgDNS">${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>ALPN</label>
+              <select id="cfgAlpn"><option value="">خودکار</option><option value="h2,http/1.1">h2 + http/1.1</option><option value="h3,h2,http/1.1">h3 + h2 + http/1.1</option></select>
+            </div>
             <div class="field"><label data-i18n="field.fp">فینگرپرینت TLS</label>
               <select id="cfgFp">${FINGERPRINT_PRESETS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
             </div>
@@ -11877,9 +12413,38 @@ function renderAdminDashboardHtml(initialData = {}) {
       .finally(function() { if (btn) btn.disabled = false; });
   }
 
+  // پریست فقط فرم را پر می‌کند؛ تنها مسیر ساخت کاربر همین فرم است و هر مقدار
+  // را می‌شودپیش از ساخت دستی تغییر داد (همه گزینه‌ها واقعی‌اند).
+  function applyPresetToForm() {
+    var presets = INITIAL_DATA.presets || {};
+    var chosen = presets[$('newPreset') ? $('newPreset').value : ''];
+    if (!chosen) return;
+    var overrides = chosen.configOverrides || {};
+    var map = {
+      cfgEv: 'ev', cfgEt: 'et', cfgEs: 'es', cfgEx: 'ex', cfgEch: 'ech',
+      cfgFrag: 'frag', cfgFragPreset: 'fragmentPreset', cfgDNS: 'customDNS',
+      cfgEchDomain: 'customECHDomain', cfgPorts: 'ports', cfgHttpPorts: 'httpPorts',
+      cfgIpv4: 'ipv4', cfgIpv6: 'ipv6', cfgEpi: 'epi', cfgEpd: 'epd', cfgEgi: 'egi',
+      cfgWarp: 'warp', cfgWarpPro: 'warpPro', cfgOvpn: 'ovpn', cfgFp: 'fp',
+      cfgPatt: 'patt', cfgAlpn: 'alpn'
+    };
+    Object.keys(map).forEach(function(id) {
+      var el = $(id);
+      var key = map[id];
+      if (!el || overrides[key] === undefined) return;
+      var value = overrides[key];
+      if (el.tagName === 'SELECT' && !Array.from(el.options).some(function(o) { return o.value === String(value); })) return;
+      el.value = String(value);
+    });
+    if ($('newNodes')) $('newNodes').value = chosen.subNodeCount || 50;
+    if ($('newLimit')) $('newLimit').value = chosen.dataLimitGb || 0;
+    if ($('newDays')) $('newDays').value = chosen.expireDays || 0;
+  }
+
   function createUser() {
     var username = ($('newUsername').value || '').trim();
     if (username.length < 2) { showToast('نام کاربری باید حداقل ۲ کاراکتر باشد', 'err'); return; }
+    var pick = function(id, fallback) { return $(id) ? $(id).value : fallback; };
     var body = {
       username: username,
       preset: $('newPreset').value,
@@ -11887,19 +12452,30 @@ function renderAdminDashboardHtml(initialData = {}) {
       expireDays: Number($('newDays').value) || 0,
       subNodeCount: Number($('newNodes').value) || 50,
       config: {
-        ev: $('cfgEv') ? $('cfgEv').value : 'yes',
-        et: $('cfgEt') ? $('cfgEt').value : 'no',
-        es: $('cfgEs') ? $('cfgEs').value : 'yes',
-        ex: $('cfgEx') ? $('cfgEx').value : 'no',
-        ech: $('cfgEch') ? $('cfgEch').value : 'no',
-        frag: $('cfgFrag') ? $('cfgFrag').value : 'yes',
-        customDNS: $('cfgDNS') ? $('cfgDNS').value : '',
-        customECHDomain: $('cfgEchDomain') ? $('cfgEchDomain').value : '',
-        ports: $('cfgPorts') ? $('cfgPorts').value.trim() : '',
-        fp: $('cfgFp') ? $('cfgFp').value : 'chrome',
-        patt: $('cfgPatt') ? $('cfgPatt').value : '/?ed=2048',
-        yx: $('cfgYx') ? $('cfgYx').value.trim() : '',
-        s: $('cfgS') ? $('cfgS').value.trim() : ''
+        ev: pick('cfgEv', 'yes'),
+        et: pick('cfgEt', 'yes'),
+        es: pick('cfgEs', 'yes'),
+        ex: pick('cfgEx', 'yes'),
+        ech: pick('cfgEch', 'no'),
+        frag: pick('cfgFrag', 'yes'),
+        fragmentPreset: pick('cfgFragPreset', 'mci'),
+        customDNS: pick('cfgDNS', ''),
+        customECHDomain: pick('cfgEchDomain', ''),
+        ports: pick('cfgPorts', '').trim(),
+        httpPorts: pick('cfgHttpPorts', '').trim(),
+        ipv4: pick('cfgIpv4', 'yes'),
+        ipv6: pick('cfgIpv6', 'yes'),
+        epi: pick('cfgEpi', 'yes'),
+        epd: pick('cfgEpd', 'yes'),
+        egi: pick('cfgEgi', 'yes'),
+        warp: pick('cfgWarp', 'yes'),
+        warpPro: pick('cfgWarpPro', 'no'),
+        ovpn: pick('cfgOvpn', 'yes'),
+        alpn: pick('cfgAlpn', ''),
+        fp: pick('cfgFp', 'chrome'),
+        patt: pick('cfgPatt', '/?ed=2048'),
+        yx: pick('cfgYx', '').trim(),
+        s: pick('cfgS', '').trim()
       }
     };
     api('/api/users', { method: 'POST', body: JSON.stringify(body) })
@@ -12235,7 +12811,7 @@ function renderAdminDashboardHtml(initialData = {}) {
 
     if (act === 'copy') { copyText(el.getAttribute('data-url') || '', 'لینک کپی شد'); }
     else if (act === 'copy-master') { copyText(masterSub(), 'سابلینک اصلی کپی شد'); }
-    else if (act === 'open-create') { openModal('createModal'); }
+    else if (act === 'open-create') { openModal('createModal'); applyPresetToForm(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }
@@ -12277,6 +12853,7 @@ function renderAdminDashboardHtml(initialData = {}) {
       if (key === 'frag' || key === 'ech') syncConditionalFields();
     }
     if (target.id === 'scanKind') syncConditionalFields();
+    if (target.id === 'newPreset') applyPresetToForm();
     if (target.id === 'dnsPreset') {
       var dnsInput = document.querySelector('input[data-key="customDNS"]');
       if (dnsInput && target.value !== 'custom') dnsInput.value = target.value;
@@ -12332,6 +12909,9 @@ function renderAdminDashboardHtml(initialData = {}) {
 // ============================================================================
 
 
+// پرچم آماده‌سازی یک‌بارهٔ اسکیمای D1 در هر ایزوله
+let schemaReady = false;
+
 function normalizeCleanPath(p = '') {
   return String(p || '').trim().replace(/^\/+|\/+$/g, '').toLowerCase();
 }
@@ -12353,6 +12933,12 @@ const __MILI_WORKER_EXPORT__ = {
   async scheduled(_event, env = {}, ctx = {}) {
     const task = (async () => {
       const results = [];
+      // استخر لبهٔ cfnew + Z-E-U-S (IPv4/IPv6/دامنه) در هر اجرای کرون تازه می‌شود
+      try {
+        results.push({ edgePool: await warmEdgePool() });
+      } catch (e) {
+        results.push({ edgePool: null, edgeError: e?.message || String(e) });
+      }
       for (const code of MULTI_COUNTRY_CODES) {
         try {
           results.push(await refreshCountryProxyPool(env, code));
@@ -12372,8 +12958,13 @@ const __MILI_WORKER_EXPORT__ = {
       const upgradeHeader = (request.headers.get('Upgrade') || '').toLowerCase();
       const isWebSocket = upgradeHeader === 'websocket';
 
-      // اطمینان از آماده بودن اسکیمای D1 یا حافظه پشتیبان بدون هیچ خطایی
-      await ensureD1Schema(env);
+      // اطمینان از آماده بودن اسکیمای D1 یا حافظه پشتیبان بدون هیچ خطایی.
+      // فقط یک‌بار در عمر هر ایزوله انجام می‌شود تا هر درخواست CPU اضافی نگیرد
+      // (همان روشی که در edgetunnel جلوی خطای ۱۱۰۲/۱۱۰۱ را می‌گیرد).
+      if (!schemaReady) {
+        await ensureD1Schema(env);
+        schemaReady = true;
+      }
       // مسیر مدیریت رندوم و یکتا برای هر نصب — UUID پیش‌فرض عمومی حذف شده است
       const adminUuid = await getOrCreateAdminPath(env);
       const globalCfg = await loadGlobalConfig(env);
@@ -12548,7 +13139,8 @@ const __MILI_WORKER_EXPORT__ = {
             });
           }
           const nodes = await generateUserNodesList(userObj, url.hostname, {
-            limit: userObj.subNodeCount
+            limit: userObj.subNodeCount,
+            waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null
           });
           return new Response(renderUserStatusPageHtml(userObj, nodes, request.url), {
             status: 200,
@@ -12595,7 +13187,7 @@ const __MILI_WORKER_EXPORT__ = {
             const p = recordUserActivity(env, targetUser.id, 0, 1).catch(() => {});
             if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
           }
-          return await handleSubscriptionResponse(request, targetUser, url, env);
+          return await handleSubscriptionResponse(request, targetUser, url, env, ctx);
         }
 
         // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)
@@ -12671,7 +13263,8 @@ const __MILI_WORKER_EXPORT__ = {
               config: globalCfg
             };
             const nodes = await generateUserNodesList(adminUser, url.hostname, {
-              limit: adminUser.subNodeCount
+              limit: adminUser.subNodeCount,
+              waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null
             });
             return new Response(renderUserStatusPageHtml(adminUser, nodes, request.url), {
               status: 200,
@@ -12714,7 +13307,8 @@ const __MILI_WORKER_EXPORT__ = {
         const matchedUser = await getUserByIdOrToken(env, fullCleanPath);
         if (matchedUser) {
           const nodes = await generateUserNodesList(matchedUser, url.hostname, {
-            limit: matchedUser.subNodeCount
+            limit: matchedUser.subNodeCount,
+            waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null
           });
           return new Response(renderUserStatusPageHtml(matchedUser, nodes, request.url), {
             status: 200,
@@ -12731,18 +13325,18 @@ const __MILI_WORKER_EXPORT__ = {
         headers: { 'Content-Type': 'application/json; charset=utf-8' }
       });
     } catch (err) {
-      // محافظ سطح بالا جهت جلوگیری ۱۰۰٪ از بروز خطای Cloudflare Error 1101
-      return new Response(
-        JSON.stringify({
-          status: 'recovered',
-          brand: BRAND_NAME,
-          message: err?.message || String(err)
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json; charset=utf-8' }
+      // محافظ سطح بالا جهت جلوگیری ۱۰۰٪ از بروز خطای Cloudflare Error 1101.
+      // طبق روش edgetunnel، خطای مدیریت‌شده هرگز به استثنای ورکر تبدیل نمی‌شود
+      // و پاسخ سادهٔ ۲۰۰ برمی‌گردد تا هیچ صفحهٔ خطای کلادفلر ظاهر نشود.
+      try { console.error('[' + BRAND_NAME + '] recovered:', err?.message || String(err)); } catch (_e) {}
+      return new Response('hello', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'Server': 'nginx'
         }
-      );
+      });
     }
   }
 };

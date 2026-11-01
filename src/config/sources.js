@@ -205,9 +205,33 @@ export const COUNTRY_META = {
   SK: { name: 'اسلواکی', flag: '🇸🇰' }
 };
 
+// ============================================================================
+// Z-E-U-S (panel-zeus/Z-E-U-S) — منبع رسمی دامنه، IPv4، IPv6 و پروکسی کشوری
+// ساختار مخزن: ips.txt (IPv4 بهینه)، ip6.txt (IPv6 بهینه)، dom.txt (دامنه‌های
+// لبه)، ech_dom.txt (دامنه‌های دارای ECH)، proxy/<CC>.txt (پروکسی هر کشور) و
+// proxy_vip/<CC>.txt (پروکسی VIP هر کشور، فهرستش در vip-list).
+// ============================================================================
+const ZEUS_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+
+export const ZEUS_SOURCES = {
+  ipv4: ZEUS_BASE + 'ips.txt',
+  ipv6: ZEUS_BASE + 'ip6.txt',
+  domains: ZEUS_BASE + 'dom.txt',
+  echDomains: ZEUS_BASE + 'ech_dom.txt',
+  echDns: ZEUS_BASE + 'ech_dns.txt',
+  proxyAll: ZEUS_BASE + 'proxy/ALL.txt',
+  vipIndex: ZEUS_BASE + 'vip-list',
+  proxyCountry: code => ZEUS_BASE + `proxy/${String(code).toUpperCase()}.txt`,
+  vipCountry: code => ZEUS_BASE + `proxy_vip/${String(code).toUpperCase()}.txt`
+};
+
 // فقط این کشورها در مخزن Z-E-U-S فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
-const ZEUS_VIP_COUNTRIES = new Set(['CA', 'DE', 'GB', 'TH', 'TR', 'US']);
+export const ZEUS_VIP_COUNTRIES = [
+  'AD', 'AL', 'CA', 'DE', 'FI', 'FR', 'GB', 'IT', 'MC', 'MX',
+  'NL', 'NO', 'RO', 'SE', 'TH', 'TR', 'US'
+];
 const zeusVip = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
+const zeusProxy = code => raw(`panel-zeus/Z-E-U-S/main/proxy/${code}.txt`);
 
 // کدام کشورها در کدام قالب کشوری فایل دارند (بازبینی اکتبر ۲۰۲۶).
 // برای کشورهای غایب، ساختن آدرس فقط یک ۴۰۴ و یک subrequest هدر است.
@@ -236,7 +260,9 @@ export function buildCountryFeeds(code) {
   if (available.clearHttp.has(cc)) feeds.push(raw(`ClearProxy/checked-proxy-list/main/http/raw/country/${cc}.txt`));
   if (available.trioSocks.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/socks5.txt`));
   if (available.trioHttp.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/http.txt`));
-  if (ZEUS_VIP_COUNTRIES.has(cc)) feeds.unshift(zeusVip(cc));
+  // منبع Z-E-U-S اولویت دارد: پروکسی‌های VIP و معمولی همان کشور در مخزن z-e-u-s
+  if (ZEUS_VIP_COUNTRIES.includes(cc)) feeds.unshift(zeusVip(cc));
+  feeds.unshift(zeusProxy(cc));
   return feeds;
 }
 
@@ -318,15 +344,92 @@ export const IP_CANDIDATE_SOURCES = [
 
 // آی‌پی‌های IPv6 بهینهٔ کلادفلر (منبع چینی خودبه‌روز)
 export const IPV6_CANDIDATE_SOURCES = [
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ip6.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv6.txt'
+];
+
+// دامنه‌های لبهٔ کلادفلر (برای نودهای دامنه‌محور و SNI جایگزین)
+// z-e-u-s: dom.txt (دامنه‌های سالم) و ech_dom.txt (دامنه‌های دارای ECH)
+// cfnew: فهرست دامنه‌های ترجیحی + فهرست آنلاین bestip
+const ZEUS_DOMAIN_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+export const DOMAIN_CANDIDATE_SOURCES = [
+  ZEUS_DOMAIN_BASE + 'dom.txt',
+  ZEUS_DOMAIN_BASE + 'ech_dom.txt',
+  'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt'
 ];
 
 // Proxy-IP های آمادهٔ عبور از کلادفلر (BPB-style) — لیست خودبه‌روز
 export const PROXY_IP_SOURCES = [
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy&country.txt',
-  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/proxy.txt'
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/proxy.txt',
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/proxy/ALL.txt'
 ];
+
+// ============================================================================
+// cfnew (byJoey/cfnew) — منابع ترجیحی خود مخزن، برای وقتی که هیچ تنظیمی نشده
+// ============================================================================
+
+// ۲۱ دامنهٔ ترجیحی cfnew (همان آرایهٔ const 直连域名列表 در سورس ورکر)
+export const CFNEW_PREFERRED_DOMAINS = [
+  'cloudflare.182682.xyz',
+  'speed.marisalnc.com',
+  'freeyx.cloudflare88.eu.org',
+  'bestcf.top',
+  'cdn.2020111.xyz',
+  'cfip.cfcdn.vip',
+  'cf.0sm.com',
+  'cf.090227.xyz',
+  'cf.zhetengsha.eu.org',
+  'cloudflare.9jy.cc',
+  'cf.zerone-cdn.pp.ua',
+  'cfip.1323123.xyz',
+  'cnamefuckxxs.yuchen.icu',
+  'cloudflare-ip.mofashi.ltd',
+  '115155.xyz',
+  'cname.xirancdn.us',
+  'f3058171cad.002404.xyz',
+  '8.889288.xyz',
+  'cdn.tzpro.xyz',
+  'cf.877771.xyz',
+  'xn--b6gac.eu.org'
+];
+
+// ۱۰ آی‌پی «اتصال رسمی» cfnew (هر کدام در یک /24 متفاوت)
+export const CFNEW_DIRECT_IPS = [
+  '172.71.218.190',
+  '162.158.228.87',
+  '162.158.189.134',
+  '162.158.26.63',
+  '162.158.25.86',
+  '162.158.29.216',
+  '162.158.218.160',
+  '162.158.227.214',
+  '172.69.118.198',
+  '172.69.119.150'
+];
+
+// ProxyIP های cfnew (بازشدهٔ const 备用地址列表) — خروجی از منطقهٔ دلخواه
+export const CFNEW_PROXY_IPS = [
+  { domain: 'ProxyIP.HK.CMLiussss.net', region: 'HK' },
+  { domain: 'ProxyIP.US.CMLiussss.net', region: 'US' },
+  { domain: 'ProxyIP.SG.CMLiussss.net', region: 'SG' },
+  { domain: 'ProxyIP.JP.CMLiussss.net', region: 'JP' },
+  { domain: 'ProxyIP.KR.CMLiussss.net', region: 'KR' },
+  { domain: 'ProxyIP.DE.CMLiussss.net', region: 'DE' },
+  { domain: 'ProxyIP.SE.CMLiussss.net', region: 'SE' },
+  { domain: 'ProxyIP.NL.CMLiussss.net', region: 'NL' },
+  { domain: 'ProxyIP.FI.CMLiussss.net', region: 'FI' },
+  { domain: 'ProxyIP.GB.CMLiussss.net', region: 'GB' },
+  { domain: 'ProxyIP.Oracle.cmliussss.net', region: 'Oracle' },
+  { domain: 'ProxyIP.DigitalOcean.CMLiussss.net', region: 'DigitalOcean' },
+  { domain: 'ProxyIP.Vultr.CMLiussss.net', region: 'Vultr' },
+  { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' }
+];
+
+// فهرست آنلاین دامنه/آی‌پی ترجیحی که خود cfnew هم استفاده می‌کند
+export const CFNEW_EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
+export const CFNEW_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
 export const IP_RANGE_SOURCES = {

@@ -3,7 +3,14 @@
 // طراحی ۱۰۰٪ مطابق تصاویر 1000050224.jpg و 1000050225.jpg با برند miliconfig
 // ============================================================================
 
-import { BRAND_NAME, BRAND_UPPER, CF_EDGE_DOMAINS, COUNTRY_PROXY_SOURCES } from '../config/defaults.js';
+import {
+  BRAND_NAME,
+  BRAND_UPPER,
+  CF_EDGE_DOMAINS,
+  COUNTRY_PROXY_SOURCES,
+  isEnabledValue,
+  normalizeEffectiveConfig
+} from '../config/defaults.js';
 import { CLOUD_LOGO_SVG, FAVICON_DATA_URI, SHIELD_LOGO_SVG, icon, stripEmoji } from './icons.js';
 import { formatBytes } from '../core/utils.js';
 
@@ -42,15 +49,37 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
   locationsList.unshift({ code: 'MULTI', title: 'چند کشور (MULTI)', url: `${baseSubUrl}?country=MULTI` });
 
 
+  // لینک‌های این صفحه باید دقیقاً با تنظیمات همین کاربر هماهنگ باشند:
+  // فقط پروتکل‌ها و بخش‌هایی که در پنل برای او روشن است نمایش داده می‌شوند.
+  const userCfg = normalizeEffectiveConfig(user.config || {});
+  const warpEnabled = isEnabledValue(userCfg.warp, true) || isEnabledValue(userCfg.warpPro, false);
+  const ovpnEnabled = isEnabledValue(userCfg.ovpn, true);
   const protoCombos = [
-    { title: 'اتصال هوشمند (همه نودها × همه پروتکل‌ها)', badge: 'Base64', url: baseSubUrl },
-    { title: 'فقط پروتکل VLESS (WebSocket + TLS)', badge: 'VLESS', url: `${baseSubUrl}?proto=vless` },
-    { title: 'فقط پروتکل Trojan (WebSocket + TLS)', badge: 'Trojan', url: `${baseSubUrl}?proto=trojan` },
-    { title: 'فقط پروتکل Shadowsocks (بدون فرگمنت)', badge: 'SS', url: `${baseSubUrl}?proto=ss` },
-    { title: 'فقط پروتکل xhttp (ضد فیلتر پیشرفته)', badge: 'xhttp', url: `${baseSubUrl}?proto=xhttp` },
-    { title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` },
-    { title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` },
-    { title: 'پروفایل OpenVPN (خروجی ‎.ovpn)', badge: 'OVPN', url: `${baseSubUrl}?target=ovpn` },
+    { title: 'اتصال هوشمند (همه نودها × همه پروتکل‌ها)', badge: 'Base64', url: baseSubUrl }
+  ];
+  if (isEnabledValue(userCfg.ev, true)) {
+    protoCombos.push({ title: 'فقط پروتکل VLESS (WebSocket + TLS)', badge: 'VLESS', url: `${baseSubUrl}?proto=vless` });
+  }
+  if (isEnabledValue(userCfg.et, true)) {
+    protoCombos.push({ title: 'فقط پروتکل Trojan (WebSocket + TLS)', badge: 'Trojan', url: `${baseSubUrl}?proto=trojan` });
+  }
+  if (isEnabledValue(userCfg.es, true)) {
+    protoCombos.push({ title: 'فقط پروتکل Shadowsocks (بدون فرگمنت)', badge: 'SS', url: `${baseSubUrl}?proto=ss` });
+  }
+  if (isEnabledValue(userCfg.ex, true)) {
+    protoCombos.push({ title: 'فقط پروتکل xhttp (ضد فیلتر پیشرفته)', badge: 'xhttp', url: `${baseSubUrl}?proto=xhttp` });
+  }
+  if (isEnabledValue(userCfg.epd, true)) {
+    protoCombos.push({ title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` });
+  }
+  if (isEnabledValue(userCfg.warp, true) || isEnabledValue(userCfg.warpPro, false)) {
+    protoCombos.push({ title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` });
+  }
+  if (isEnabledValue(userCfg.ovpn, true)) {
+    protoCombos.push({ title: 'پروفایل OpenVPN (خروجی ‎.ovpn)', badge: 'OVPN', url: `${baseSubUrl}?target=ovpn` });
+    protoCombos.push({ title: 'بستهٔ کامل OpenVPN (ZIP چندفایلی)', badge: 'OVPN-ZIP', url: `${baseSubUrl}?target=ovpn&format=zip` });
+  }
+  protoCombos.push(
     { title: 'فقط نودهای لبه CDN (Multi-Location)', badge: 'Edge', url: `${baseSubUrl}?scope=edge` },
     { title: 'فقط سرور اصلی (بدون CDN)', badge: 'Origin', url: `${baseSubUrl}?scope=origin` },
     { title: 'کانفیگ اختصاصی Clash Meta / Mihomo', badge: 'YAML', url: `${baseSubUrl}?target=clash` },
@@ -59,7 +88,7 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     { title: 'کانفیگ اختصاصی Quantumult X', badge: 'QuanX', url: `${baseSubUrl}?target=quanx` },
     { title: 'کانفیگ اختصاصی Loon', badge: 'Loon', url: `${baseSubUrl}?target=loon` },
     { title: 'متن خام لینک‌ها (Raw Plaintext)', badge: 'RAW', url: `${baseSubUrl}?target=raw` }
-  ];
+  );
 
   const safeNodesJson = JSON.stringify(nodes).replace(/</g, '\\u003c');
 
@@ -503,12 +532,12 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
         <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}', 'لینک اشتراک هوشمند کپی شد')">${icon('copy')} کپی ساب‌لینک</button>
         <div class="url-text">${baseSubUrl}</div>
       </div>
-      <!-- دانلود مستقیم کانفیگ‌های آماده: بدون هیچ تنظیمی در پنل -->
+      <!-- دانلود مستقیم کانفیگ‌های آماده — فقط بخش‌هایی که برای این کاربر روشن است -->
       <div class="toolbar" style="margin-top:10px;">
-        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
+        ${warpEnabled ? `<a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
-        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>
-        <a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>` : ''}
+        ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
       </div>
     </div>
 

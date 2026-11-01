@@ -95,7 +95,9 @@ export const CONFIG_DEFAULTS = {
   ipRotation: 15, // چرخش خودکار آی‌پی به دقیقه (۰ = خاموش)
   locationNodeCount: 8, // تعداد نود چندلوکیشن که در ساب‌لینک کشوری ساخته می‌شود
   frag: 'yes', // کلید روشن/خاموش فرگمنت (شادوساکس فرگمنت ندارد)
-  ports: '443,2053,2087,8443', // پورت‌های نودهای ساب‌لینک (لیست جداشده با کاما)
+  ports: '443,2053,2087,8443', // پورت‌های TLS نودهای ساب‌لینک (لیست جداشده با کاما)
+  // پورت‌های بدون TLS که به‌عنوان «حالت دوم» هر نود ساخته می‌شوند؛ خالی = هیچ نود HTTP‌ای ساخته نشود
+  httpPorts: '80,8080',
   adminPasswordHash: '', // هش رمز عبور مدیر
   supportChannel: TELEGRAM_SUPPORT,
   // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
@@ -162,6 +164,7 @@ export const ENV_KEY_MAPPING = {
   fragmentPreset: ['fragmentPreset', 'FRAGMENT_PRESET'],
   frag: ['frag', 'FRAG', 'FRAGMENT_ENABLED'],
   ports: ['ports', 'PORTS', 'NODE_PORTS'],
+  httpPorts: ['httpPorts', 'HTTPPORTS', 'HTTP_PORTS', 'NODE_HTTP_PORTS'],
   ipRotation: ['ipRotation', 'IP_ROTATION', 'ROTATION_MINUTES'],
   locationNodeCount: ['locationNodeCount', 'LOCATION_NODE_COUNT'],
   pd: ['pd', 'PD', 'PANEL_DOMAIN_NODES'],
@@ -475,6 +478,10 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   snap.fp = snap.fp || 'chrome';
   snap.patt = snap.patt || '/?ed=2048';
   snap.ports = parseNodePorts(snap.ports).join(',');
+  // پورت‌های HTTP اختیاری‌اند؛ مقدار خالی یعنی فقط نودهای TLS ساخته شوند
+  snap.httpPorts = String(snap.httpPorts == null ? CONFIG_DEFAULTS.httpPorts : snap.httpPorts).trim()
+    ? parseNodePorts(snap.httpPorts).filter(port => CF_HTTP_PORTS.includes(port)).join(',')
+    : '';
   const clampInt = (val, min, max, dflt) => {
     const n = parseInt(val, 10);
     if (!Number.isFinite(n)) return dflt;

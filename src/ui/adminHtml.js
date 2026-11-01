@@ -885,6 +885,11 @@ export function renderAdminDashboardHtml(initialData = {}) {
               <input type="text" data-key="ports" placeholder="443,2053,2087,8443">
               <span class="hint">لیست پورت‌ها با کاما — مجاز: ${CF_PORT_CHOICES.map(p => p.port).join(' , ')}. پورت HTTP فقط وقتی ECH خاموش است استفاده می‌شود.</span>
             </div>
+            <div class="field">
+              <label>پورت‌های HTTP (حالت دوم هر نود)</label>
+              <input type="text" data-key="httpPorts" placeholder="80,8080">
+              <span class="hint">هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ HTTP می‌گیرد؛ خالی بگذارید تا فقط نودهای TLS ساخته شوند.</span>
+            </div>
           </div>
 
           <div class="group-title" style="margin-top: 22px;">${icon('bolt')} <span data-i18n="settings.extra">دامنهٔ پنل، WARP و OpenVPN</span></div>
@@ -1085,22 +1090,39 @@ export function renderAdminDashboardHtml(initialData = {}) {
         <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" value="0"></div>
         <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" value="0"></div>
         <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" value="${Number(config.subNodeCount) || 50}"></div>
-        <details class="adv-box">
-          <summary data-i18n="modal.advanced">تنظیمات منحصر به فرد این کاربر</summary>
+        
+        <details class="adv-box" open>
+          <summary data-i18n="modal.advanced">تنظیمات کامل این کاربر (همه گزینه‌ها واقعی و روی ساب اثر دارند)</summary>
+          <div class="loc-meta" style="margin:8px 0 0;">با انتخاب پریست، مقادیر زیر پر می‌شوند و هر کدام را می‌توانید جداگانه تغییر دهید؛ ساب‌لینک و صفحه وضعیت دقیقاً از همین مقادیر ساخته می‌شوند.</div>
           <div class="form-grid" style="margin-top:10px;">
-            <div class="field"><label>VLESS</label><select id="cfgEv"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>Trojan</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>VLESS (WebSocket)</label><select id="cfgEv"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>Trojan (WebSocket)</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label>Shadowsocks</label><select id="cfgEs"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>xHTTP</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>ECH</label><select id="cfgEch"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>فرگمنت</label><select id="cfgFrag"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label data-i18n="field.dns">DNS سفارشی</label>
-              <select id="cfgDNS">${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}</select>
+            <div class="field"><label>xHTTP (ضد فیلتر)</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
+            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
+            <div class="field"><label>IPv4</label><select id="cfgIpv4"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
+            <div class="field"><label>IPv6</label><select id="cfgIpv6"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
+            <div class="field"><label>آی‌پی ثابت / لبهٔ CDN (epi)</label><select id="cfgEpi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>دامنه‌های لبه (epd)</label><select id="cfgEpd"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>لیست ترجیحی آنلاین (egi)</label><select id="cfgEgi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>WARP</label><select id="cfgWarp"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>WARP PRO</label><select id="cfgWarpPro"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>OpenVPN</label><select id="cfgOvpn"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>فرگمنت TLS</label><select id="cfgFrag"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
+            <div class="field"><label>پریست فرگمنت</label>
+              <select id="cfgFragPreset">${Object.entries(FRAGMENT_PRESETS).map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('')}</select>
             </div>
+            <div class="field"><label>ECH</label><select id="cfgEch"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label data-i18n="field.echDomain">دامنه ECH</label>
               <select id="cfgEchDomain">${ECH_DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('')}</select>
             </div>
-            <div class="field"><label data-i18n="field.ports">پورت‌های نود</label><input type="text" id="cfgPorts" value="${config.ports || '443,2053,2087,8443'}"></div>
+            <div class="field"><label data-i18n="field.dns">DNS سفارشی</label>
+              <select id="cfgDNS">${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>ALPN</label>
+              <select id="cfgAlpn"><option value="">خودکار</option><option value="h2,http/1.1">h2 + http/1.1</option><option value="h3,h2,http/1.1">h3 + h2 + http/1.1</option></select>
+            </div>
             <div class="field"><label data-i18n="field.fp">فینگرپرینت TLS</label>
               <select id="cfgFp">${FINGERPRINT_PRESETS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
             </div>
@@ -1422,9 +1444,38 @@ export function renderAdminDashboardHtml(initialData = {}) {
       .finally(function() { if (btn) btn.disabled = false; });
   }
 
+  // پریست فقط فرم را پر می‌کند؛ تنها مسیر ساخت کاربر همین فرم است و هر مقدار
+  // را می‌شودپیش از ساخت دستی تغییر داد (همه گزینه‌ها واقعی‌اند).
+  function applyPresetToForm() {
+    var presets = INITIAL_DATA.presets || {};
+    var chosen = presets[$('newPreset') ? $('newPreset').value : ''];
+    if (!chosen) return;
+    var overrides = chosen.configOverrides || {};
+    var map = {
+      cfgEv: 'ev', cfgEt: 'et', cfgEs: 'es', cfgEx: 'ex', cfgEch: 'ech',
+      cfgFrag: 'frag', cfgFragPreset: 'fragmentPreset', cfgDNS: 'customDNS',
+      cfgEchDomain: 'customECHDomain', cfgPorts: 'ports', cfgHttpPorts: 'httpPorts',
+      cfgIpv4: 'ipv4', cfgIpv6: 'ipv6', cfgEpi: 'epi', cfgEpd: 'epd', cfgEgi: 'egi',
+      cfgWarp: 'warp', cfgWarpPro: 'warpPro', cfgOvpn: 'ovpn', cfgFp: 'fp',
+      cfgPatt: 'patt', cfgAlpn: 'alpn'
+    };
+    Object.keys(map).forEach(function(id) {
+      var el = $(id);
+      var key = map[id];
+      if (!el || overrides[key] === undefined) return;
+      var value = overrides[key];
+      if (el.tagName === 'SELECT' && !Array.from(el.options).some(function(o) { return o.value === String(value); })) return;
+      el.value = String(value);
+    });
+    if ($('newNodes')) $('newNodes').value = chosen.subNodeCount || 50;
+    if ($('newLimit')) $('newLimit').value = chosen.dataLimitGb || 0;
+    if ($('newDays')) $('newDays').value = chosen.expireDays || 0;
+  }
+
   function createUser() {
     var username = ($('newUsername').value || '').trim();
     if (username.length < 2) { showToast('نام کاربری باید حداقل ۲ کاراکتر باشد', 'err'); return; }
+    var pick = function(id, fallback) { return $(id) ? $(id).value : fallback; };
     var body = {
       username: username,
       preset: $('newPreset').value,
@@ -1432,19 +1483,30 @@ export function renderAdminDashboardHtml(initialData = {}) {
       expireDays: Number($('newDays').value) || 0,
       subNodeCount: Number($('newNodes').value) || 50,
       config: {
-        ev: $('cfgEv') ? $('cfgEv').value : 'yes',
-        et: $('cfgEt') ? $('cfgEt').value : 'no',
-        es: $('cfgEs') ? $('cfgEs').value : 'yes',
-        ex: $('cfgEx') ? $('cfgEx').value : 'no',
-        ech: $('cfgEch') ? $('cfgEch').value : 'no',
-        frag: $('cfgFrag') ? $('cfgFrag').value : 'yes',
-        customDNS: $('cfgDNS') ? $('cfgDNS').value : '',
-        customECHDomain: $('cfgEchDomain') ? $('cfgEchDomain').value : '',
-        ports: $('cfgPorts') ? $('cfgPorts').value.trim() : '',
-        fp: $('cfgFp') ? $('cfgFp').value : 'chrome',
-        patt: $('cfgPatt') ? $('cfgPatt').value : '/?ed=2048',
-        yx: $('cfgYx') ? $('cfgYx').value.trim() : '',
-        s: $('cfgS') ? $('cfgS').value.trim() : ''
+        ev: pick('cfgEv', 'yes'),
+        et: pick('cfgEt', 'yes'),
+        es: pick('cfgEs', 'yes'),
+        ex: pick('cfgEx', 'yes'),
+        ech: pick('cfgEch', 'no'),
+        frag: pick('cfgFrag', 'yes'),
+        fragmentPreset: pick('cfgFragPreset', 'mci'),
+        customDNS: pick('cfgDNS', ''),
+        customECHDomain: pick('cfgEchDomain', ''),
+        ports: pick('cfgPorts', '').trim(),
+        httpPorts: pick('cfgHttpPorts', '').trim(),
+        ipv4: pick('cfgIpv4', 'yes'),
+        ipv6: pick('cfgIpv6', 'yes'),
+        epi: pick('cfgEpi', 'yes'),
+        epd: pick('cfgEpd', 'yes'),
+        egi: pick('cfgEgi', 'yes'),
+        warp: pick('cfgWarp', 'yes'),
+        warpPro: pick('cfgWarpPro', 'no'),
+        ovpn: pick('cfgOvpn', 'yes'),
+        alpn: pick('cfgAlpn', ''),
+        fp: pick('cfgFp', 'chrome'),
+        patt: pick('cfgPatt', '/?ed=2048'),
+        yx: pick('cfgYx', '').trim(),
+        s: pick('cfgS', '').trim()
       }
     };
     api('/api/users', { method: 'POST', body: JSON.stringify(body) })
@@ -1780,7 +1842,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
 
     if (act === 'copy') { copyText(el.getAttribute('data-url') || '', 'لینک کپی شد'); }
     else if (act === 'copy-master') { copyText(masterSub(), 'سابلینک اصلی کپی شد'); }
-    else if (act === 'open-create') { openModal('createModal'); }
+    else if (act === 'open-create') { openModal('createModal'); applyPresetToForm(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }
@@ -1822,6 +1884,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
       if (key === 'frag' || key === 'ech') syncConditionalFields();
     }
     if (target.id === 'scanKind') syncConditionalFields();
+    if (target.id === 'newPreset') applyPresetToForm();
     if (target.id === 'dnsPreset') {
       var dnsInput = document.querySelector('input[data-key="customDNS"]');
       if (dnsInput && target.value !== 'custom') dnsInput.value = target.value;

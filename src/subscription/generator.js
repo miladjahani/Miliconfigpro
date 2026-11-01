@@ -47,6 +47,7 @@ import {
   parseAddressAndPort
 } from '../core/utils.js';
 import { verifyCountryProxies } from '../core/proxyGeo.js';
+import { getEdgePool, pickFromPool } from '../core/edgePool.js';
 import {
   generateClashConfig,
   generateLoonConfig,
@@ -153,18 +154,22 @@ export function buildFragmentValue(cfg = {}) {
   return `${length},${interval},${packets || 'tlshello'}`;
 }
 
-// انتخاب پورت نود از لیست پنل (ports) — هر نود یک پورت، به‌صورت چرخشی
-function chooseNodePort(cfg = {}, item = {}, index = 0) {
+// همه حالت‌های پورت یک آدرس: یک پورت TLS + یک پورت HTTP (اگر تنظیم شده باشد).
+// با همین، هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ بدون TLS دارد و اگر یکی در
+// شبکهٔ کاربر فیلتر باشد دیگری کار می‌کند.
+export function buildPortVariants(cfg = {}, item = {}, index = 0) {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const explicit = Number(item?.port) || 0;
   if (explicit) {
-    return { port: explicit, tls: !CF_HTTP_PORTS.includes(explicit) };
+    return [{ port: explicit, tls: !CF_HTTP_PORTS.includes(explicit) }];
   }
-  let ports = parseNodePorts(cfg.ports);
-  if (disableNonTls) ports = ports.filter(p => !CF_HTTP_PORTS.includes(p));
-  if (!ports.length) ports = [443];
-  const port = ports[Math.abs(index) % ports.length];
-  return { port, tls: !CF_HTTP_PORTS.includes(port) };
+  const tlsPorts = parseNodePorts(cfg.ports).filter(port => !CF_HTTP_PORTS.includes(port));
+  const httpPorts = disableNonTls ? [] : parseNodePorts(cfg.httpPorts || '')
+    .filter(port => CF_HTTP_PORTS.includes(port));
+  const out = [];
+  if (tlsPorts.length) out.push({ port: tlsPorts[Math.abs(index) % tlsPorts.length], tls: true });
+  if (httpPorts.length) out.push({ port: httpPorts[Math.abs(index) % httpPorts.length], tls: false });
+  return out.length ? out : [{ port: 443, tls: true }];
 }
 
 // چیدمان متناوب آی‌پی‌ها و دامنه‌های پیش‌فرض CFnew: هر ۲ آی‌پی، یک دامنه،
@@ -609,13 +614,13 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port, tls } = chooseNodePort(cfg, item, idx);
 
     // مسیر یکتا برای نوع نود + کشور؛ پروکسی خروجی هم داخل همان مسیر به ورکر داده می‌شود
     const itemPath = buildNodePath('vless', cfg, wkOverride, item);
+    const baseName = namer(item);
 
-    {
-      const nodeName = namer(item);
+    for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
+      const nodeName = tls ? baseName : `${baseName} · HTTP`;
       if (tls) {
         const params = new URLSearchParams({
           encryption: 'none',
@@ -677,7 +682,8 @@ export function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port } = chooseNodePort(cfg, item, idx);
+    // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همیشه نسخهٔ TLS انتخاب می‌شود
+    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
     const nodeName = namer(item);
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${workerHost};path=${itemPath};tls`;
@@ -728,32 +734,34 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port, tls } = chooseNodePort(cfg, item, idx);
 
     {
-      const nodeName = namer(item);
+      const baseName = namer(item);
       const itemPath = buildNodePath('trojan', cfg, wkOverride, item);
-      if (tls) {
-        const params = new URLSearchParams({
-          security: 'tls',
-          sni: workerHost,
-          fp: cfg.fp || 'chrome',
-          type: 'ws',
-          host: workerHost,
-          path: itemPath
-        });
-        if (alpn) params.set('alpn', alpn);
-        if (echValue) params.set('ech', echValue);
-        if (fragmentValue) params.set('fragment', fragmentValue);
-        links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
-      } else {
-        const params = new URLSearchParams({
-          security: 'none',
-          type: 'ws',
-          host: workerHost,
-          path: itemPath
-        });
-        links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+      for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
+        const nodeName = tls ? baseName : `${baseName} · HTTP`;
+        if (tls) {
+          const params = new URLSearchParams({
+            security: 'tls',
+            sni: workerHost,
+            fp: cfg.fp || 'chrome',
+            type: 'ws',
+            host: workerHost,
+            path: itemPath
+          });
+          if (alpn) params.set('alpn', alpn);
+          if (echValue) params.set('ech', echValue);
+          if (fragmentValue) params.set('fragment', fragmentValue);
+          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        } else {
+          const params = new URLSearchParams({
+            security: 'none',
+            type: 'ws',
+            host: workerHost,
+            path: itemPath
+          });
+          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        }
       }
     }
   }
@@ -773,7 +781,7 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port } = chooseNodePort(cfg, item, idx);
+    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
     const nodeName = namer(item);
     // مسیر یکتای xHTTP + کشور + پروکسی خروجی
     let xhttpPath = `/${shortPath}?nt=xhttp`;
@@ -1566,6 +1574,9 @@ export async function fetchOpenVpnNodes(cfg = {}, force = false) {
 export async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
+  // استخر لبهٔ ترکیبی cfnew + Z-E-U-S: پاسخ فوری از فهرست داخلی و تازه‌سازی
+  // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
+  const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
   const userUuid = String(userOrConfig?.uuid || queryOverrides.uuid || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase();
   const nodeScope = queryOverrides.scope || userOrConfig?.nodeScope || 'all';
   const wkOverride = (queryOverrides.wk || cfg.wk || '').trim().toUpperCase();
@@ -1607,7 +1618,11 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     ) || 50);
     const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
     const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
-    const domains = pickEdgeDomains(addressCount);
+    // اول دامنه‌های واقعی منابع (ز-یو-اس / cfnew / bestip) و بعد استخر تأییدشدهٔ داخلی
+    const domains = [...new Set([
+      ...pickFromPool(edgePool.domains, Math.ceil(addressCount / 2)),
+      ...pickEdgeDomains(addressCount)
+    ])].slice(0, addressCount);
     appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
   }
 
@@ -1677,11 +1692,20 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     } else {
       // دامنه‌های پیش‌فرض CFnew همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
       // چیده می‌شوند تا با سقف کم نود هم حتماً در سایلینک باشند.
+      // آی‌پی‌های تازه از استخر cfnew/Z-E-U-S (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
+      const pooledAddresses = [
+        ...pickFromPool(edgePool.ipv4, 8),
+        ...(cfg.ipv6 === 'no' ? [] : pickFromPool(edgePool.ipv6, 4))
+      ];
       const staticIpNodes = cfg.epi === 'yes'
-        ? getStaticCfAddresses(cfg).map(ip => ({ ip, isp: 'CF-Static' }))
+        ? pooledAddresses.map(ip => ({ ip, isp: 'CF-Fast' }))
         : [];
+      const pooledDomains = [...new Set([
+        ...pickFromPool(edgePool.domains, 8),
+        ...DIRECT_DOMAINS.map(d => d.domain)
+      ])];
       const domainNodes = cfg.epd === 'yes'
-        ? DIRECT_DOMAINS.map(d => ({ ip: d.domain, isp: d.name || d.domain }))
+        ? pooledDomains.map(domain => ({ ip: domain, isp: domain }))
         : [];
       if (staticIpNodes.length || domainNodes.length) {
         appendFromSource(interleaveAddresses(staticIpNodes, domainNodes));
@@ -1760,7 +1784,7 @@ export function detectTargetFromRequest(request, url) {
   return 'base64';
 }
 
-export async function handleSubscriptionResponse(request, userOrConfig, url = null, env = null) {
+export async function handleSubscriptionResponse(request, userOrConfig, url = null, env = null, ctx = null) {
   if (!url) url = new URL(request.url);
   const workerHost = url.hostname;
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
@@ -1873,6 +1897,7 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     set: url.searchParams.get('set') || '',
     nowarp: url.searchParams.get('nowarp') || '',
     env,
+    waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null,
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };

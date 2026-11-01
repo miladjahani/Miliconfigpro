@@ -16,6 +16,7 @@ import {
   verifyAdminSession
 } from './db/d1.js';
 import { handleWebSocketUpgrade, handleXhttpPostRequest } from './core/runtime.js';
+import { warmEdgePool } from './core/edgePool.js';
 import {
   MULTI_COUNTRY_CODES,
   buildWarpConfBundle,
@@ -38,6 +39,9 @@ import { renderLoginGatewayHtml } from './ui/loginHtml.js';
 import { renderUserStatusPageHtml } from './ui/statusHtml.js';
 import { renderAdminDashboardHtml } from './ui/adminHtml.js';
 
+// پرچم آماده‌سازی یک‌بارهٔ اسکیمای D1 در هر ایزوله
+let schemaReady = false;
+
 function normalizeCleanPath(p = '') {
   return String(p || '').trim().replace(/^\/+|\/+$/g, '').toLowerCase();
 }
@@ -59,6 +63,12 @@ export default {
   async scheduled(_event, env = {}, ctx = {}) {
     const task = (async () => {
       const results = [];
+      // استخر لبهٔ cfnew + Z-E-U-S (IPv4/IPv6/دامنه) در هر اجرای کرون تازه می‌شود
+      try {
+        results.push({ edgePool: await warmEdgePool() });
+      } catch (e) {
+        results.push({ edgePool: null, edgeError: e?.message || String(e) });
+      }
       for (const code of MULTI_COUNTRY_CODES) {
         try {
           results.push(await refreshCountryProxyPool(env, code));
@@ -78,8 +88,13 @@ export default {
       const upgradeHeader = (request.headers.get('Upgrade') || '').toLowerCase();
       const isWebSocket = upgradeHeader === 'websocket';
 
-      // اطمینان از آماده بودن اسکیمای D1 یا حافظه پشتیبان بدون هیچ خطایی
-      await ensureD1Schema(env);
+      // اطمینان از آماده بودن اسکیمای D1 یا حافظه پشتیبان بدون هیچ خطایی.
+      // فقط یک‌بار در عمر هر ایزوله انجام می‌شود تا هر درخواست CPU اضافی نگیرد
+      // (همان روشی که در edgetunnel جلوی خطای ۱۱۰۲/۱۱۰۱ را می‌گیرد).
+      if (!schemaReady) {
+        await ensureD1Schema(env);
+        schemaReady = true;
+      }
       // مسیر مدیریت رندوم و یکتا برای هر نصب — UUID پیش‌فرض عمومی حذف شده است
       const adminUuid = await getOrCreateAdminPath(env);
       const globalCfg = await loadGlobalConfig(env);
@@ -254,7 +269,8 @@ export default {
             });
           }
           const nodes = await generateUserNodesList(userObj, url.hostname, {
-            limit: userObj.subNodeCount
+            limit: userObj.subNodeCount,
+            waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null
           });
           return new Response(renderUserStatusPageHtml(userObj, nodes, request.url), {
             status: 200,
@@ -301,7 +317,7 @@ export default {
             const p = recordUserActivity(env, targetUser.id, 0, 1).catch(() => {});
             if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
           }
-          return await handleSubscriptionResponse(request, targetUser, url, env);
+          return await handleSubscriptionResponse(request, targetUser, url, env, ctx);
         }
 
         // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)
@@ -377,7 +393,8 @@ export default {
               config: globalCfg
             };
             const nodes = await generateUserNodesList(adminUser, url.hostname, {
-              limit: adminUser.subNodeCount
+              limit: adminUser.subNodeCount,
+              waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null
             });
             return new Response(renderUserStatusPageHtml(adminUser, nodes, request.url), {
               status: 200,
@@ -420,7 +437,8 @@ export default {
         const matchedUser = await getUserByIdOrToken(env, fullCleanPath);
         if (matchedUser) {
           const nodes = await generateUserNodesList(matchedUser, url.hostname, {
-            limit: matchedUser.subNodeCount
+            limit: matchedUser.subNodeCount,
+            waitUntil: ctx && typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null
           });
           return new Response(renderUserStatusPageHtml(matchedUser, nodes, request.url), {
             status: 200,
@@ -437,18 +455,18 @@ export default {
         headers: { 'Content-Type': 'application/json; charset=utf-8' }
       });
     } catch (err) {
-      // محافظ سطح بالا جهت جلوگیری ۱۰۰٪ از بروز خطای Cloudflare Error 1101
-      return new Response(
-        JSON.stringify({
-          status: 'recovered',
-          brand: BRAND_NAME,
-          message: err?.message || String(err)
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json; charset=utf-8' }
+      // محافظ سطح بالا جهت جلوگیری ۱۰۰٪ از بروز خطای Cloudflare Error 1101.
+      // طبق روش edgetunnel، خطای مدیریت‌شده هرگز به استثنای ورکر تبدیل نمی‌شود
+      // و پاسخ سادهٔ ۲۰۰ برمی‌گردد تا هیچ صفحهٔ خطای کلادفلر ظاهر نشود.
+      try { console.error('[' + BRAND_NAME + '] recovered:', err?.message || String(err)); } catch (_e) {}
+      return new Response('hello', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'Server': 'nginx'
         }
-      );
+      });
     }
   }
 };
