@@ -1,5 +1,5 @@
 // ============================================================================
-// miliconfig v3.1 - تولیدکننده ساب‌لینک چندکاربره با نام‌گذاری number+miliconfig
+// miliconfig v3.2 - تولیدکننده ساب‌لینک چندکاربره با نام‌گذاری گویای نودها
 // و اعمال دقیق تنظیمات هر کاربر + محدودیت تعداد نودها در ساب (subNodeCount)
 // ============================================================================
 
@@ -35,8 +35,9 @@ import {
   parseNodePorts
 } from '../config/defaults.js';
 import {
+  addressFamilyLabel,
+  buildNodeDisplayName,
   buildZip,
-  createMiliNodeNamer,
   decodeBase64Utf8,
   encodeBase64Utf8,
   finalizeMiliSubscriptionLinks,
@@ -172,8 +173,8 @@ export function buildPortVariants(cfg = {}, item = {}, index = 0) {
   return out.length ? out : [{ port: 443, tls: true }];
 }
 
-// چیدمان متناوب آی‌پی‌ها و دامنه‌های پیش‌فرض CFnew: هر ۲ آی‌پی، یک دامنه،
-// تا دامنه‌های cfnew حتی با سقف کم نود هم حتماً داخل سابلینک باشند.
+// چیدمان متناوب آی‌پی‌ها و دامنه‌های پیش‌فرض: هر ۲ آی‌پی، یک دامنه،
+// تا نودهای دامنه حتی با سقف کم نود هم حتماً داخل سابلینک باشند.
 function interleaveAddresses(ipNodes = [], domainNodes = []) {
   const out = [];
   const ips = [...ipNodes];
@@ -187,18 +188,85 @@ function interleaveAddresses(ipNodes = [], domainNodes = []) {
   return out;
 }
 
-// توزیع مساوی پروتکل‌ها در سابلینک (vless / trojan / ss / xhttp به‌صورت چرخشی)
-function interleaveProtocols(groups = {}) {
-  const order = ['vless', 'trojan', 'ss', 'xhttp'];
-  const queues = order.map(key => (Array.isArray(groups[key]) ? [...groups[key]] : []));
-  const total = queues.reduce((sum, q) => sum + q.length, 0);
+// ساخت یک ورودی نود همراه با فرادادهٔ لازم برای نام‌گذاری و توزیع مساوی
+function makeNodeEntry(link, proto, host, item = null, tls = true) {
+  const cc = String(item?.country || '').trim().toUpperCase();
+  const meta = {
+    proto,
+    host,
+    family: addressFamilyLabel(host),
+    cc: /^[A-Z]{2}$/.test(cc) ? cc : '',
+    proxy: Boolean(item?.proxy),
+    tls: tls !== false
+  };
+  return { link, meta };
+}
+
+// توزیع مساوی ترکیب‌های مختلف در سابلینک: هر «پروتکل × خانوادهٔ آدرس»
+// (VLESS/IPv4، VLESS/IPv6، VLESS/Domain، Trojan/IPv4 و ...) به تعداد برابر
+// در ساب حاضر می‌شود و نودهای پروکسی‌دار یک‌درمیان بین بقیه پخش می‌شوند.
+function balanceComboEntries(entries = [], limit = 0) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const groups = new Map();
+  for (const entry of entries) {
+    if (!entry || !entry.link) continue;
+    const key = `${entry.meta.proto}|${entry.meta.family || 'na'}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+  if (!groups.size) return [];
+
+  // داخل هر گروه، نودهای پروکسی‌دار و بدون پروکسی یک‌درمیان بیایند
+  for (const [key, list] of groups) {
+    const withProxy = list.filter(item => item.meta.proxy);
+    const plain = list.filter(item => !item.meta.proxy);
+    const mixed = [];
+    let a = 0;
+    let b = 0;
+    while (a < withProxy.length || b < plain.length) {
+      if ((mixed.length % 2 === 0 && a < withProxy.length) || b >= plain.length) {
+        mixed.push(withProxy[a++]);
+      } else {
+        mixed.push(plain[b++]);
+      }
+    }
+    groups.set(key, mixed);
+  }
+
+  // سهمیهٔ برابر برای هر ترکیب تا سقف نود کاربر
+  const total = entries.length;
+  const target = limit > 0 ? Math.min(limit, total) : total;
+  const keys = [...groups.keys()];
+  const quota = new Map(keys.map(key => [key, 0]));
+  let remaining = target;
+  let pending = keys.slice();
+  while (remaining > 0 && pending.length) {
+    const share = Math.max(1, Math.floor(remaining / pending.length));
+    const next = [];
+    for (const key of pending) {
+      const bucket = groups.get(key);
+      const left = bucket.length - quota.get(key);
+      const take = Math.min(share, left, remaining);
+      quota.set(key, quota.get(key) + take);
+      remaining -= take;
+      if (bucket.length - quota.get(key) > 0) next.push(key);
+      if (remaining <= 0) break;
+    }
+    if (next.length === pending.length) {
+      const progressed = next.some(key => quota.get(key) > 0);
+      if (!progressed) break;
+    }
+    pending = next;
+  }
+
+  const queues = keys.map(key => groups.get(key).slice(0, quota.get(key)));
   const out = [];
   let guard = 0;
-  while (out.length < total && guard++ < total * 4) {
+  while (out.length < target && guard++ < target * 4) {
     let moved = false;
-    for (const q of queues) {
-      if (q.length) {
-        out.push(q.shift());
+    for (const queue of queues) {
+      if (queue.length && out.length < target) {
+        out.push(queue.shift());
         moved = true;
       }
     }
@@ -600,7 +668,7 @@ async function getVerifiedCountryProxies(code, urls, options = {}) {
   return list;
 }
 
-function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '') {
+function buildVlessLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const defaultHttps = [443];
   const defaultHttp = disableNonTls ? [] : [80];
@@ -617,10 +685,15 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
 
     // مسیر یکتا برای نوع نود + کشور؛ پروکسی خروجی هم داخل همان مسیر به ورکر داده می‌شود
     const itemPath = buildNodePath('vless', cfg, wkOverride, item);
-    const baseName = namer(item);
 
     for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
-      const nodeName = tls ? baseName : `${baseName} · HTTP`;
+      const nodeName = buildNodeDisplayName({
+        proto: 'vless',
+        host: rawHost,
+        cc: item?.country,
+        proxy: Boolean(item?.proxy),
+        tls
+      });
       if (tls) {
         const params = new URLSearchParams({
           encryption: 'none',
@@ -634,7 +707,7 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
         if (alpn) params.set('alpn', alpn);
         if (echValue) params.set('ech', echValue);
         if (fragmentValue) params.set('fragment', fragmentValue);
-        links.push(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'vless', rawHost, item, tls));
       } else {
         const params = new URLSearchParams({
           encryption: 'none',
@@ -643,7 +716,7 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
           host: workerHost,
           path: itemPath
         });
-        links.push(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'vless', rawHost, item, tls));
       }
     }
   }
@@ -670,7 +743,7 @@ export function rotateIpListByTimeBucket(list, rotationSetting = 'off') {
   return [...list.slice(shift), ...list.slice(0, shift)];
 }
 
-export function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
+export function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const sspass = (cfg.sspass && String(cfg.sspass).trim()) || userUuid;
   // این ورکر هدر Shadowsocks را به‌صورت متنی می‌خواند (parseShadowsocksHeader)، بنابراین cipher باید none باشد
@@ -684,7 +757,7 @@ export function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
     // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همیشه نسخهٔ TLS انتخاب می‌شود
     const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
-    const nodeName = namer(item);
+    const nodeName = buildNodeDisplayName({ proto: 'ss', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${workerHost};path=${itemPath};tls`;
 
@@ -692,12 +765,12 @@ export function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
     // ۱) SIP002 (userinfo جدا)  ۲) قالب قدیمی base64 کامل (method:pass@host:port)
     if (idx % 2 === 0) {
       links.push(
-        `ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`
+        makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
       );
     } else {
       const legacy = encodeBase64Utf8(`${cipher}:${sspass}@${safeAddr}:${port}`);
       links.push(
-        `ss://${legacy}?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`
+        makeNodeEntry(`ss://${legacy}?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
       );
     }
   }
@@ -719,7 +792,7 @@ function encodeSip002UserInfo(text) {
     .replace(/=+$/, '');
 }
 
-function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '') {
+function buildTrojanLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const defaultHttps = [443];
   const defaultHttp = disableNonTls ? [] : [80];
@@ -736,10 +809,15 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
 
     {
-      const baseName = namer(item);
       const itemPath = buildNodePath('trojan', cfg, wkOverride, item);
       for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
-        const nodeName = tls ? baseName : `${baseName} · HTTP`;
+        const nodeName = buildNodeDisplayName({
+          proto: 'trojan',
+          host: rawHost,
+          cc: item?.country,
+          proxy: Boolean(item?.proxy),
+          tls
+        });
         if (tls) {
           const params = new URLSearchParams({
             security: 'tls',
@@ -752,7 +830,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
           if (alpn) params.set('alpn', alpn);
           if (echValue) params.set('ech', echValue);
           if (fragmentValue) params.set('fragment', fragmentValue);
-          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+          links.push(makeNodeEntry(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'trojan', rawHost, item, tls));
         } else {
           const params = new URLSearchParams({
             security: 'none',
@@ -760,7 +838,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
             host: workerHost,
             path: itemPath
           });
-          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+          links.push(makeNodeEntry(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'trojan', rawHost, item, tls));
         }
       }
     }
@@ -768,7 +846,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
   return links;
 }
 
-function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
+function buildXhttpLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const shortPath = String(userUuid || '').substring(0, 8);
   const alpn = normalizeAlpn(cfg.alpn);
@@ -782,7 +860,7 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
     const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
-    const nodeName = namer(item);
+    const nodeName = buildNodeDisplayName({ proto: 'xhttp', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     // مسیر یکتای xHTTP + کشور + پروکسی خروجی
     let xhttpPath = `/${shortPath}?nt=xhttp`;
     const xhttpCountry = String(item.country || '').trim().toUpperCase();
@@ -811,7 +889,7 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
     if (alpn) params.set('alpn', alpn);
     if (echValue) params.set('ech', echValue);
     if (fragmentValue) params.set('fragment', fragmentValue);
-    links.push(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+    links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'xhttp', rawHost, item, true));
   }
   return links;
 }
@@ -1326,17 +1404,19 @@ export async function buildWarpFamilyLinks(cfg = {}, options = {}) {
   const base = registered || buildFallbackWarpConfig();
 
   if (wantWarp) {
-    links.push(buildWireguardLink(base, 'WARP'));
+    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard' })));
   }
   if (wantPro) {
     // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
-    links.push(buildWireguardLink(base, 'WARP PRO'));
+    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp_pro', family: 'WireGuard' })));
   }
   if (wantMl) {
     const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
     endpoints.forEach((endpoint, idx) => {
-      const suffix = endpoint.label ? ` ${endpoint.label}` : '';
-      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, `WARP-ML-${idx + 1}${suffix}`));
+      const label = String(endpoint.label || '').trim().toUpperCase();
+      const meta = { proto: 'warp_ml', family: 'WireGuard', cc: /^[A-Z]{2}$/.test(label) ? label : '' };
+      const name = `${buildNodeDisplayName(meta)} · ${label || 'EP'}-${idx + 1}`;
+      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, name));
     });
   }
   return links;
@@ -1570,11 +1650,12 @@ export async function fetchOpenVpnNodes(cfg = {}, force = false) {
   return items;
 }
 
-// تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری دقیق number+miliconfig و رعایت سقف تعداد نود در ساب
+// تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری گویا (کشور/پروتکل/خانوادهٔ آدرس)
+// و رعایت سقف تعداد نود در ساب
 export async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
-  // استخر لبهٔ ترکیبی cfnew + Z-E-U-S: پاسخ فوری از فهرست داخلی و تازه‌سازی
+  // استخر لبهٔ ترکیبی دامنه/آی‌پی: پاسخ فوری از فهرست داخلی و تازه‌سازی
   // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
   const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
   const userUuid = String(userOrConfig?.uuid || queryOverrides.uuid || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase();
@@ -1583,18 +1664,31 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const protoFilter = (queryOverrides.proto || '').trim().toLowerCase();
   // ساب‌لینک اختصاصی «دامنه‌های لبهٔ کلادفلر»: ?set=domain
   // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
-  const domainMode = String(queryOverrides.set || '').trim().toLowerCase() === 'domain';
+  const setParam = String(queryOverrides.set || '').trim().toLowerCase();
+  const domainMode = setParam === 'domain';
+  // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
+  // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
+  const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
+
+  if (ipv6Mode) {
+    // فقط آی‌پی نسخه ۶؛ دامنه محور/لیست ترجیحی/سرور اصلی/چندلوکیشن کنار گذاشته می‌شوند
+    cfg.ipv4 = 'no';
+    cfg.ipv6 = 'yes';
+    cfg.epd = 'no';
+    cfg.egi = 'no';
+    cfg.ena = 'no';
+    cfg.pd = 'no';
+    cfg.yxby = 'yes';
+  }
 
   const evEnabled = protoFilter ? protoFilter === 'vless' : isEnabledValue(cfg.ev, true);
   const etEnabled = protoFilter ? protoFilter === 'trojan' : isEnabledValue(cfg.et, false);
   const exEnabled = protoFilter ? protoFilter === 'xhttp' : isEnabledValue(cfg.ex, false);
   const esEnabled = protoFilter ? (protoFilter === 'ss' || protoFilter === 'shadowsocks') : isEnabledValue(cfg.es, false);
 
-  const namer = createMiliNodeNamer(BRAND_NAME);
-  // هر پروتکل در گروه جداگانه ساخته می‌شود تا در پایان با چیدمان چرخشی
-  // همه پروتکل‌ها به نسبت مساوی در سابلینک حاضر باشند (نه فقط VLESS).
+  // هر پروتکل در گروه جداگانه ساخته می‌شود تا در پایان ترکیب‌های مختلف
+  // (پروتکل × خانوادهٔ آدرس) به تعداد مساوی در ساب حاضر باشند.
   const protoGroups = { vless: [], trojan: [], ss: [], xhttp: [] };
-  const rawLinks = [];
 
   // فرگمنت TLS بر اساس پریست انتخابی مدیر (off = بدون فرگمنت)
   // شادوساکس هیچ‌وقت پارامتر fragment نمی‌گیرد و همیشه در سابلینک می‌ماند.
@@ -1603,10 +1697,19 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   function appendFromSource(sourceList) {
     const safeList = filterAddressFamily(sourceList, cfg);
     if (!Array.isArray(safeList) || safeList.length === 0) return;
-    if (evEnabled) protoGroups.vless.push(...buildVlessLinks(safeList, userUuid, workerHost, cfg, namer, wkOverride));
-    if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(safeList, userUuid, workerHost, cfg, namer, wkOverride));
-    if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(safeList, userUuid, workerHost, cfg, namer));
-    if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg, namer));
+    if (evEnabled) protoGroups.vless.push(...buildVlessLinks(safeList, userUuid, workerHost, cfg, wkOverride));
+    if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(safeList, userUuid, workerHost, cfg, wkOverride));
+    if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(safeList, userUuid, workerHost, cfg));
+    if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg));
+  }
+
+  // ساب اختصاصی IPv6: همهٔ آی‌پی‌های نسخه ۶ استخر + آی‌پی‌های رسمی کلادفلر
+  if (ipv6Mode) {
+    const v6Pool = [...new Set([
+      ...pickFromPool(edgePool.ipv6, 12),
+      ...OFFICIAL_DIRECT_IPV6
+    ])].filter(Boolean);
+    appendFromSource(v6Pool.map(ip => ({ ip, isp: 'CF-IPv6', family: 'ipv6' })));
   }
 
   // نودهای «دامنهٔ کلادفلر»: آدرس نود فقط دامنه است (بدون آی‌پی). دامنه‌ها
@@ -1618,7 +1721,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     ) || 50);
     const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
     const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
-    // اول دامنه‌های واقعی منابع (ز-یو-اس / cfnew / bestip) و بعد استخر تأییدشدهٔ داخلی
+    // اول دامنه‌های واقعی منابع بیرونی و بعد استخر تأییدشدهٔ داخلی
     const domains = [...new Set([
       ...pickFromPool(edgePool.domains, Math.ceil(addressCount / 2)),
       ...pickEdgeDomains(addressCount)
@@ -1630,7 +1733,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
-  if (!domainMode && countryFilter) {
+  if (!domainMode && !ipv6Mode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
       ? MULTI_COUNTRY_CODES.slice()
       : (COUNTRY_PROXY_SOURCES[countryFilter] ? [countryFilter] : []);
@@ -1663,12 +1766,12 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const disablePreferred = cfg.yxby === 'yes' || nodeScope === 'origin';
   const enableNative = cfg.ena === 'yes' || nodeScope === 'origin';
 
-  if (!domainMode && enableNative && nodeScope !== 'edge') {
+  if (!domainMode && !ipv6Mode && enableNative && nodeScope !== 'edge') {
     appendFromSource([{ ip: workerHost, isp: 'Origin' }]);
   }
 
   // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
-  if (!domainMode && isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
+  if (!domainMode && !ipv6Mode && isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
     const panelDomainNodes = buildPanelDomainNodes(workerHost, cfg);
     if (panelDomainNodes.length) appendFromSource(panelDomainNodes);
   }
@@ -1677,11 +1780,11 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const hasCustomPreferred = customIps.length > 0 || customDomains.length > 0;
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
-  if (!domainMode && !countryMode && customProxies.length > 0) {
+  if (!domainMode && !ipv6Mode && !countryMode && customProxies.length > 0) {
     appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost));
   }
 
-  if (!domainMode && !disablePreferred && !countryMode) {
+  if (!domainMode && !ipv6Mode && !disablePreferred && !countryMode) {
     if (hasCustomPreferred) {
       if (customIps.length > 0 && cfg.epi === 'yes') {
         appendFromSource(customIps);
@@ -1690,9 +1793,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
         appendFromSource(customDomains.map(d => ({ ip: d.domain, port: d.port, isp: d.name || d.domain })));
       }
     } else {
-      // دامنه‌های پیش‌فرض CFnew همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
+      // دامنه‌های پیش‌فرض همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
       // چیده می‌شوند تا با سقف کم نود هم حتماً در سایلینک باشند.
-      // آی‌پی‌های تازه از استخر cfnew/Z-E-U-S (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
+      // آی‌پی‌های تازه از استخر لبهٔ کلادفلر (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
       const pooledAddresses = [
         ...pickFromPool(edgePool.ipv4, 8),
         ...(cfg.ipv6 === 'no' ? [] : pickFromPool(edgePool.ipv6, 4))
@@ -1738,33 +1841,39 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     }
   }
 
-  if (protoGroups.vless.length === 0 && protoGroups.trojan.length === 0 && protoGroups.ss.length === 0 && protoGroups.xhttp.length === 0) {
+  const allEntries = [
+    ...protoGroups.vless,
+    ...protoGroups.trojan,
+    ...protoGroups.ss,
+    ...protoGroups.xhttp
+  ];
+
+  if (allEntries.length === 0) {
     appendFromSource([{ ip: workerHost, port: 443, isp: 'Origin' }]);
   }
-
-  // چیدمان چرخشی پروتکل‌ها: vless → trojan → ss → xhttp → تکرار
-  const balancedLinks = interleaveProtocols(protoGroups);
-  if (balancedLinks.length) rawLinks.push(...balancedLinks);
 
   const subNodeCount = queryOverrides.limit !== undefined
     ? parseInt(queryOverrides.limit, 10)
     : Number(userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50);
 
-  // اعمال چرخش خودکار آی‌پی در صورت تنظیم بازه زمانی توسط مدیر
-  const rotatedLinks = rotateIpListByTimeBucket(rawLinks, cfg.ipRotation || 'off');
+  // توزیع مساوی ترکیب‌ها (پروتکل × IPv4/IPv6/Domain) و بعد چرخش زمانی اختیاری
+  const balancedEntries = balanceComboEntries(allEntries, subNodeCount);
+  const rotatedLinks = rotateIpListByTimeBucket(balancedEntries, cfg.ipRotation || 'off');
 
-  // اعمال دقیق نام‌گذاری number+miliconfig و سقف تعداد نودهای ساب‌لینک کاربر
-  const finalized = finalizeMiliSubscriptionLinks(rotatedLinks, subNodeCount, BRAND_NAME);
+  // اعمال نام گویا (کشور/نوع نود/خانوادهٔ آدرس) + سقف تعداد نود ساب‌لینک کاربر
+  const finalized = finalizeMiliSubscriptionLinks(rotatedLinks, subNodeCount);
 
   // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
   const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
   // WARP و WARP PRO بدون نیاز به هیچ تنظیمی همیشه حاضرند؛ فقط حذف کامل آن‌ها
   // با ?proto=vless (یا پروتکل دیگر) یا ?nowarp=1 ممکن است.
   const nowarp = String(queryOverrides.nowarp || '') === '1' || cfg.warp === 'no' && cfg.warpPro === 'no';
-  const warpLinks = warpAllowed && !domainMode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
+  const warpLinks = warpAllowed && !domainMode && !ipv6Mode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
 
-  // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
-  return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
+  // ۳ نود اطلاع‌رسانی در صدر ساب‌لینک‌ها؛ در ساب اختصاصی IPv6 حذف می‌شوند
+  // تا آن ساب واقعاً فقط نودهای IPv6 داشته باشد.
+  const infoNodes = ipv6Mode ? [] : HARDCODED_INFO_NODES;
+  return [...infoNodes, ...finalized, ...warpLinks];
 }
 
 // تشخیص خودکار کلاینت از User-Agent در صورت عدم ارسال پارامتر target
@@ -1792,7 +1901,7 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
 
   // بررسی وضعیت فعال بودن، حجم و انقضای کاربر
   if (userOrConfig && userOrConfig.enabled === false) {
-    const disabledNode = `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=tls&type=ws#${encodeURIComponent('1+' + BRAND_NAME)}`;
+    const disabledNode = `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=tls&type=ws#${encodeURIComponent('⛔ حساب غیرفعال')}`;
     return new Response(btoa(disabledNode), {
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }

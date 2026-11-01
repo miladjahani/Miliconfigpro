@@ -1,18 +1,17 @@
 // ============================================================================
-// miliconfig - کانال بروزرسانی نسخه‌ها (الگو: مکانیزم پنل Z-E-U-S)
+// miliconfig - کانال بروزرسانی نسخه‌ها
 //
 // مسئله: ورکرهای نصب‌شده روی حساب‌های دیگران از بیرون قابل جایگزینی نیستند.
 // راه‌حل‌ها به ترتیب اولویت:
-//   ۱) اتصال به گیت‌هاب (Cloudflare Workers Builds / Pages + Git): هر push به
-//      main خودکار مستقر می‌شود.
-//   ۲) بروزرسانی از داخل پنل با Cloudflare API — همان روشی که پنل Z-E-U-S دارد:
-//      توکن را یک‌بار می‌گیرد، با /user/tokens/verify اعتبارسنجی می‌کند،
-//      Account ID را در صورت نبود از /accounts می‌گیرد، نام اسکریپت را از
-//      WORKER_NAME یا دامنهٔ درخواست تشخیص می‌دهد، بایندینگ‌های فعلی
-//      (D1/KV/متن ساده) را نگه می‌دارد و باندل تازه را با نام ماژول تصادفی
-//      آپلود می‌کند.
-//   ۳) نسخه‌های قدیمی‌تر که این کد را ندارند فقط با یک‌بار استقرار مجدد به‌روز
-//      می‌شوند؛ داده‌های مشترک از منابع آنلاین تازه می‌مانند.
+//   ۱) اتصال به گیت‌هاب (Workers Builds / Pages + Git): هر push به main خودکار
+//      مستقر می‌شود و هیچ اطلاعاتی از حساب لازم نیست.
+//   ۲) اگر ورکر یک کلید محرمانهٔ CF_API_TOKEN داشته باشد (که در داشبورد کلادفلر
+//      و نه در پنل تنظیم می‌شود)، خودِ ورکر نسخهٔ تازه را مستقر می‌کند:
+//      اعتبارسنجی با /user/tokens/verify، تشخیص Account ID از /accounts،
+//     تشخیص نام اسکریپت از WORKER_NAME/دامنه، حفظ بایندینگ‌های فعلی
+//      (D1/KV/متن ساده) و آپلود باندل با نام ماژول تصادفی.
+//   ۳) در غیر این صورت پنل فقط نسخهٔ تازه را می‌شمارد و فایل/دستور بروزرسانی
+//      می‌دهد؛ هیچ ورودی حساب کلودفلر از کاربر خواسته نمی‌شود.
 // ============================================================================
 
 import { VERSION } from '../config/defaults.js';
@@ -144,7 +143,7 @@ export function getUpdateTarget(cfg = {}, env = {}, options = {}) {
   };
 }
 
-// اعتبارسنجی توکن — همان endpointی که Z-E-U-S استفاده می‌کند
+// اعتبارسنجی توکن با endpoint رسمی کلادفلر
 export async function verifyUpdateToken(token = '') {
   const value = String(token || '').trim();
   if (!value) return { valid: false, error: 'توکن خالی است' };
@@ -162,7 +161,7 @@ export async function verifyUpdateToken(token = '') {
   }
 }
 
-// اگر Account ID تنظیم نشده باشد، از روی توکن پیدا می‌شود (مثل پنل Z-E-U-S)
+// اگر Account ID تنظیم نشده باشد، از روی توکن پیدا می‌شود
 export async function resolveAccountId(token = '', current = '') {
   if (current) return { accountId: current, detected: false };
   try {
@@ -269,6 +268,17 @@ async function fetchExistingBindings(accountId, scriptName, token) {
   }
 }
 
+// دریافت باندل تازه (برای دانلود مستقیم فایل نسخهٔ جدید از پنل)
+export async function fetchLatestBundle(env = {}) {
+  const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
+  const bundle = await fetchTextWithFallback(
+    customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })] : mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true }),
+    { timeout: 20000 }
+  );
+  if (!bundle || !bundle.text || bundle.text.length < 50000) return null;
+  return bundle;
+}
+
 export async function applyUpdate(cfg = {}, env = {}, options = {}) {
   const token = String(options.token || env?.CF_API_TOKEN || '').trim();
   const hostScriptName = String(options.hostScriptName || '').trim();
@@ -277,16 +287,27 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
   ).trim();
 
   if (!token) {
+    // هیچ ورودی حساب کلودفلر از کاربر خواسته نمی‌شود؛ نسخهٔ تازه به‌صورت
+    // فایل قابل دانلود و دستور آمادهٔ استقرار برگردانده می‌شود.
+    const info = await checkForUpdate(cfg, env, { force: true });
+    const latest = info?.latest || '';
+    const target = inferScriptName(hostScriptName) || 'نام-ورکر-شما';
     return {
       success: false,
-      error: 'برای بروزرسانی از داخل پنل، ابتدا توکن کلادفلر را متصل کنید (دکمهٔ «اتصال توکن»).',
-      missing: ['CF_API_TOKEN']
+      needsManualDeploy: true,
+      latest,
+      downloadUrl: mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0],
+      command: `curl -fsSL ${mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0]} -o _worker.js && npx wrangler deploy _worker.js --name ${target}`,
+      error: latest
+        ? `نسخهٔ ${latest} آماده است؛ نصب خودکار بدون کلید ورکر انجام نمی‌شود. فایل نسخهٔ تازه را دانلود کنید یا دستور آماده را اجرا کنید.`
+        : 'نصب خودکار روی این استقرار ممکن نیست؛ فایل نسخهٔ تازه را دانلود کنید یا دستور آماده را اجرا کنید.',
+      missing: []
     };
   }
   if (!scriptName) {
     return {
       success: false,
-      error: 'نام اسکریپت Workers مشخص نیست؛ آن را در تنظیمات (cfScriptName) وارد کنید.',
+      error: 'نام اسکریپت Workers مشخص نیست؛ متغیر WORKER_NAME را روی ورکر تنظیم کنید.',
       missing: ['CF_SCRIPT_NAME']
     };
   }

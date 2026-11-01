@@ -1,6 +1,6 @@
 // ============================================================================
 // miliconfig v3.1 - مبدل‌های داخلی اشتراک (Clash, Sing-box, Surge, Loon, QuanX, Residential Chain)
-// منطبق ۱۰۰٪ با منطق کد اصلی CFnew v3.1 + نام‌گذاری number+miliconfig
+// تبدیل لینک‌های نود به Clash / Sing-box / Surge / QuanX / Loon
 // ============================================================================
 
 import { BRAND_NAME } from '../config/defaults.js';

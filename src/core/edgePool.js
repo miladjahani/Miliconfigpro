@@ -2,9 +2,9 @@
 // miliconfig - استخر یکپارچه منابع لبهٔ کلادفلر
 //
 // منابع (طبق درخواست کاربر، هر دو مخزن کامل مطالعه شده‌اند):
-//   • cfnew  (byJoey/cfnew)          → ۲۱ دامنهٔ ترجیحی، ۱۰ آی‌پی اتصال رسمی،
+//   • منابع ترجیحی داخلی          → ۲۱ دامنهٔ ترجیحی، ۱۰ آی‌پی اتصال رسمی،
 //                                       ۱۴ ProxyIP منطقه‌ای، فهرست آنلاین bestip
-//   • Z-E-U-S (panel-zeus/Z-E-U-S)   → ips.txt (IPv4)، ip6.txt (IPv6)،
+//   • آینهٔ لبهٔ عمومی             → ips.txt (IPv4)، ip6.txt (IPv6)،
 //                                       dom.txt (دامنه لبه)، ech_dom.txt و
 //                                       ech_dns.txt (دامنه/DNS برای ECH)
 //
@@ -17,13 +17,13 @@
 // ============================================================================
 
 import {
-  CFNEW_DIRECT_IPS,
-  CFNEW_EDGE_LIST_URL,
-  CFNEW_PREFERRED_DOMAINS,
-  CFNEW_PROXY_IPS,
+  DIRECT_EDGE_IPS,
+  EDGE_LIST_URL,
+  PREFERRED_EDGE_DOMAINS,
+  EDGE_PROXY_IPS,
   DOMAIN_CANDIDATE_SOURCES,
   IPV6_CANDIDATE_SOURCES,
-  ZEUS_SOURCES
+  EDGE_MIRROR_SOURCES
 } from '../config/sources.js';
 import {
   DIRECT_DOMAINS,
@@ -163,7 +163,7 @@ function poolPushUnique(list, seen, value, limit = POOL_MAX_ITEMS) {
 export function poolBuiltin() {
   const ipv4 = [];
   const ipv4Seen = new Set();
-  for (const ip of CFNEW_DIRECT_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
+  for (const ip of DIRECT_EDGE_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
   for (const ip of OFFICIAL_DIRECT_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
 
   const ipv6 = [];
@@ -172,14 +172,14 @@ export function poolBuiltin() {
 
   const domains = [];
   const domainSeen = new Set();
-  for (const domain of CFNEW_PREFERRED_DOMAINS) poolPushUnique(domains, domainSeen, domain, 120);
+  for (const domain of PREFERRED_EDGE_DOMAINS) poolPushUnique(domains, domainSeen, domain, 120);
   for (const item of DIRECT_DOMAINS) poolPushUnique(domains, domainSeen, item.domain, 120);
 
   const echDomains = [];
   const echSeen = new Set();
   for (const domain of ECH_DOMAINS) poolPushUnique(echDomains, echSeen, domain, 60);
 
-  const proxyIps = CFNEW_PROXY_IPS.map(item => ({ ...item, port: 443 }))
+  const proxyIps = EDGE_PROXY_IPS.map(item => ({ ...item, port: 443 }))
     .concat(FALLBACK_PROXY_IPS.map(item => ({ ...item })));
 
   return { ipv4, ipv6, domains, echDomains, echDns: [], proxyIps, origin: 'builtin' };
@@ -262,12 +262,12 @@ function poolGetCache() {
 
 async function poolFetchFresh() {
   const [ips, ip6, dom, echDom, echDns, edgeList] = await Promise.all([
-    poolFetchText(ZEUS_SOURCES.ipv4),
-    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || ZEUS_SOURCES.ipv6),
-    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || ZEUS_SOURCES.domains),
-    poolFetchText(ZEUS_SOURCES.echDomains),
-    poolFetchText(ZEUS_SOURCES.echDns),
-    poolFetchText(CFNEW_EDGE_LIST_URL, 2000)
+    poolFetchText(EDGE_MIRROR_SOURCES.ipv4),
+    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.ipv6),
+    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.domains),
+    poolFetchText(EDGE_MIRROR_SOURCES.echDomains),
+    poolFetchText(EDGE_MIRROR_SOURCES.echDns),
+    poolFetchText(EDGE_LIST_URL, 2000)
   ]);
   const v4Parsed = poolParseAddressLines(ips);
   const v6Parsed = poolParseAddressLines(ip6);

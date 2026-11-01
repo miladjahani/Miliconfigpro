@@ -2,8 +2,6 @@
 // miliconfig v3.1 - ابزارهای هسته، نام‌گذاری نودها (number+miliconfig) و رمزنگاری
 // ============================================================================
 
-import { BRAND_NAME } from '../config/defaults.js';
-
 const base64TextDecoder = new TextDecoder();
 export const sharedDecoder = new TextDecoder();
 
@@ -123,30 +121,68 @@ export function parseAddressAndPort(input) {
 }
 
 // ============================================================================
-// نام‌گذار اختصاصی نودهای خروجی با فرمت دقیق number+miliconfig
-// (مثلاً: 1+miliconfig, 2+miliconfig, 3+miliconfig ...)
+// نام‌گذاری گویا برای نودهای ساب‌لینک:
+// «پرچم و کد کشور · نوع نود · خانوادهٔ آدرس (IPv4/IPv6/Domain) · نشانگر پروکسی»
+// به‌جای الگوی قبلی «عدد+miliconfig» تا کاربر در کلاینت بفهمد چه نودی را انتخاب
+// می‌کند. نودهایی که مسیرشان پروکسی خروجی دارد با «⇄ Proxy» علامت می‌خورند.
 // ============================================================================
-export function createMiliNodeNamer(brand = BRAND_NAME) {
-  let counter = 0;
-  const cleanBrand = String(brand || BRAND_NAME).trim() || BRAND_NAME;
-  return function nameNode(_item) {
-    counter += 1;
-    return `${counter}+${cleanBrand}`;
-  };
+export function countryFlag(code = '') {
+  const cc = String(code || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  return String.fromCodePoint(...[...cc].map(ch => 0x1f1e6 + ch.charCodeAt(0) - 65));
 }
 
-// بازشماری و اعمال محدودیت تعداد نودهای ساب‌لینک کاربر با فرمت دقیق number+miliconfig
-export function finalizeMiliSubscriptionLinks(links = [], subNodeCount = 0, brand = BRAND_NAME) {
-  if (!Array.isArray(links) || links.length === 0) return [];
-  const cleanBrand = String(brand || BRAND_NAME).trim() || BRAND_NAME;
+// خانوادهٔ آدرس نود بر اساس شکل هاست (IPv6 / IPv4 / دامنه)
+export function addressFamilyLabel(host = '') {
+  const text = String(host || '').trim();
+  if (!text) return '';
+  if (text.includes(':')) return 'IPv6';
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) return 'IPv4';
+  return 'Domain';
+}
+
+const NODE_PROTO_LABELS = {
+  vless: 'VLESS',
+  trojan: 'Trojan',
+  ss: 'SS',
+  xhttp: 'xHTTP',
+  warp: 'WARP',
+  warp_pro: 'WARP PRO',
+  warp_ml: 'WARP ML',
+  wireguard: 'WARP'
+};
+
+export function buildNodeDisplayName(meta = {}) {
+  const protoKey = String(meta.proto || '').trim().toLowerCase();
+  const protoLabel = NODE_PROTO_LABELS[protoKey] || (protoKey ? protoKey.toUpperCase() : 'Node');
+  const family = meta.family || addressFamilyLabel(meta.host);
+  const cc = String(meta.cc || '').trim().toUpperCase();
+  const flag = countryFlag(cc);
+  const countryTag = cc ? (flag ? `${flag} ${cc}` : cc) : '🌐 CF';
+  const parts = [countryTag, protoLabel];
+  if (family) parts.push(family);
+  if (meta.tls === false) parts.push('HTTP');
+  if (meta.proxy) parts.push('⇄ Proxy');
+  if (meta.mci) parts.push('MCI');
+  return parts.join(' · ');
+}
+
+// اعمال نام گویا + شمارهٔ یکتا و محدودیت تعداد نودهای ساب‌لینک کاربر
+// ورودی می‌تواند شیء { link, meta } یا لینک خام باشد.
+export function finalizeMiliSubscriptionLinks(entries = [], subNodeCount = 0) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
   const limit = parseInt(subNodeCount, 10);
-  const sliced = Number.isFinite(limit) && limit > 0 ? links.slice(0, limit) : links.slice();
-  return sliced.map((link, idx) => {
-    const nodeName = `${idx + 1}+${cleanBrand}`;
-    const hashIdx = link.indexOf('#');
-    const base = hashIdx > -1 ? link.substring(0, hashIdx) : link;
+  const sliced = Number.isFinite(limit) && limit > 0 ? entries.slice(0, limit) : entries.slice();
+  return sliced.map((entry, idx) => {
+    const raw = typeof entry === 'string' ? entry : String(entry?.link || '');
+    if (!raw) return '';
+    const meta = typeof entry === 'string' ? {} : (entry.meta || {});
+    const baseName = buildNodeDisplayName(meta);
+    const nodeName = `${baseName} · #${idx + 1}`;
+    const hashIdx = raw.indexOf('#');
+    const base = hashIdx > -1 ? raw.substring(0, hashIdx) : raw;
     return `${base}#${encodeURIComponent(nodeName)}`;
-  });
+  }).filter(Boolean);
 }
 
 // ============================================================================

@@ -23,6 +23,7 @@ import { USER_PRESETS } from '../config/presets.js';
 import {
   applyUpdate,
   checkForUpdate,
+  fetchLatestBundle,
   inferScriptName,
   resolveAccountId,
   verifyUpdateToken
@@ -36,8 +37,8 @@ import {
   deleteUser,
   ensureD1Schema,
   getOrCreateAdminPath,
-  getSecretSetting,
   getStorageDiagnostics,
+  verifyConfigInD1,
   rotateAdminPath,
   verifyAdminSession,
   getUserByIdOrToken,
@@ -48,7 +49,6 @@ import {
   resetUserStats,
   saveGlobalConfig,
   setAdminPassword,
-  setSecretSetting,
   updateUser,
   verifyAdminPassword
 } from '../db/d1.js';
@@ -634,11 +634,30 @@ export async function handleConfigApi(request, env) {
           config: sanitizeConfigForClient(cfg)
         });
       }
+      const keys = Object.keys(body || {}).filter(key => !key.startsWith('_'));
       const updated = await saveGlobalConfig(env, body || {});
-      await addAuditLog(env, 'ذخیره تنظیمات پنل', 'بروزرسانی پیکربندی سراسری', clientIp);
+      // تأیید واقعی: after از نوشتن، کلیدها دوباره از D1 خوانده می‌شوند
+      const verification = await verifyConfigInD1(env, keys);
+      const storedInD1 = !verification.error && verification.found === keys.length;
+      await addAuditLog(
+        env,
+        'ذخیره تنظیمات پنل',
+        storedInD1 ? `${keys.length} کلید در D1` : `D1: ${verification.error || verification.missing.join(',')}`,
+        clientIp
+      ).catch(() => {});
       return jsonResponse({
         success: true,
-        message: 'تنظیمات با موفقیت در دیتابیس ذخیره شد',
+        storedInD1,
+        storage: {
+          mode: verification.error ? 'Memory' : 'D1',
+          written: verification.found,
+          checked: verification.checked,
+          missing: verification.missing,
+          error: verification.error
+        },
+        message: storedInD1
+          ? `تنظیمات در D1 ذخیره شد (${verification.found} کلید)`
+          : `ذخیره در D1 انجام نشد: ${verification.error || verification.missing.join(', ')}`,
         config: sanitizeConfigForClient(updated)
       });
     } catch (err) {
@@ -653,12 +672,11 @@ export async function handleConfigApi(request, env) {
 }
 
 // ۲. بروزرسانی نسخه: بررسی و استقرار نسخهٔ تازه از گیت‌هاب روی همین اسکریپت (/api/update)
-// توکن می‌تواند در env باشد یا یک‌بار از پنل ذخیره شود (مثل مکانیزم پنل Z-E-U-S).
+// هیچ اطلاعات حساب کلودفلر از کاربر گرفته نمی‌شود؛ اگر ورکر خودش کلید
+// CF_API_TOKEN داشته باشد (تنظیم‌شده در داشبورد کلادفلر) نصب خودکار انجام می‌شود.
 async function resolveUpdateToken(env) {
   const envToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
-  if (envToken) return { token: envToken, source: 'env' };
-  const stored = await getSecretSetting(env, 'cf_token');
-  return { token: stored, source: stored ? 'panel' : '' };
+  return { token: envToken, source: envToken ? 'env' : '' };
 }
 
 export async function handleUpdateApi(request, env) {
@@ -697,7 +715,28 @@ export async function handleUpdateApi(request, env) {
   return jsonResponse({ error: 'Method not allowed' }, 405);
 }
 
-// ۲-ب. اتصال/قطع توکن بروزرسانی خودکار (همان الگوی /api/auto-update-setup در Z-E-U-S)
+// ۲-الف. دانلود مستقیم فایل نسخهٔ تازه از گیت‌هاب/آینه‌ها (بدون نیاز به کلید حساب)
+export async function handleUpdateBundle(request, env) {
+  const bundle = await fetchLatestBundle(env);
+  if (!bundle) {
+    return new Response('دریافت فایل نسخهٔ تازه ناموفق بود؛ چند دقیقهٔ دیگر تلاش کنید.', {
+      status: 502,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+    });
+  }
+  return new Response(bundle.text, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="miliconfig-worker.js"',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
+
+// ۲-ب. وضعیت بروزرسانی خودکار — بدون هیچ ورودی حسابی از کاربر
+// اگر ورکر کلید CF_API_TOKEN داشته باشد، نصب خودکار در دسترس است؛ در غیر این
+// صورت پنل فقط دانلود فایل و دستور استقرار را نشان می‌دهد.
 export async function handleAutoUpdateSetupApi(request, env) {
   if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
   if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -706,57 +745,58 @@ export async function handleAutoUpdateSetupApi(request, env) {
   try { body = await request.json(); } catch (_e) {}
   const action = String(body?.action || 'check').toLowerCase();
   const cfg = await loadGlobalConfig(env);
-  const stored = await getSecretSetting(env, 'cf_token');
-  const envToken = String(env?.CF_API_TOKEN || '').trim();
+  const envToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  const scriptGuess = inferScriptName(new URL(request.url).hostname) || '';
 
   if (action === 'check') {
     return jsonResponse({
       success: true,
-      has_token: Boolean(envToken || stored),
-      token_source: envToken ? 'env' : (stored ? 'panel' : ''),
+      has_token: Boolean(envToken),
+      token_source: envToken ? 'env' : '',
+      can_auto_deploy: Boolean(envToken),
       auto_update: String(cfg.autoUpdate || 'no') === 'yes',
       account_id: cfg.cfAccountId || '',
-      script_name: cfg.cfScriptName || inferScriptName(new URL(request.url).hostname),
-      worker_name: String(env?.WORKER_NAME || '')
+      script_name: cfg.cfScriptName || scriptGuess,
+      worker_name: String(env?.WORKER_NAME || ''),
+      message: envToken
+        ? 'نصب خودکار از داخل همین ورکر فعال است.'
+        : 'برای نصب خودکار کافی است کلید CF_API_TOKEN را در متغیرهای ورکر (داشبورد کلادفلر) اضافه کنید؛ پنل هیچ ورودی حسابی نمی‌خواهد.'
     });
   }
 
   if (action === 'enable') {
-    const candidate = String(body?.token || envToken || stored || '').trim();
-    if (!candidate) {
-      return jsonResponse({ success: false, error: 'TOKEN_MISSING', message: 'توکن کلادفلر را وارد کنید.' }, 400);
+    if (!envToken) {
+      return jsonResponse({
+        success: false,
+        error: 'TOKEN_MISSING',
+        can_auto_deploy: false,
+        message: 'کلید CF_API_TOKEN روی این ورکر تنظیم نشده است؛ بدون آن فقط دانلود فایل نسخهٔ تازه و دستور استقرار در دسترس است.'
+      }, 400);
     }
-    const verified = await verifyUpdateToken(candidate);
+    const verified = await verifyUpdateToken(envToken);
     if (!verified.valid) {
-      return jsonResponse({ success: false, error: 'INVALID_TOKEN', message: verified.error || 'توکن معتبر نیست.' }, 400);
+      return jsonResponse({ success: false, error: 'INVALID_TOKEN', message: verified.error || 'کلید ورکر معتبر نیست.' }, 400);
     }
-    const account = await resolveAccountId(candidate, cfg.cfAccountId || '');
+    const account = await resolveAccountId(envToken, cfg.cfAccountId || '');
     const patch = { autoUpdate: 'yes' };
     if (account.accountId && !cfg.cfAccountId) patch.cfAccountId = account.accountId;
-    const scriptGuess = cfg.cfScriptName || inferScriptName(new URL(request.url).hostname) || '';
     if (scriptGuess && !cfg.cfScriptName) patch.cfScriptName = scriptGuess;
-    await setSecretSetting(env, 'cf_token', candidate);
     const saved = await saveGlobalConfig(env, patch);
-    await addAuditLog(env, 'اتصال توکن بروزرسانی', `حساب: ${account.accountId ? account.accountId.slice(-6) : 'نامشخص'}`, clientIp).catch(() => {});
+    await addAuditLog(env, 'فعال‌سازی بروزرسانی خودکار', `حساب: ${account.accountId ? account.accountId.slice(-6) : 'نامشخص'}`, clientIp).catch(() => {});
     return jsonResponse({
       success: true,
       has_token: true,
+      can_auto_deploy: true,
       auto_update: true,
       account_id: saved?.cfAccountId || patch.cfAccountId || '',
       script_name: saved?.cfScriptName || patch.cfScriptName || '',
-      message: 'توکن تأیید شد و بروزرسانی خودکار روشن شد.'
+      message: 'کلید ورکر تأیید شد و بروزرسانی خودکار روشن شد.'
     });
   }
 
   if (action === 'disable') {
     await saveGlobalConfig(env, { autoUpdate: 'no' });
     return jsonResponse({ success: true, auto_update: false, message: 'بروزرسانی خودکار خاموش شد.' });
-  }
-
-  if (action === 'clear-token') {
-    await setSecretSetting(env, 'cf_token', '');
-    await saveGlobalConfig(env, { autoUpdate: 'no' });
-    return jsonResponse({ success: true, has_token: false, auto_update: false, message: 'توکن ذخیره‌شده حذف شد.' });
   }
 
   return jsonResponse({ success: false, error: 'action نامعتبر است' }, 400);
@@ -1264,7 +1304,7 @@ export async function handleScannerApi(request, env) {
         ipv4: IP_RANGE_SOURCES.ipv4.length,
         ipv6: IP_RANGE_SOURCES.ipv6.length
       },
-      // آی‌پی‌ها و دامنه‌های پیش‌فرض CFnew برای افزودن مستقیم به yx از داخل اسکنر
+      // آی‌پی‌ها و دامنه‌های پیش‌فرض لبهٔ کلادفلر برای افزودن مستقیم به yx از داخل اسکنر
       officialIps: OFFICIAL_DIRECT_IPS,
       officialIpv6: OFFICIAL_DIRECT_IPV6,
       directDomains: DIRECT_DOMAINS.map(item => item.domain)
@@ -1377,7 +1417,7 @@ export async function handleScannerApi(request, env) {
           ...(family === 'ipv4' ? [] : curatedV6)
         ];
 
-        // لیست زنده آی‌پی‌های فرانت‌شده کلادفلر (Z-E-U-S)؛ آدرس‌های تصادفی داخل رنج‌ها
+        // لیست زنده آی‌پی‌های فرانت‌شده کلادفلر؛ آدرس‌های تصادفی داخل رنج‌ها
         // از داخل ورکر کلادفلر قابل اتصال نیستند، بنابراین از خود لیست نمونه می‌گیریم.
         // فیدهای همیشه‌به‌روز: آی‌پی‌های تست‌شدهٔ IPDB (BestCF) و پروکسی‌آی‌پی‌های آمادهٔ (BestProxy)
         const ipListSources = family === 'ipv6' ? [] : [...IP_CANDIDATE_SOURCES, ...PROXY_IP_SOURCES];

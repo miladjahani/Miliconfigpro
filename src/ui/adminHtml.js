@@ -1,5 +1,5 @@
 // ============================================================================
-// miliconfig v3.1 - مرکز کنترل سیستم‌عامل مدیریت (تم Z-E-U-S)
+// miliconfig v3.2 - مرکز کنترل مدیریت پنل
 // بدون ایموجی - تمام آیکون‌ها SVG اختصاصی - دکمه‌ها با event delegation
 // ============================================================================
 
@@ -41,8 +41,8 @@ const PANEL_I18N = {
     'metric.ips': 'آی‌پی‌های سالم', 'metric.protocols': 'پروتکل‌های فعال',
     'settings.protocols': 'پروتکل‌ها و قابلیت‌ها', 'settings.network': 'شبکه و ترنسپورت', 'settings.panel': 'پنل و امنیت',
     'scanner.country': 'کشور', 'scanner.kind': 'نوع', 'scanner.family': 'خانواده آی‌پی',
-    'scanner.count': 'تعداد', 'scanner.addCfIps': 'افزودن IPهای پیش‌فرض CFnew به yx',
-    'scanner.addCfDomains': 'افزودن دامنه‌های پیش‌فرض CFnew به yx',
+    'scanner.count': 'تعداد',    'scanner.addCfIps': 'افزودن آی‌پی‌های پیش‌فرض کلادفلر به yx',
+    'scanner.addCfDomains': 'افزودن دامنه‌های پیش‌فرض کلادفلر به yx',
     'modal.create': 'ایجاد کاربر جدید', 'modal.username': 'نام کاربری', 'modal.preset': 'پریست',
     'modal.limit': 'حجم مجاز (GB) — صفر برای نامحدود', 'modal.days': 'مدت اعتبار (روز) — صفر برای بدون انقضا',
     'modal.nodes': 'تعداد نود در ساب‌لینک', 'modal.createBtn': 'ساخت کاربر', 'modal.cancel': 'انصراف',
@@ -88,8 +88,8 @@ const PANEL_I18N = {
     'metric.ips': 'Healthy IPs', 'metric.protocols': 'Active protocols',
     'settings.protocols': 'Protocols & features', 'settings.network': 'Network & transport', 'settings.panel': 'Panel & security',
     'scanner.country': 'Country', 'scanner.kind': 'Type', 'scanner.family': 'IP family',
-    'scanner.count': 'Count', 'scanner.addCfIps': 'Add CFnew default IPs to yx',
-    'scanner.addCfDomains': 'Add CFnew default domains to yx',
+    'scanner.count': 'Count',    'scanner.addCfIps': 'Add Cloudflare default IPs to yx',
+    'scanner.addCfDomains': 'Add Cloudflare default domains to yx',
     'modal.create': 'Create new user', 'modal.username': 'Username', 'modal.preset': 'Preset',
     'modal.limit': 'Data limit (GB) — 0 for unlimited', 'modal.days': 'Validity (days) — 0 for never',
     'modal.nodes': 'Nodes in subscription', 'modal.createBtn': 'Create user', 'modal.cancel': 'Cancel',
@@ -165,7 +165,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
     clock: icon('clock'),
     power: icon('power'),
     layers: icon('layers'),
-    download: icon('download')
+    download: icon('download'),
+    signal: icon('signal')
   });
 
   const ssmethods = ['none'];
@@ -218,7 +219,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    padding-bottom: 108px;
+    padding-bottom: 48px;
     -webkit-font-smoothing: antialiased;
   }
   body::before {
@@ -278,7 +279,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
   body.light-mode .card,
   body.light-mode .user-card,
   body.light-mode .loc-card { background: #ffffff; }
-  body.light-mode .dock { background: rgba(255, 255, 255, 0.95); }
+
   body.light-mode .modal-card { background: #ffffff; }
   body.light-mode .toast-body { background: #ffffff; color: #0c1a12; }
   body.light-mode .field input,
@@ -290,7 +291,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
   body.light-mode .icon-btn { background: #ffffff; color: #0c1a12; }
   body.light-mode .chip { background: #ffffff; }
   body.light-mode .scan-status { color: #5a6d60; }
-  body.light-mode .dock-item { color: #4b5c50; }
+
   body.light-mode .switch i { background: #cfdcd4; }
 
   .mi { width: 20px; height: 20px; display: inline-block; vertical-align: middle; flex: none; }
@@ -357,7 +358,45 @@ export function renderAdminDashboardHtml(initialData = {}) {
   .topbar .hide-sm { display: inline-flex; }
 
   /* ---------- main ---------- */
-  .main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 10px; }
+  .main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 10px; }
+
+  /* ---------- نوار تب‌ها (جدا از منو) ---------- */
+  .tabbar {
+    position: sticky;
+    top: 61px;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 2px 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(5, 8, 10, 0.96), rgba(5, 8, 10, 0.74));
+    backdrop-filter: blur(14px);
+    scrollbar-width: none;
+  }
+  .tabbar::-webkit-scrollbar { display: none; }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    padding: 9px 15px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  }
+  .tab:hover { color: var(--text); border-color: var(--line-strong); background: var(--neon-soft); }
+  .tab.is-active { color: var(--neon); border-color: var(--line-strong); background: var(--neon-soft); }
+  .tab .mi { width: 17px; height: 17px; }
+  body.light-mode .tabbar { background: linear-gradient(180deg, rgba(238, 243, 240, 0.96), rgba(238, 243, 240, 0.72)); }
   .panel { display: none; animation: rise 0.32s ease both; }
   .panel.is-active { display: block; }
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -581,32 +620,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
   .loc-name { font-size: 0.8rem; font-weight: 700; }
   .loc-meta { font-size: 0.68rem; color: var(--muted-2); margin-top: 2px; }
 
-  /* ---------- dock ---------- */
-  .dock-wrap { position: fixed; inset-inline: 0; bottom: 14px; z-index: 60; display: flex; justify-content: center; pointer-events: none; }
-  .dock {
-    pointer-events: auto;
-    display: flex; align-items: center; gap: 4px;
-    padding: 7px;
-    border-radius: 20px;
-    border: 1px solid var(--line);
-    background: rgba(6, 10, 9, 0.9);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4) inset;
-  }
-  .dock-item {
-    appearance: none; border: 0; background: transparent; color: var(--muted);
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    min-width: 74px; padding: 8px 10px; border-radius: 14px;
-    font-family: inherit; font-size: 0.68rem; font-weight: 600; cursor: pointer;
-    transition: 0.16s; position: relative;
-  }
-  .dock-item .mi { width: 21px; height: 21px; }
-  .dock-item:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
-  .dock-item.is-active { color: var(--neon); background: var(--neon-soft); }
-  .dock-item.is-active::after {
-    content: ""; position: absolute; bottom: 4px; width: 4px; height: 4px; border-radius: 50%;
-    background: var(--neon); box-shadow: 0 0 8px var(--neon-glow);
-  }
 
   /* ---------- modal / toast ---------- */
   .modal { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(2, 5, 4, 0.72); backdrop-filter: blur(6px); }
@@ -646,8 +659,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
     .scan-controls { grid-template-columns: 1fr; }
     .window-body { padding: 14px; }
     .window-sub { display: none; }
-    .dock-item { min-width: 60px; padding: 7px 6px; font-size: 0.62rem; }
-    .dock-item .mi { width: 19px; height: 19px; }
   }
 
   /* ---------- mobile drawer (کشوی منو) ---------- */
@@ -738,13 +749,15 @@ export function renderAdminDashboardHtml(initialData = {}) {
 
   /* قواعد موبایل آخرین بلوک استایل هستند تا بر قواعد پایهٔ بالا اولویت داشته باشند */
   @media (max-width: 820px) {
-    .dock-wrap { display: none; }
     .topbar > .icon-btn:not(.menu-btn) { display: none; }
     .topbar > .chip:not(.mobile-keep) { display: none; }
     .menu-btn { display: inline-flex; }
     .nav-drawer { display: block; }
     .drawer-backdrop { display: block; }
     .toast { bottom: 24px; }
+    .tabbar { top: 57px; padding: 8px 0 10px; gap: 6px; }
+    .tab { padding: 8px 12px; font-size: 0.79rem; }
+    .tab span { display: inline; }
   }
 </style>
 </head>
@@ -781,14 +794,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
       </div>
       <button class="icon-btn drawer-close" type="button" data-act="close-drawer" title="بستن">${icon('close')}</button>
     </div>
-    <div class="drawer-group">صفحه‌ها</div>
-    <div class="drawer-list">
-      <button class="drawer-item is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span class="drawer-label">داشبورد</span><span class="drawer-hint">وضعیت زنده</span></button>
-      <button class="drawer-item" type="button" data-tab="users">${icon('users')}<span class="drawer-label">کاربران</span><span class="drawer-hint">ساخت و مدیریت</span></button>
-      <button class="drawer-item" type="button" data-tab="scanner">${icon('radar')}<span class="drawer-label">اسکنر</span><span class="drawer-hint">آی‌پی و پروکسی</span></button>
-      <button class="drawer-item" type="button" data-tab="locations">${icon('globe')}<span class="drawer-label">چندلوکیشن</span><span class="drawer-hint">کشورها</span></button>
-      <button class="drawer-item" type="button" data-tab="settings">${icon('settings')}<span class="drawer-label">تنظیمات</span><span class="drawer-hint">همه گزینه‌ها</span></button>
-    </div>
     <div class="drawer-group">نسخه</div>
     <div class="drawer-list">
       <button class="drawer-item" type="button" data-act="check-update">${icon('refresh')}<span class="drawer-label">بررسی بروزرسانی</span><span class="drawer-hint" id="drawerVersion">v${VERSION.replace(/^v/i, '')}</span></button>
@@ -802,6 +807,18 @@ export function renderAdminDashboardHtml(initialData = {}) {
       <button class="drawer-item danger" type="button" data-act="logout">${icon('logout')}<span class="drawer-label">خروج</span></button>
     </div>
   </nav>
+
+  <main class="main">
+
+  <!-- نوار تب‌ها: از منو جدا است و همهٔ صفحه‌ها را با یک کلیک عوض می‌کند -->
+  <nav class="tabbar" id="tabbar" aria-label="تب‌های پنل">
+    <button class="tab is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span data-i18n="nav.dashboard">داشبورد</span></button>
+    <button class="tab" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
+    <button class="tab" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
+    <button class="tab" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
+    <button class="tab" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
+  </nav>
+
     <section class="panel is-active" data-panel="dashboard">
       <div class="window">
         <div class="window-head">
@@ -825,7 +842,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
             <div class="metric">
               <div class="metric-top"><span class="metric-label" data-i18n="metric.ips">آی‌پی‌های سالم</span><span class="metric-icon">${icon('server')}</span></div>
               <div class="metric-value" id="mIps">0 <small>نود</small></div>
-              <div class="metric-foot">CFnew + نودهای ترجیحی</div>
+              <div class="metric-foot">نودهای ترجیحی · IPv4 / IPv6 / دامنه</div>
             </div>
             <div class="metric">
               <div class="metric-top"><span class="metric-label" data-i18n="metric.protocols">پروتکل‌های فعال</span><span class="metric-icon">${icon('layers')}</span></div>
@@ -860,17 +877,18 @@ export function renderAdminDashboardHtml(initialData = {}) {
             <div class="kv"><span>نسخهٔ نصب‌شده</span><b class="mono">v${VERSION.replace(/^v/i, '')}</b></div>
             <div class="kv"><span>آخرین نسخهٔ گیت‌هاب</span><b class="mono" id="updLatest">—</b></div>
             <div class="kv"><span>وضعیت</span><b id="updState">بررسی نشده</b></div>
-            <div class="kv"><span>توکن کلادفلر</span><b id="updToken">—</b></div>
+            <div class="kv"><span>نصب خودکار</span><b id="updAuto">—</b></div>
             <div class="kv"><span>اسکریپت هدف</span><b class="mono" id="updScript">—</b></div>
             <div class="toolbar" style="margin-top:10px;flex-wrap:wrap;">
               <button class="btn sm" type="button" data-act="check-update">${icon('refresh')} بررسی بروزرسانی</button>
-              <button class="btn sm" type="button" data-act="open-token">${icon('key')} اتصال توکن</button>
-              <button class="btn sm primary" type="button" data-act="apply-update">${icon('download')} بروزرسانی خودکار</button>
+              <button class="btn sm" type="button" data-act="download-update">${icon('download')} دانلود فایل نسخهٔ تازه</button>
+              <button class="btn sm" type="button" data-act="copy-update-cmd">${icon('copy')} کپی دستور استقرار</button>
+              <button class="btn sm primary" type="button" data-act="apply-update">${icon('bolt')} نصب خودکار</button>
               <button class="btn sm ghost" type="button" data-act="disable-autoupdate">${icon('close')} خاموش کردن</button>
             </div>
             <div class="loc-meta" style="margin-top:8px;line-height:1.9;">
-              توکن را با دسترسی <b class="mono">Workers Scripts: Edit</b> بسازید و همین‌جا وصل کنید؛ پنل آن را در دیتابیس محرمانه نگه می‌دارد و بایندینگ‌های D1/KV را هنگام آپدیت حفظ می‌کند.
-              اگر پروژه به گیت‌هاب وصل باشد، هر push به main خودکار مستقر می‌شود و نیازی به این کار نیست.
+              بروزرسانی هیچ ورودی از حساب کلادفلر نمی‌خواهد. اگر این ورکر به گیت‌هاب وصل باشد، نسخهٔ تازه خودکار مستقر می‌شود؛ وگرنه فایل تازه را دانلود کنید یا دستور آمادهٔ استقرار را اجرا کنید.
+              نصب خودکار از داخل پنل فقط وقتی فعال می‌شود که متغیر محرمانهٔ <b class="mono">CF_API_TOKEN</b> در تنظیمات خود ورکر تعریف شده باشد.
             </div>
             <ul id="updNotes" class="loc-meta" style="margin:8px 0 0;padding-inline-start:18px;display:none;"></ul>
           </div>
@@ -957,7 +975,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
           <div class="form-grid">
             <div class="field">
               <label>رمز تروجان (tp)</label>
-              <input type="text" data-key="tp" placeholder="اختیاری">
+              <input type="text" data-key="tp" list="dlTp" placeholder="اختیاری">
             </div>
             <div class="field">
               <label>متد Shadowsocks</label>
@@ -998,7 +1016,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>ProxyIP سفارشی (p)</label>
-              <input type="text" data-key="p" placeholder="domain:port">
+              <input type="text" data-key="p" list="dlProxyIp" placeholder="domain:port">
             </div>
             <div class="field">
               <label>تعداد نود چندلوکیشن</label>
@@ -1006,20 +1024,20 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>پروکسی خروجی (s)</label>
-              <input type="text" data-key="s" placeholder="socks5://user:pass@host:port">
+              <input type="text" data-key="s" list="dlProxy" placeholder="socks5://user:pass@host:port">
               <span class="hint">ترافیک خروجی از این پروکسی عبور می‌کند (همان مقدار در مسیر نود هم گذاشته می‌شود).</span>
             </div>
             <div class="field" data-show-when="frag">
               <label>طول فرگمنت</label>
-              <input type="text" data-key="fragmentLength" placeholder="100-200">
+              <input type="text" data-key="fragmentLength" list="dlFragmentLen" placeholder="100-200">
             </div>
             <div class="field" data-show-when="frag">
               <label>فاصله فرگمنت</label>
-              <input type="text" data-key="fragmentInterval" placeholder="10-20">
+              <input type="text" data-key="fragmentInterval" list="dlFragmentInt" placeholder="10-20">
             </div>
             <div class="field" data-show-when="frag">
               <label>نوع پکت فرگمنت</label>
-              <input type="text" data-key="fragmentPackets" placeholder="tlshello">
+              <input type="text" data-key="fragmentPackets" list="dlFragmentPackets" placeholder="tlshello">
             </div>
             <div class="field">
               <label data-i18n="field.dns">DNS سفارشی (DoH)</label>
@@ -1027,17 +1045,17 @@ export function renderAdminDashboardHtml(initialData = {}) {
                 ${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}
                 <option value="custom">سفارشی (مقدار دلخواه)</option>
               </select>
-              <input type="text" data-key="customDNS" placeholder="https://223.5.5.5/dns-query" style="margin-top:8px;">
+              <input type="text" data-key="customDNS" list="dlDNS" placeholder="https://223.5.5.5/dns-query" style="margin-top:8px;">
               <span class="hint" data-i18n="field.dnsHint">یک DNS از لیست انتخاب کنید یا مقدار دلخواه DoH بنویسید.</span>
             </div>
             <div class="field">
               <label data-i18n="field.ports">پورت‌های نود (ports)</label>
-              <input type="text" data-key="ports" placeholder="443,2053,2087,8443">
+              <input type="text" data-key="ports" list="dlPorts" placeholder="443,2053,2087,8443">
               <span class="hint">لیست پورت‌ها با کاما — مجاز: ${CF_PORT_CHOICES.map(p => p.port).join(' , ')}. پورت HTTP فقط وقتی ECH خاموش است استفاده می‌شود.</span>
             </div>
             <div class="field">
               <label>پورت‌های HTTP (حالت دوم هر نود)</label>
-              <input type="text" data-key="httpPorts" placeholder="80,8080">
+              <input type="text" data-key="httpPorts" list="dlHttpPorts" placeholder="80,8080">
               <span class="hint">هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ HTTP می‌گیرد؛ خالی بگذارید تا فقط نودهای TLS ساخته شوند.</span>
             </div>
           </div>
@@ -1065,18 +1083,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
               <label class="switch"><input type="checkbox" data-key="ovpn"><i></i></label>
             </div>
             <div class="switch-row">
-              <div class="switch-meta">${icon('refresh')}<div><b>بروزرسانی خودکار نسخه</b><span>با توکن کلادفلر، نسخهٔ تازهٔ گیت‌هاب خودکار مستقر می‌شود</span></div></div>
+              <div class="switch-meta">${icon('refresh')}<div><b>بروزرسانی خودکار نسخه</b><span>نسخهٔ تازهٔ گیت‌هاب بدون هیچ ورودی حسابی مستقر می‌شود</span></div></div>
               <label class="switch"><input type="checkbox" data-key="autoUpdate"><i></i></label>
-            </div>
-            <div class="field">
-              <label>Cloudflare Account ID</label>
-              <input type="text" data-key="cfAccountId" placeholder="مثلاً 5f3c...">
-              <span class="hint">برای بروزرسانی خودکار؛ این مقدار محرمانه نیست.</span>
-            </div>
-            <div class="field">
-              <label>نام اسکریپت Workers</label>
-              <input type="text" data-key="cfScriptName" placeholder="miliconfig-worker-v5">
-              <span class="hint">همان نامی که در ورکر یا wrangler تنظیم شده است. توکن را در بخش Keys با نام CF_API_TOKEN اضافه کنید.</span>
             </div>
             <div class="field">
               <label>تعداد نود دامنهٔ پنل</label>
@@ -1093,7 +1101,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>نقاط پایانی WARP سفارشی</label>
-              <input type="text" data-key="warpEndpoint" placeholder="162.159.192.1:2408#DE,188.114.97.1:500#TR">
+              <input type="text" data-key="warpEndpoint" list="dlWarpEndpoint" placeholder="162.159.192.1:2408#DE,188.114.97.1:500#TR">
               <span class="hint">خالی بگذارید تا نقاط پایانی رسمی کلادفلر به‌صورت چرخشی استفاده شوند. برچسب هر آی‌پی نام لوکیشن نود می‌شود.</span>
             </div>
             <div class="field">
@@ -1102,7 +1110,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>کشورهای OpenVPN</label>
-              <input type="text" data-key="ovpnCountries" placeholder="JP,KR,US">
+              <input type="text" data-key="ovpnCountries" list="dlCountries" placeholder="JP,KR,US">
               <span class="hint">کد کشورها با کاما (مثلاً JP,KR,US). خالی = انتخاب خودکار از کشورهای مختلف.</span>
             </div>
             <div class="field">
@@ -1125,16 +1133,16 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label data-i18n="field.customPath">مسیر سفارشی پنل (d)</label>
-              <input type="text" data-key="d" placeholder="admin">
+              <input type="text" data-key="d" list="dlAdminPath" placeholder="admin">
               <span class="hint">در صورت خالی بودن، همان مسیر رندوم بالا استفاده می‌شود.</span>
             </div>
             <div class="field">
               <label>صفحه استتار (homepage)</label>
-              <input type="text" data-key="homepage" placeholder="https://example.com">
+              <input type="text" data-key="homepage" list="dlHomepage" placeholder="https://example.com">
             </div>
             <div class="field">
               <label>نودهای ترجیحی (yx)</label>
-              <input type="text" data-key="yx" placeholder="1.2.3.4:443#Node, 5.6.7.8:443#Node2">
+              <input type="text" data-key="yx" list="dlYx" placeholder="1.2.3.4:443#Node, 5.6.7.8:443#Node2">
             </div>
             <div class="field">
               <label data-i18n="field.nodeCount">تعداد نود هر کاربر</label>
@@ -1194,8 +1202,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
           </div>
           <div class="scan-status" id="scanHint">آی‌پی‌های سالم با دکمهٔ «افزودن به yx» و پروکسی‌ها با «اتصال به s» در تنظیمات ذخیره می‌شوند.</div>
           <div class="toolbar" style="margin-top: 12px;">
-            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن IPهای پیش‌فرض CFnew به yx</span></button>
-            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض CFnew به yx</span></button>
+            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن آی‌پی‌های پیش‌فرض کلادفلر به yx</span></button>
+            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض کلادفلر به yx</span></button>
           </div>
           <div class="scan-status" id="scanStatus"></div>
           <div class="table-wrap">
@@ -1235,15 +1243,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
     </section>
   </main>
 
-  <div class="dock-wrap">
-    <nav class="dock">
-      <button class="dock-item is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span data-i18n="nav.dashboard">داشبورد</span></button>
-      <button class="dock-item" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
-      <button class="dock-item" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
-      <button class="dock-item" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
-      <button class="dock-item" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
-    </nav>
-  </div>
 
   <div class="modal" id="createModal">
     <div class="modal-card">
@@ -1251,9 +1250,9 @@ export function renderAdminDashboardHtml(initialData = {}) {
       <div class="modal-body">
         <div class="field"><label>نام کاربری</label><input type="text" id="newUsername" placeholder="مثلاً ali"></div>
         <div class="field"><label>پریست</label><select id="newPreset">${presetOptions}</select></div>
-        <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" value="0"></div>
-        <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" value="0"></div>
-        <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" value="${Number(config.subNodeCount) || 50}"></div>
+        <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" list="dlDataLimit" value="0"></div>
+        <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" list="dlExpireDays" value="0"></div>
+        <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" list="dlNodeCount" value="${Number(config.subNodeCount) || 50}"></div>
         
         <details class="adv-box" open>
           <summary data-i18n="modal.advanced">تنظیمات کامل این کاربر (همه گزینه‌ها واقعی و روی ساب اثر دارند)</summary>
@@ -1263,8 +1262,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
             <div class="field"><label>Trojan (WebSocket)</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label>Shadowsocks</label><select id="cfgEs"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label>xHTTP (ضد فیلتر)</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
-            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
+            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" list="dlPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
+            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" list="dlHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
             <div class="field"><label>IPv4</label><select id="cfgIpv4"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
             <div class="field"><label>IPv6</label><select id="cfgIpv6"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
             <div class="field"><label>آی‌پی ثابت / لبهٔ CDN (epi)</label><select id="cfgEpi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
@@ -1293,8 +1292,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
             <div class="field"><label data-i18n="field.patt">الگوی مسیر</label>
               <select id="cfgPatt">${PATH_PATTERNS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
             </div>
-            <div class="field"><label data-i18n="field.yx">نودهای ترجیحی (yx)</label><input type="text" id="cfgYx" placeholder="1.2.3.4:443#Node"></div>
-            <div class="field"><label data-i18n="field.outProxy">پروکسی خروجی (s)</label><input type="text" id="cfgS" placeholder="socks5://host:1080"></div>
+            <div class="field"><label data-i18n="field.yx">نودهای ترجیحی (yx)</label><input type="text" id="cfgYx" list="dlYx" placeholder="1.2.3.4:443#Node"></div>
+            <div class="field"><label data-i18n="field.outProxy">پروکسی خروجی (s)</label><input type="text" id="cfgS" list="dlProxy" placeholder="socks5://host:1080"></div>
           </div>
         </details>
       </div>
@@ -1320,24 +1319,95 @@ export function renderAdminDashboardHtml(initialData = {}) {
     </div>
   </div>
 
-  <div class="modal" id="tokenModal">
-    <div class="modal-card">
-      <div class="modal-head"><b>${icon('key')} اتصال توکن بروزرسانی</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="tokenModal">${icon('close')}</button></div>
-      <div class="modal-body">
-        <div class="field">
-          <label>Cloudflare API Token</label>
-          <input type="password" id="cfToken" autocomplete="off" placeholder="توکن با دسترسی Workers Scripts: Edit">
-          <span class="hint">توکن فقط برای آپلود نسخهٔ تازه استفاده می‌شود و در دیتابیس محرمانه ذخیره می‌گردد.</span>
-        </div>
-        <div class="field"><label>Account ID (اختیاری — خودکار شناسایی می‌شود)</label><input type="text" id="cfAccountInput" placeholder="خالی بگذارید تا از توکن خوانده شود"></div>
-        <div class="field"><label>نام اسکریپت Workers (اختیاری)</label><input type="text" id="cfScriptInput" placeholder="مثل miliconfig-worker-v5"></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn primary" type="button" data-act="enable-autoupdate">${icon('check')} تأیید و فعال‌سازی</button>
-        <button class="btn ghost" type="button" data-act="close-modal" data-modal="tokenModal">انصراف</button>
-      </div>
-    </div>
-  </div>
+  <!-- لیست‌های آماده: همهٔ ورودی‌های متنی فرم ساخت کاربر و تنظیمات پیشنهاد آماده دارند -->
+  <datalist id="dlPorts">
+    <option value="443,2053,2087,8443"></option>
+    <option value="443"></option>
+    <option value="8443"></option>
+    <option value="2053,2087,2096"></option>
+    <option value="443,8443"></option>
+    <option value="2053"></option>
+    <option value="2087"></option>
+    <option value="2096"></option>
+  </datalist>
+  <datalist id="dlHttpPorts">
+    <option value="80,8080"></option>
+    <option value="80"></option>
+    <option value="8080"></option>
+    <option value="8080,8880"></option>
+    <option value="2052,2082"></option>
+  </datalist>
+  <datalist id="dlNodeCount">
+    <option value="30"></option><option value="50"></option><option value="80"></option>
+    <option value="100"></option><option value="120"></option><option value="150"></option>
+    <option value="200"></option>
+  </datalist>
+  <datalist id="dlDataLimit">
+    <option value="0"></option><option value="10"></option><option value="30"></option>
+    <option value="50"></option><option value="100"></option><option value="200"></option>
+  </datalist>
+  <datalist id="dlExpireDays">
+    <option value="0"></option><option value="7"></option><option value="15"></option>
+    <option value="30"></option><option value="60"></option><option value="90"></option>
+    <option value="180"></option>
+  </datalist>
+  <datalist id="dlFragmentLen">
+    <option value="100-200"></option><option value="50-100"></option><option value="10-20"></option>
+    <option value="5-10"></option><option value="200-400"></option>
+  </datalist>
+  <datalist id="dlFragmentInt">
+    <option value="10-20"></option><option value="5-10"></option><option value="20-40"></option>
+    <option value="1-3"></option>
+  </datalist>
+  <datalist id="dlFragmentPackets">
+    <option value="tlshello"></option><option value="1-3"></option><option value="1-5"></option>
+  </datalist>
+  <datalist id="dlProxy">
+    <option value="socks5://host:1080"></option>
+    <option value="socks5://user:pass@host:1080"></option>
+    <option value="http://host:8080"></option>
+    <option value="https://host:443"></option>
+  </datalist>
+  <datalist id="dlProxyIp">
+    <option value="example.com:443"></option><option value="1.2.3.4:443"></option>
+    <option value="[2606:4700::1]:443"></option>
+  </datalist>
+  <datalist id="dlYx">
+    <option value="1.2.3.4:443#Node"></option>
+    <option value="[2606:4700::1]:443#IPv6"></option>
+    <option value="example.com:443#Domain"></option>
+    <option value="1.2.3.4:443#A,5.6.7.8:443#B"></option>
+  </datalist>
+  <datalist id="dlCountries">
+    <option value="DE"></option><option value="FR"></option><option value="NL"></option>
+    <option value="US"></option><option value="GB"></option><option value="TR"></option>
+    <option value="JP"></option><option value="KR"></option><option value="SG"></option>
+    <option value="FI"></option><option value="SE"></option><option value="AE"></option>
+  </datalist>
+  <datalist id="dlWarpEndpoint">
+    <option value="162.159.192.1:2408#DE"></option>
+    <option value="188.114.97.1:500#TR"></option>
+    <option value="[2606:4700:d0::a29f:c001]:2408#US"></option>
+    <option value="162.159.192.1:2408#DE,188.114.97.1:500#TR"></option>
+  </datalist>
+  <datalist id="dlDNS">
+    <option value="https://223.5.5.5/dns-query"></option>
+    <option value="https://1.1.1.1/dns-query"></option>
+    <option value="https://8.8.8.8/dns-query"></option>
+    <option value="https://dns.google/dns-query"></option>
+    <option value="https://cloudflare-dns.com/dns-query"></option>
+  </datalist>
+  <datalist id="dlHomepage">
+    <option value="https://www.cloudflare.com"></option>
+    <option value="https://www.google.com"></option>
+    <option value="https://example.com"></option>
+  </datalist>
+  <datalist id="dlAdminPath">
+    <option value="admin"></option><option value="panel"></option><option value="manage"></option>
+  </datalist>
+  <datalist id="dlTp">
+    <option value=""></option><option value="mili-pass"></option><option value="change-me"></option>
+  </datalist>
 
   <div class="toast"><div class="toast-body" id="toastBody"></div></div>
 
@@ -1415,7 +1485,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     document.querySelectorAll('.panel').forEach(function(p) {
       p.classList.toggle('is-active', p.getAttribute('data-panel') === name);
     });
-    document.querySelectorAll('.dock-item').forEach(function(b) {
+    document.querySelectorAll('.tab[data-tab]').forEach(function(b) {
       b.classList.toggle('is-active', b.getAttribute('data-tab') === name);
     });
     document.querySelectorAll('.drawer-item[data-tab]').forEach(function(b) {
@@ -1493,6 +1563,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=clash">' + ICO.layers + ' Clash</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=singbox">' + ICO.bolt + ' Singbox</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=domain">' + ICO.globe + ' ' + t('btn.domainSub') + '</button>',
+          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=ipv6">' + ICO.signal + ' IPv6 همراه اول</button>',
           '<a class="btn sm" href="' + statusUrl + '" target="_blank" rel="noopener">' + ICO.external + ' ' + t('btn.status') + '</a>',
           '<button class="btn sm ghost" type="button" data-act="test-nodes" data-user="' + userKey(u) + '">' + ICO.radar + ' ' + t('btn.testNodes') + '</button>',
           '<button class="btn sm ghost" type="button" data-act="reset-user" data-id="' + u.id + '">' + ICO.refresh + ' ' + t('btn.resetUser') + '</button>',
@@ -1643,7 +1714,12 @@ export function renderAdminDashboardHtml(initialData = {}) {
           state.config = Object.assign({}, state.config, payload);
           fillSettings();
           renderMetrics();
-          showToast('تنظیمات در D1 ذخیره شد', 'ok');
+          // پیام سرور دقیقاً می‌گوید در D1 ذخیره شد یا نه (تأیید با خواندن مجدد)
+          showToast(data.message || 'تنظیمات ذخیره شد', data.storedInD1 === false ? 'err' : 'ok');
+          if (data.storage) {
+            state.diagnostics = Object.assign({}, state.diagnostics, { storageMode: data.storage.mode });
+            if ($('storageText')) $('storageText').textContent = 'ذخیره‌سازی ' + data.storage.mode;
+          }
         } else {
           showToast(data.message || 'خطا در ذخیره تنظیمات', 'err');
         }
@@ -1741,9 +1817,10 @@ export function renderAdminDashboardHtml(initialData = {}) {
     var drawerVersion = $('drawerVersion');
     if (latest) latest.textContent = info && info.latest ? 'v' + info.latest : '—';
     if (drawerVersion && info && info.current) drawerVersion.textContent = 'v' + info.current;
-    if ($('updToken')) {
-      $('updToken').textContent = info && info.hasToken ? 'متصل' : 'تنظیم نشده';
-      $('updToken').style.color = info && info.hasToken ? 'var(--neon)' : 'var(--warn)';
+    if ($('updAuto')) {
+      var autoReady = Boolean(info && (info.autoApplyAvailable || info.tokenSource === 'env'));
+      $('updAuto').textContent = autoReady ? 'در دسترس (کلید خود ورکر)' : 'دانلود فایل / دستور استقرار';
+      $('updAuto').style.color = autoReady ? 'var(--neon)' : 'var(--warn)';
     }
     if ($('updScript')) $('updScript').textContent = (info && info.scriptName) || 'تشخیص خودکار';
     if (!stateEl) return;
@@ -1766,9 +1843,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
       notesEl.innerHTML = notes.map(function(n) { return '<li>' + n + '</li>'; }).join('');
       notesEl.style.display = notes.length ? 'block' : 'none';
     }
-    if (info.updateAvailable && !info.autoApplyAvailable) {
-      stateEl.textContent += ' — کلید CF_API_TOKEN یا حساب/اسکریپت تنظیم نشده';
-    }
   }
 
   function checkUpdate(silent) {
@@ -1777,54 +1851,37 @@ export function renderAdminDashboardHtml(initialData = {}) {
       .catch(function() { if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err'); });
   }
 
-  function openTokenModal() {
-    openModal('tokenModal');
-    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'check' }) })
-      .then(function(data) {
-        var tokenEl = $('updToken');
-        if (tokenEl) {
-          tokenEl.textContent = data.has_token ? (data.token_source === 'env' ? 'در env تنظیم شده' : 'ذخیره‌شده در پنل') : 'تنظیم نشده';
-          tokenEl.style.color = data.has_token ? 'var(--neon)' : 'var(--warn)';
-        }
-        if ($('updScript')) $('updScript').textContent = data.script_name || 'تشخیص خودکار';
-        if ($('cfAccountInput') && data.account_id) $('cfAccountInput').value = data.account_id;
-        if ($('cfScriptInput') && data.script_name) $('cfScriptInput').value = data.script_name;
+  // بروزرسانی بدون هیچ ورودی حسابی: فایل نسخهٔ تازه یا دستور آمادهٔ استقرار
+  function downloadUpdateBundle() {
+    var base = origin() + '/api/update-bundle';
+    window.open(base, '_blank');
+    showToast('دانلود فایل نسخهٔ تازه شروع شد', 'ok');
+  }
+
+  function copyUpdateCommand() {
+    api('/api/update?t=' + Date.now())
+      .then(function(info) {
+        var cmd = info && info.command
+          ? info.command
+          : 'curl -fsSL ' + (info && info.downloadUrl ? info.downloadUrl : '') + ' -o _worker.js && npx wrangler deploy _worker.js';
+        copyText(cmd, 'دستور استقرار کپی شد');
       })
-      .catch(function() {});
+      .catch(function() { showToast('خطای شبکه در دریافت دستور', 'err'); });
   }
 
   function enableAutoUpdate() {
-    var token = $('cfToken') ? $('cfToken').value.trim() : '';
-    var accountId = $('cfAccountInput') ? $('cfAccountInput').value.trim() : '';
-    var scriptName = $('cfScriptInput') ? $('cfScriptInput').value.trim() : '';
-    if (!token && !(document.getElementById('updToken') && document.getElementById('updToken').textContent !== 'تنظیم نشده')) {
-      showToast('توکن کلادفلر را وارد کنید', 'err');
-      return;
-    }
     var btn = document.querySelector('[data-act="enable-autoupdate"]');
     if (btn) btn.disabled = true;
-    var patch = {};
-    if (accountId) patch.cfAccountId = accountId;
-    if (scriptName) patch.cfScriptName = scriptName;
-    var saveConfig = Object.keys(patch).length
-      ? api('/api/config', { method: 'POST', body: JSON.stringify(patch) })
-      : Promise.resolve({ success: true });
-    saveConfig
-      .then(function() {
-        return api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'enable', token: token }) });
-      })
+    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'enable' }) })
       .then(function(data) {
         if (data.success) {
           showToast(data.message || 'بروزرسانی خودکار فعال شد', 'ok');
-          if ($('cfToken')) $('cfToken').value = '';
-          closeModal('tokenModal');
-          openTokenModal();
           checkUpdate(true);
         } else {
-          showToast(data.message || data.error || 'توکن تأیید نشد', 'err');
+          showToast(data.message || data.error || 'نصب خودکار در دسترس نیست', 'err');
         }
       })
-      .catch(function() { showToast('خطای شبکه در اتصال توکن', 'err'); })
+      .catch(function() { showToast('خطای شبکه در فعال‌سازی', 'err'); })
       .finally(function() { if (btn) btn.disabled = false; });
   }
 
@@ -1848,6 +1905,12 @@ export function renderAdminDashboardHtml(initialData = {}) {
         if (data.success) {
           showToast(data.message || 'نسخهٔ تازه مستقر شد', 'ok');
           setTimeout(function() { location.reload(); }, 2500);
+        } else if (data.needsManualDeploy) {
+          // بدون کلید ورکر: فایل نسخهٔ تازه یا دستور آماده
+          if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+          var cmd = data.command || '';
+          if (cmd) copyText(cmd, 'دستور استقرار کپی شد');
+          showToast(data.error || 'فایل نسخهٔ تازه و دستور استقرار آماده شد', 'err');
         } else {
           showToast(data.error || data.message || 'بروزرسانی ناموفق بود', 'err');
         }
@@ -2061,7 +2124,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     if (!items.length) { showToast('لیست پیش‌فرض خالی است', 'err'); return; }
     applyScanItems('yx', items).then(function(data) {
       if (data && data.success) {
-        showToast((kind === 'ips' ? 'آی‌پی‌های پیش‌فرض CFnew' : 'دامنه‌های پیش‌فرض CFnew') + ' به yx اضافه شدند', 'ok');
+        showToast((kind === 'ips' ? 'آی‌پی‌های پیش‌فرض کلادفلر' : 'دامنه‌های پیش‌فرض کلادفلر') + ' به yx اضافه شدند', 'ok');
       }
     });
   }
@@ -2178,7 +2241,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
     else if (act === 'apply-update') { applyUpdateNow(); }
-    else if (act === 'open-token') { openTokenModal(); }
+    else if (act === 'download-update') { downloadUpdateBundle(); }
+    else if (act === 'copy-update-cmd') { copyUpdateCommand(); }
     else if (act === 'enable-autoupdate') { enableAutoUpdate(); }
     else if (act === 'disable-autoupdate') { disableAutoUpdate(); }
     else if (act === 'open-password') { openModal('passwordModal'); }

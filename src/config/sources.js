@@ -206,32 +206,32 @@ export const COUNTRY_META = {
 };
 
 // ============================================================================
-// Z-E-U-S (panel-zeus/Z-E-U-S) — منبع رسمی دامنه، IPv4، IPv6 و پروکسی کشوری
-// ساختار مخزن: ips.txt (IPv4 بهینه)، ip6.txt (IPv6 بهینه)، dom.txt (دامنه‌های
-// لبه)، ech_dom.txt (دامنه‌های دارای ECH)، proxy/<CC>.txt (پروکسی هر کشور) و
+// منبع عمومی لبهٔ کلادفلر: دامنه، IPv4، IPv6 و پروکسی کشوری
+// ساختار: ips.txt (IPv4 بهینه)، ip6.txt (IPv6 بهینه)، dom.txt (دامنه‌های لبه)،
+// ech_dom.txt (دامنه‌های دارای ECH)، proxy/<CC>.txt (پروکسی هر کشور) و
 // proxy_vip/<CC>.txt (پروکسی VIP هر کشور، فهرستش در vip-list).
 // ============================================================================
-const ZEUS_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+const EDGE_MIRROR_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
 
-export const ZEUS_SOURCES = {
-  ipv4: ZEUS_BASE + 'ips.txt',
-  ipv6: ZEUS_BASE + 'ip6.txt',
-  domains: ZEUS_BASE + 'dom.txt',
-  echDomains: ZEUS_BASE + 'ech_dom.txt',
-  echDns: ZEUS_BASE + 'ech_dns.txt',
-  proxyAll: ZEUS_BASE + 'proxy/ALL.txt',
-  vipIndex: ZEUS_BASE + 'vip-list',
-  proxyCountry: code => ZEUS_BASE + `proxy/${String(code).toUpperCase()}.txt`,
-  vipCountry: code => ZEUS_BASE + `proxy_vip/${String(code).toUpperCase()}.txt`
+export const EDGE_MIRROR_SOURCES = {
+  ipv4: EDGE_MIRROR_BASE + 'ips.txt',
+  ipv6: EDGE_MIRROR_BASE + 'ip6.txt',
+  domains: EDGE_MIRROR_BASE + 'dom.txt',
+  echDomains: EDGE_MIRROR_BASE + 'ech_dom.txt',
+  echDns: EDGE_MIRROR_BASE + 'ech_dns.txt',
+  proxyAll: EDGE_MIRROR_BASE + 'proxy/ALL.txt',
+  vipIndex: EDGE_MIRROR_BASE + 'vip-list',
+  proxyCountry: code => EDGE_MIRROR_BASE + `proxy/${String(code).toUpperCase()}.txt`,
+  vipCountry: code => EDGE_MIRROR_BASE + `proxy_vip/${String(code).toUpperCase()}.txt`
 };
 
-// فقط این کشورها در مخزن Z-E-U-S فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
-export const ZEUS_VIP_COUNTRIES = [
+// فقط این کشورها فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
+export const EDGE_VIP_COUNTRIES = [
   'AD', 'AL', 'CA', 'DE', 'FI', 'FR', 'GB', 'IT', 'MC', 'MX',
   'NL', 'NO', 'RO', 'SE', 'TH', 'TR', 'US'
 ];
-const zeusVip = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
-const zeusProxy = code => raw(`panel-zeus/Z-E-U-S/main/proxy/${code}.txt`);
+const vipFeed = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
+const proxyFeed = code => raw(`panel-zeus/Z-E-U-S/main/proxy/${code}.txt`);
 
 // کدام کشورها در کدام قالب کشوری فایل دارند (بازبینی اکتبر ۲۰۲۶).
 // برای کشورهای غایب، ساختن آدرس فقط یک ۴۰۴ و یک subrequest هدر است.
@@ -260,9 +260,9 @@ export function buildCountryFeeds(code) {
   if (available.clearHttp.has(cc)) feeds.push(raw(`ClearProxy/checked-proxy-list/main/http/raw/country/${cc}.txt`));
   if (available.trioSocks.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/socks5.txt`));
   if (available.trioHttp.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/http.txt`));
-  // منبع Z-E-U-S اولویت دارد: پروکسی‌های VIP و معمولی همان کشور در مخزن z-e-u-s
-  if (ZEUS_VIP_COUNTRIES.includes(cc)) feeds.unshift(zeusVip(cc));
-  feeds.unshift(zeusProxy(cc));
+  // پروکسی‌های VIP و معمولی همان کشور اولویت دارند
+  if (EDGE_VIP_COUNTRIES.includes(cc)) feeds.unshift(vipFeed(cc));
+  feeds.unshift(proxyFeed(cc));
   return feeds;
 }
 
@@ -349,12 +349,11 @@ export const IPV6_CANDIDATE_SOURCES = [
 ];
 
 // دامنه‌های لبهٔ کلادفلر (برای نودهای دامنه‌محور و SNI جایگزین)
-// z-e-u-s: dom.txt (دامنه‌های سالم) و ech_dom.txt (دامنه‌های دارای ECH)
-// cfnew: فهرست دامنه‌های ترجیحی + فهرست آنلاین bestip
-const ZEUS_DOMAIN_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+// dom.txt (دامنه‌های سالم) و ech_dom.txt (دامنه‌های دارای ECH) + فهرست آنلاین bestip
+const EDGE_DOMAIN_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
 export const DOMAIN_CANDIDATE_SOURCES = [
-  ZEUS_DOMAIN_BASE + 'dom.txt',
-  ZEUS_DOMAIN_BASE + 'ech_dom.txt',
+  EDGE_DOMAIN_BASE + 'dom.txt',
+  EDGE_DOMAIN_BASE + 'ech_dom.txt',
   'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt'
 ];
 
@@ -367,11 +366,11 @@ export const PROXY_IP_SOURCES = [
 ];
 
 // ============================================================================
-// cfnew (byJoey/cfnew) — منابع ترجیحی خود مخزن، برای وقتی که هیچ تنظیمی نشده
+// منابع ترجیحی داخلی لبهٔ کلادفلر، برای وقتی که هیچ تنظیمی نشده است
 // ============================================================================
 
-// ۲۱ دامنهٔ ترجیحی cfnew (همان آرایهٔ const 直连域名列表 در سورس ورکر)
-export const CFNEW_PREFERRED_DOMAINS = [
+// ۲۱ دامنهٔ ترجیحی تأییدشده
+export const PREFERRED_EDGE_DOMAINS = [
   'cloudflare.182682.xyz',
   'speed.marisalnc.com',
   'freeyx.cloudflare88.eu.org',
@@ -395,8 +394,8 @@ export const CFNEW_PREFERRED_DOMAINS = [
   'xn--b6gac.eu.org'
 ];
 
-// ۱۰ آی‌پی «اتصال رسمی» cfnew (هر کدام در یک /24 متفاوت)
-export const CFNEW_DIRECT_IPS = [
+// ۱۰ آی‌پی «اتصال رسمی» (هر کدام در یک /24 متفاوت)
+export const DIRECT_EDGE_IPS = [
   '172.71.218.190',
   '162.158.228.87',
   '162.158.189.134',
@@ -409,8 +408,8 @@ export const CFNEW_DIRECT_IPS = [
   '172.69.119.150'
 ];
 
-// ProxyIP های cfnew (بازشدهٔ const 备用地址列表) — خروجی از منطقهٔ دلخواه
-export const CFNEW_PROXY_IPS = [
+// ProxyIP های آماده — خروجی از منطقهٔ دلخواه
+export const EDGE_PROXY_IPS = [
   { domain: 'ProxyIP.HK.CMLiussss.net', region: 'HK' },
   { domain: 'ProxyIP.US.CMLiussss.net', region: 'US' },
   { domain: 'ProxyIP.SG.CMLiussss.net', region: 'SG' },
@@ -427,9 +426,9 @@ export const CFNEW_PROXY_IPS = [
   { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' }
 ];
 
-// فهرست آنلاین دامنه/آی‌پی ترجیحی که خود cfnew هم استفاده می‌کند
-export const CFNEW_EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
-export const CFNEW_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
+// فهرست آنلاین دامنه/آی‌پی ترجیحی
+export const EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
+export const EDGE_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
 export const IP_RANGE_SOURCES = {

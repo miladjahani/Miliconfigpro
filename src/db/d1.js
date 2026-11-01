@@ -24,6 +24,9 @@ const memoryStore = {
   auditLogs: [],
   trafficHourly: new Map(),
   lastSyncAt: 0,
+  d1Error: null,
+  lastD1WriteAt: 0,
+  lastD1WriteError: null,
   adminPasswordHash: '',
   adminPath: ''
 };
@@ -187,6 +190,73 @@ export async function rotateAdminPath(env = {}) {
 }
 
 // ساخت خودکار جداول D1 (Auto-Migration)
+// ستون‌های جدول users به‌تفکیک نوع — برای جدول‌هایی که با اسکیمای قدیمی‌تر
+// ساخته شده‌اند و ALTER TABLE لازم دارند.
+const USER_TABLE_COLUMNS = {
+  sub_node_count: 'INTEGER NOT NULL DEFAULT 50',
+  status: "TEXT NOT NULL DEFAULT 'active'",
+  enabled: 'INTEGER NOT NULL DEFAULT 1',
+  data_limit_gb: 'REAL NOT NULL DEFAULT 0',
+  used_bytes: 'INTEGER NOT NULL DEFAULT 0',
+  lifetime_bytes: 'INTEGER NOT NULL DEFAULT 0',
+  request_count: 'INTEGER NOT NULL DEFAULT 0',
+  expire_days: 'INTEGER NOT NULL DEFAULT 0',
+  expire_at: 'INTEGER NOT NULL DEFAULT 0',
+  start_on_first_use: 'INTEGER NOT NULL DEFAULT 1',
+  first_connected_at: 'INTEGER NOT NULL DEFAULT 0',
+  ip_limit: 'INTEGER NOT NULL DEFAULT 50',
+  node_scope: "TEXT NOT NULL DEFAULT 'all'",
+  preset: "TEXT NOT NULL DEFAULT 'iran-fast'",
+  note: "TEXT DEFAULT ''",
+  config_json: "TEXT NOT NULL DEFAULT '{}'",
+  created_at: 'INTEGER NOT NULL DEFAULT 0',
+  updated_at: 'INTEGER NOT NULL DEFAULT 0'
+};
+
+const SYSTEM_CONFIG_COLUMNS = {
+  value: "TEXT NOT NULL DEFAULT ''",
+  updated_at: 'INTEGER NOT NULL DEFAULT 0'
+};
+
+// افزودن ستون‌های جاافتادهٔ یک جدول؛ خروجی: فهرست خطاها (خالی = بدون مشکل)
+async function addMissingColumns(db, table, columns = {}) {
+  const errors = [];
+  let existing = new Set();
+  try {
+    const info = await db.prepare(`PRAGMA table_info(${table})`).all();
+    existing = new Set((info?.results || []).map(row => String(row.name || '').toLowerCase()));
+  } catch (err) {
+    return [err?.message || String(err)];
+  }
+  for (const [name, type] of Object.entries(columns)) {
+    if (existing.has(name.toLowerCase())) continue;
+    try {
+      await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`).run();
+    } catch (err) {
+      errors.push(`${table}.${name}: ${err?.message || String(err)}`);
+    }
+  }
+  return errors;
+}
+
+// تأیید واقعی نوشته‌شدن کلیدهای تنظیمات در D1 (تست خواندنی پس از ذخیره)
+export async function verifyConfigInD1(env = {}, keys = []) {
+  const wanted = (Array.isArray(keys) ? keys : []).map(key => String(key));
+  const state = await ensureD1Schema(env);
+  const detected = detectD1Binding(env);
+  if (!detected || !state.d1Enabled || !memoryStore.d1SchemaReady) {
+    return { checked: wanted.length, found: 0, missing: wanted, error: state.error || 'D1 در دسترس نیست' };
+  }
+  try {
+    const res = await detected.db.prepare(`SELECT key FROM system_config`).all();
+    const stored = new Set((res?.results || []).map(row => String(row.key)));
+    const missing = wanted.filter(key => !stored.has(key));
+    return { checked: wanted.length, found: wanted.length - missing.length, missing, error: null };
+  } catch (err) {
+    return { checked: wanted.length, found: 0, missing: wanted, error: err?.message || String(err) };
+  }
+}
+
 export async function ensureD1Schema(env = {}, force = false) {
   const detected = detectD1Binding(env);
   if (!detected) {
@@ -259,11 +329,55 @@ export async function ensureD1Schema(env = {}, force = false) {
     )`
   ];
 
-  try {
-    for (const sql of ddlStatements) {
+  // هر دستور DDL جداگانه اجرا می‌شود؛ یک جدول مشکل‌دار نباید کل اسکیما (و در
+  // نتیجه ذخیرهٔ تنظیمات در D1) را از کار بیندازد.
+  const schemaErrors = [];
+  for (const sql of ddlStatements) {
+    try {
       await db.prepare(sql).run();
+    } catch (err) {
+      schemaErrors.push(err?.message || String(err));
     }
+  }
+
+  // جدول‌هایی که با نسخهٔ قدیمی ساخته شده‌اند ستون‌های تازه را ندارند و همین
+  // باعث می‌شد INSERT در D1 خطا بدهد و تنظیمات فقط در حافظه بماند.
+  try {
+    schemaErrors.push(...await addMissingColumns(db, 'users', USER_TABLE_COLUMNS));
+  } catch (err) {
+    schemaErrors.push(err?.message || String(err));
+  }
+  try {
+    schemaErrors.push(...await addMissingColumns(db, 'system_config', SYSTEM_CONFIG_COLUMNS));
+  } catch (err) {
+    schemaErrors.push(err?.message || String(err));
+  }
+
+  // فقط اگر جدول‌های اصلی قابل خواندن باشند D1 آمادهٔ استفاده اعلام می‌شود
+  let schemaUsable = true;
+  try {
+    await db.prepare(`SELECT COUNT(*) as cnt FROM users`).first();
+    await db.prepare(`SELECT COUNT(*) as cnt FROM system_config`).first();
+  } catch (err) {
+    schemaUsable = false;
+    schemaErrors.push(err?.message || String(err));
+  }
+
+  if (!schemaUsable) {
+    memoryStore.d1SchemaReady = false;
+    memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || 'D1 آماده نشد';
+    ensureMemorySeeded(env);
+    return {
+      d1Enabled: false,
+      bindingName,
+      migrated: false,
+      error: memoryStore.d1Error
+    };
+  }
+
+  try {
     memoryStore.d1SchemaReady = true;
+    memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || null;
 
     // بررسی وجود کاربر اولیه
     const countRow = await db.prepare(`SELECT COUNT(*) as cnt FROM users`).first();
@@ -309,15 +423,12 @@ export async function ensureD1Schema(env = {}, force = false) {
       await addAuditLog(env, 'ساخت خودکار دیتابیس D1', `${firstId} · iran-fast`, 'system');
     }
 
-    return { d1Enabled: true, bindingName, migrated: true };
+    return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   } catch (err) {
-    ensureMemorySeeded(env);
-    return {
-      d1Enabled: false,
-      bindingName,
-      migrated: false,
-      error: err?.message || String(err)
-    };
+    // ساخت کاربر اولیه نباید D1 را از کار بیندازد؛ ستون‌های جدول قبلاً بررسی شده‌اند
+    memoryStore.d1SchemaReady = true;
+    memoryStore.d1Error = err?.message || String(err);
+    return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   }
 }
 
@@ -498,63 +609,6 @@ export async function changeAdminPassword(env = {}, currentPassword, newPassword
 
 // تنظیمات سراسری پنل
 // ----------------------------------------------------------------------------
-// تنظیمات محرمانه (مثل توکن بروزرسانی) — جدا از پیکربندی عمومی نگهداری می‌شوند
-// تا هرگز از مسیر /api/config یا تنظیمات کلاینت لو نروند.
-// ----------------------------------------------------------------------------
-export async function getSecretSetting(env = {}, key = '') {
-  const name = String(key || '').trim();
-  if (!name) return '';
-  await ensureD1Schema(env);
-  const detected = detectD1Binding(env);
-  if (detected && memoryStore.d1SchemaReady) {
-    try {
-      const row = await safeBind(
-        detected.db.prepare(`SELECT value FROM system_config WHERE key = ?`), name
-      ).first();
-      if (row && row.value) return String(row.value);
-    } catch (_e) {}
-  }
-  const kv = detectKvBinding(env);
-  if (kv) {
-    try {
-      const val = await kv.kv.get('secret_' + name);
-      if (val) return String(val);
-    } catch (_e) {}
-  }
-  return '';
-}
-
-export async function setSecretSetting(env = {}, key = '', value = '') {
-  const name = String(key || '').trim();
-  if (!name) return false;
-  await ensureD1Schema(env);
-  const detected = detectD1Binding(env);
-  const text = String(value == null ? '' : value);
-  if (detected && memoryStore.d1SchemaReady) {
-    try {
-      if (!text) {
-        await safeBind(detected.db.prepare(`DELETE FROM system_config WHERE key = ?`), name).run();
-      } else {
-        await safeBind(
-          detected.db.prepare(
-            `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-          ), name, text, Date.now()
-        ).run();
-      }
-      return true;
-    } catch (_e) {}
-  }
-  const kv = detectKvBinding(env);
-  if (kv) {
-    try {
-      await kv.kv.put('secret_' + name, text);
-      return true;
-    } catch (_e) {}
-  }
-  return false;
-}
-
 export async function loadGlobalConfig(env = {}, force = false) {
   await ensureD1Schema(env);
   const envSnap = getEnvConfigSnapshot(env);
@@ -614,12 +668,15 @@ export async function saveGlobalConfig(env = {}, newValues = {}) {
   }
 
   if (detectedD1 && memoryStore.d1SchemaReady) {
+    // همهٔ کلیدها در یک batch نوشته می‌شوند (اتمی و سریع) و خطای واقعی D1
+    // ذخیره می‌شود تا در پنل به‌جای پیام «ذخیره شد» ي‌صورت صادقانه گزارش گردد.
     try {
+      const statements = [];
       for (const [k, v] of Object.entries(newValues || {})) {
         if (v === '' || v === null || v === undefined) {
-          await safeBind(detectedD1.db.prepare(`DELETE FROM system_config WHERE key = ?`), k).run();
+          statements.push(safeBind(detectedD1.db.prepare(`DELETE FROM system_config WHERE key = ?`), k));
         } else {
-          await safeBind(
+          statements.push(safeBind(
             detectedD1.db.prepare(
               `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
@@ -627,10 +684,15 @@ export async function saveGlobalConfig(env = {}, newValues = {}) {
             k,
             String(v),
             now
-          ).run();
+          ));
         }
       }
-    } catch (_e) {}
+      if (statements.length) await detectedD1.db.batch(statements);
+      memoryStore.lastD1WriteAt = now;
+      memoryStore.lastD1WriteError = null;
+    } catch (err) {
+      memoryStore.lastD1WriteError = err?.message || String(err);
+    }
   }
 
   if (detectedKv) {
@@ -1188,7 +1250,9 @@ export async function getStorageDiagnostics(env = {}) {
     d1Enabled: d1State.d1Enabled,
     d1BindingName: d1State.bindingName || 'DB',
     d1Migrated: d1State.migrated,
-    d1Error: d1State.error || null,
+    d1Error: d1State.error || memoryStore.lastD1WriteError || null,
+    d1LastWriteAt: memoryStore.lastD1WriteAt || 0,
+    d1WriteError: memoryStore.lastD1WriteError || null,
     kvEnabled: Boolean(kvDetected),
     kvBindingName: kvDetected?.bindingName || 'C',
     hasPassword: hasPass,

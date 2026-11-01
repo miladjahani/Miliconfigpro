@@ -229,32 +229,32 @@ const COUNTRY_META = {
 };
 
 // ============================================================================
-// Z-E-U-S (panel-zeus/Z-E-U-S) — منبع رسمی دامنه، IPv4، IPv6 و پروکسی کشوری
-// ساختار مخزن: ips.txt (IPv4 بهینه)، ip6.txt (IPv6 بهینه)، dom.txt (دامنه‌های
-// لبه)، ech_dom.txt (دامنه‌های دارای ECH)، proxy/<CC>.txt (پروکسی هر کشور) و
+// منبع عمومی لبهٔ کلادفلر: دامنه، IPv4، IPv6 و پروکسی کشوری
+// ساختار: ips.txt (IPv4 بهینه)، ip6.txt (IPv6 بهینه)، dom.txt (دامنه‌های لبه)،
+// ech_dom.txt (دامنه‌های دارای ECH)، proxy/<CC>.txt (پروکسی هر کشور) و
 // proxy_vip/<CC>.txt (پروکسی VIP هر کشور، فهرستش در vip-list).
 // ============================================================================
-const ZEUS_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+const EDGE_MIRROR_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
 
-const ZEUS_SOURCES = {
-  ipv4: ZEUS_BASE + 'ips.txt',
-  ipv6: ZEUS_BASE + 'ip6.txt',
-  domains: ZEUS_BASE + 'dom.txt',
-  echDomains: ZEUS_BASE + 'ech_dom.txt',
-  echDns: ZEUS_BASE + 'ech_dns.txt',
-  proxyAll: ZEUS_BASE + 'proxy/ALL.txt',
-  vipIndex: ZEUS_BASE + 'vip-list',
-  proxyCountry: code => ZEUS_BASE + `proxy/${String(code).toUpperCase()}.txt`,
-  vipCountry: code => ZEUS_BASE + `proxy_vip/${String(code).toUpperCase()}.txt`
+const EDGE_MIRROR_SOURCES = {
+  ipv4: EDGE_MIRROR_BASE + 'ips.txt',
+  ipv6: EDGE_MIRROR_BASE + 'ip6.txt',
+  domains: EDGE_MIRROR_BASE + 'dom.txt',
+  echDomains: EDGE_MIRROR_BASE + 'ech_dom.txt',
+  echDns: EDGE_MIRROR_BASE + 'ech_dns.txt',
+  proxyAll: EDGE_MIRROR_BASE + 'proxy/ALL.txt',
+  vipIndex: EDGE_MIRROR_BASE + 'vip-list',
+  proxyCountry: code => EDGE_MIRROR_BASE + `proxy/${String(code).toUpperCase()}.txt`,
+  vipCountry: code => EDGE_MIRROR_BASE + `proxy_vip/${String(code).toUpperCase()}.txt`
 };
 
-// فقط این کشورها در مخزن Z-E-U-S فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
-const ZEUS_VIP_COUNTRIES = [
+// فقط این کشورها فایل proxy_vip دارند (بقیه ۴۰۴ هستند)
+const EDGE_VIP_COUNTRIES = [
   'AD', 'AL', 'CA', 'DE', 'FI', 'FR', 'GB', 'IT', 'MC', 'MX',
   'NL', 'NO', 'RO', 'SE', 'TH', 'TR', 'US'
 ];
-const zeusVip = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
-const zeusProxy = code => raw(`panel-zeus/Z-E-U-S/main/proxy/${code}.txt`);
+const vipFeed = code => raw(`panel-zeus/Z-E-U-S/main/proxy_vip/${code}.txt`);
+const proxyFeed = code => raw(`panel-zeus/Z-E-U-S/main/proxy/${code}.txt`);
 
 // کدام کشورها در کدام قالب کشوری فایل دارند (بازبینی اکتبر ۲۰۲۶).
 // برای کشورهای غایب، ساختن آدرس فقط یک ۴۰۴ و یک subrequest هدر است.
@@ -283,9 +283,9 @@ function buildCountryFeeds(code) {
   if (available.clearHttp.has(cc)) feeds.push(raw(`ClearProxy/checked-proxy-list/main/http/raw/country/${cc}.txt`));
   if (available.trioSocks.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/socks5.txt`));
   if (available.trioHttp.has(cc)) feeds.push(raw(`trio666/proxy-checker/main/country/${cc}/http.txt`));
-  // منبع Z-E-U-S اولویت دارد: پروکسی‌های VIP و معمولی همان کشور در مخزن z-e-u-s
-  if (ZEUS_VIP_COUNTRIES.includes(cc)) feeds.unshift(zeusVip(cc));
-  feeds.unshift(zeusProxy(cc));
+  // پروکسی‌های VIP و معمولی همان کشور اولویت دارند
+  if (EDGE_VIP_COUNTRIES.includes(cc)) feeds.unshift(vipFeed(cc));
+  feeds.unshift(proxyFeed(cc));
   return feeds;
 }
 
@@ -372,12 +372,11 @@ const IPV6_CANDIDATE_SOURCES = [
 ];
 
 // دامنه‌های لبهٔ کلادفلر (برای نودهای دامنه‌محور و SNI جایگزین)
-// z-e-u-s: dom.txt (دامنه‌های سالم) و ech_dom.txt (دامنه‌های دارای ECH)
-// cfnew: فهرست دامنه‌های ترجیحی + فهرست آنلاین bestip
-const ZEUS_DOMAIN_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
+// dom.txt (دامنه‌های سالم) و ech_dom.txt (دامنه‌های دارای ECH) + فهرست آنلاین bestip
+const EDGE_DOMAIN_BASE = 'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/';
 const DOMAIN_CANDIDATE_SOURCES = [
-  ZEUS_DOMAIN_BASE + 'dom.txt',
-  ZEUS_DOMAIN_BASE + 'ech_dom.txt',
+  EDGE_DOMAIN_BASE + 'dom.txt',
+  EDGE_DOMAIN_BASE + 'ech_dom.txt',
   'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt'
 ];
 
@@ -390,11 +389,11 @@ const PROXY_IP_SOURCES = [
 ];
 
 // ============================================================================
-// cfnew (byJoey/cfnew) — منابع ترجیحی خود مخزن، برای وقتی که هیچ تنظیمی نشده
+// منابع ترجیحی داخلی لبهٔ کلادفلر، برای وقتی که هیچ تنظیمی نشده است
 // ============================================================================
 
-// ۲۱ دامنهٔ ترجیحی cfnew (همان آرایهٔ const 直连域名列表 در سورس ورکر)
-const CFNEW_PREFERRED_DOMAINS = [
+// ۲۱ دامنهٔ ترجیحی تأییدشده
+const PREFERRED_EDGE_DOMAINS = [
   'cloudflare.182682.xyz',
   'speed.marisalnc.com',
   'freeyx.cloudflare88.eu.org',
@@ -418,8 +417,8 @@ const CFNEW_PREFERRED_DOMAINS = [
   'xn--b6gac.eu.org'
 ];
 
-// ۱۰ آی‌پی «اتصال رسمی» cfnew (هر کدام در یک /24 متفاوت)
-const CFNEW_DIRECT_IPS = [
+// ۱۰ آی‌پی «اتصال رسمی» (هر کدام در یک /24 متفاوت)
+const DIRECT_EDGE_IPS = [
   '172.71.218.190',
   '162.158.228.87',
   '162.158.189.134',
@@ -432,8 +431,8 @@ const CFNEW_DIRECT_IPS = [
   '172.69.119.150'
 ];
 
-// ProxyIP های cfnew (بازشدهٔ const 备用地址列表) — خروجی از منطقهٔ دلخواه
-const CFNEW_PROXY_IPS = [
+// ProxyIP های آماده — خروجی از منطقهٔ دلخواه
+const EDGE_PROXY_IPS = [
   { domain: 'ProxyIP.HK.CMLiussss.net', region: 'HK' },
   { domain: 'ProxyIP.US.CMLiussss.net', region: 'US' },
   { domain: 'ProxyIP.SG.CMLiussss.net', region: 'SG' },
@@ -450,9 +449,9 @@ const CFNEW_PROXY_IPS = [
   { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' }
 ];
 
-// فهرست آنلاین دامنه/آی‌پی ترجیحی که خود cfnew هم استفاده می‌کند
-const CFNEW_EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
-const CFNEW_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
+// فهرست آنلاین دامنه/آی‌پی ترجیحی
+const EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
+const EDGE_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
 const IP_RANGE_SOURCES = {
@@ -557,14 +556,14 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 // --- MODULE: src/config/defaults.js ---
 // ============================================================================
-// miliconfig v3.1 - تنظیمات پیش‌فرض پایه (الهام‌گرفته از Z-E-U-S و CFnew)
+// miliconfig v3.2 - تنظیمات پیش‌فرض پایه
 // مجهز به شادوساکس، فرگمنت، ECH، لیست‌های کشوری، قفل ۳ کاربر و چرخش خودکار آی‌پی
 // ============================================================================
 
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.2.1';
+const VERSION = 'v3.3.0';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';
@@ -614,7 +613,7 @@ const CONFIG_DEFAULTS = {
   jk: 'no',
   subNodeCount: 50,
   brand: BRAND_NAME,
-  // تنظیمات جدید الهام‌گرفته از ZEUS:
+  // تنظیمات ترنسپورت و رفتار کلاینت:
   fp: 'chrome', // فینگرپرینت: chrome, firefox, safari, edge, ios, randomized
   patt: '/?ed=2048', // الگوهای مسیر
   fragmentPreset: 'mci', // پریست‌های فرگمنت
@@ -807,7 +806,7 @@ function parseNodePorts(value = '') {
 // آدرس‌های ۴۰۴ (dimzon، بخشی از فایل‌های proxy_vip و …) از این استخر حذف شده‌اند.
 
 // ============================================================================
-// ادغام منابع زنده اسکنر (Z-E-U-S + trio666 + proxifly + ProxyScrape + ClearProxy)
+// ادغام منابع زنده اسکنر (آینهٔ لبه + trio666 + proxifly + ProxyScrape + ClearProxy)
 // ============================================================================
 const COUNTRY_PROXY_SOURCES = (() => {
   const codes = new Set([
@@ -1037,7 +1036,7 @@ function getEnvConfigSnapshot(env = {}) {
 
 // --- MODULE: src/config/presets.js ---
 // ============================================================================
-// miliconfig v3.1 - پریست‌های ساخت سریع کاربر (مطابق رابط کاربری Zeus و CFnew)
+// miliconfig v3.2 - پریست‌های ساخت سریع کاربر
 // ============================================================================
 
 
@@ -1179,7 +1178,6 @@ function buildUserDefaultConfig(basePanelConfig = {}, presetId = 'iran-fast', cu
 // miliconfig v3.1 - ابزارهای هسته، نام‌گذاری نودها (number+miliconfig) و رمزنگاری
 // ============================================================================
 
-
 const base64TextDecoder = new TextDecoder();
 const sharedDecoder = new TextDecoder();
 
@@ -1299,30 +1297,68 @@ function parseAddressAndPort(input) {
 }
 
 // ============================================================================
-// نام‌گذار اختصاصی نودهای خروجی با فرمت دقیق number+miliconfig
-// (مثلاً: 1+miliconfig, 2+miliconfig, 3+miliconfig ...)
+// نام‌گذاری گویا برای نودهای ساب‌لینک:
+// «پرچم و کد کشور · نوع نود · خانوادهٔ آدرس (IPv4/IPv6/Domain) · نشانگر پروکسی»
+// به‌جای الگوی قبلی «عدد+miliconfig» تا کاربر در کلاینت بفهمد چه نودی را انتخاب
+// می‌کند. نودهایی که مسیرشان پروکسی خروجی دارد با «⇄ Proxy» علامت می‌خورند.
 // ============================================================================
-function createMiliNodeNamer(brand = BRAND_NAME) {
-  let counter = 0;
-  const cleanBrand = String(brand || BRAND_NAME).trim() || BRAND_NAME;
-  return function nameNode(_item) {
-    counter += 1;
-    return `${counter}+${cleanBrand}`;
-  };
+function countryFlag(code = '') {
+  const cc = String(code || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  return String.fromCodePoint(...[...cc].map(ch => 0x1f1e6 + ch.charCodeAt(0) - 65));
 }
 
-// بازشماری و اعمال محدودیت تعداد نودهای ساب‌لینک کاربر با فرمت دقیق number+miliconfig
-function finalizeMiliSubscriptionLinks(links = [], subNodeCount = 0, brand = BRAND_NAME) {
-  if (!Array.isArray(links) || links.length === 0) return [];
-  const cleanBrand = String(brand || BRAND_NAME).trim() || BRAND_NAME;
+// خانوادهٔ آدرس نود بر اساس شکل هاست (IPv6 / IPv4 / دامنه)
+function addressFamilyLabel(host = '') {
+  const text = String(host || '').trim();
+  if (!text) return '';
+  if (text.includes(':')) return 'IPv6';
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) return 'IPv4';
+  return 'Domain';
+}
+
+const NODE_PROTO_LABELS = {
+  vless: 'VLESS',
+  trojan: 'Trojan',
+  ss: 'SS',
+  xhttp: 'xHTTP',
+  warp: 'WARP',
+  warp_pro: 'WARP PRO',
+  warp_ml: 'WARP ML',
+  wireguard: 'WARP'
+};
+
+function buildNodeDisplayName(meta = {}) {
+  const protoKey = String(meta.proto || '').trim().toLowerCase();
+  const protoLabel = NODE_PROTO_LABELS[protoKey] || (protoKey ? protoKey.toUpperCase() : 'Node');
+  const family = meta.family || addressFamilyLabel(meta.host);
+  const cc = String(meta.cc || '').trim().toUpperCase();
+  const flag = countryFlag(cc);
+  const countryTag = cc ? (flag ? `${flag} ${cc}` : cc) : '🌐 CF';
+  const parts = [countryTag, protoLabel];
+  if (family) parts.push(family);
+  if (meta.tls === false) parts.push('HTTP');
+  if (meta.proxy) parts.push('⇄ Proxy');
+  if (meta.mci) parts.push('MCI');
+  return parts.join(' · ');
+}
+
+// اعمال نام گویا + شمارهٔ یکتا و محدودیت تعداد نودهای ساب‌لینک کاربر
+// ورودی می‌تواند شیء { link, meta } یا لینک خام باشد.
+function finalizeMiliSubscriptionLinks(entries = [], subNodeCount = 0) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
   const limit = parseInt(subNodeCount, 10);
-  const sliced = Number.isFinite(limit) && limit > 0 ? links.slice(0, limit) : links.slice();
-  return sliced.map((link, idx) => {
-    const nodeName = `${idx + 1}+${cleanBrand}`;
-    const hashIdx = link.indexOf('#');
-    const base = hashIdx > -1 ? link.substring(0, hashIdx) : link;
+  const sliced = Number.isFinite(limit) && limit > 0 ? entries.slice(0, limit) : entries.slice();
+  return sliced.map((entry, idx) => {
+    const raw = typeof entry === 'string' ? entry : String(entry?.link || '');
+    if (!raw) return '';
+    const meta = typeof entry === 'string' ? {} : (entry.meta || {});
+    const baseName = buildNodeDisplayName(meta);
+    const nodeName = `${baseName} · #${idx + 1}`;
+    const hashIdx = raw.indexOf('#');
+    const base = hashIdx > -1 ? raw.substring(0, hashIdx) : raw;
     return `${base}#${encodeURIComponent(nodeName)}`;
-  });
+  }).filter(Boolean);
 }
 
 // ============================================================================
@@ -1606,20 +1642,19 @@ function formatBytes(bytes = 0) {
 
 // --- MODULE: src/core/updater.js ---
 // ============================================================================
-// miliconfig - کانال بروزرسانی نسخه‌ها (الگو: مکانیزم پنل Z-E-U-S)
+// miliconfig - کانال بروزرسانی نسخه‌ها
 //
 // مسئله: ورکرهای نصب‌شده روی حساب‌های دیگران از بیرون قابل جایگزینی نیستند.
 // راه‌حل‌ها به ترتیب اولویت:
-//   ۱) اتصال به گیت‌هاب (Cloudflare Workers Builds / Pages + Git): هر push به
-//      main خودکار مستقر می‌شود.
-//   ۲) بروزرسانی از داخل پنل با Cloudflare API — همان روشی که پنل Z-E-U-S دارد:
-//      توکن را یک‌بار می‌گیرد، با /user/tokens/verify اعتبارسنجی می‌کند،
-//      Account ID را در صورت نبود از /accounts می‌گیرد، نام اسکریپت را از
-//      WORKER_NAME یا دامنهٔ درخواست تشخیص می‌دهد، بایندینگ‌های فعلی
-//      (D1/KV/متن ساده) را نگه می‌دارد و باندل تازه را با نام ماژول تصادفی
-//      آپلود می‌کند.
-//   ۳) نسخه‌های قدیمی‌تر که این کد را ندارند فقط با یک‌بار استقرار مجدد به‌روز
-//      می‌شوند؛ داده‌های مشترک از منابع آنلاین تازه می‌مانند.
+//   ۱) اتصال به گیت‌هاب (Workers Builds / Pages + Git): هر push به main خودکار
+//      مستقر می‌شود و هیچ اطلاعاتی از حساب لازم نیست.
+//   ۲) اگر ورکر یک کلید محرمانهٔ CF_API_TOKEN داشته باشد (که در داشبورد کلادفلر
+//      و نه در پنل تنظیم می‌شود)، خودِ ورکر نسخهٔ تازه را مستقر می‌کند:
+//      اعتبارسنجی با /user/tokens/verify، تشخیص Account ID از /accounts،
+//     تشخیص نام اسکریپت از WORKER_NAME/دامنه، حفظ بایندینگ‌های فعلی
+//      (D1/KV/متن ساده) و آپلود باندل با نام ماژول تصادفی.
+//   ۳) در غیر این صورت پنل فقط نسخهٔ تازه را می‌شمارد و فایل/دستور بروزرسانی
+//      می‌دهد؛ هیچ ورودی حساب کلودفلر از کاربر خواسته نمی‌شود.
 // ============================================================================
 
 
@@ -1750,7 +1785,7 @@ function getUpdateTarget(cfg = {}, env = {}, options = {}) {
   };
 }
 
-// اعتبارسنجی توکن — همان endpointی که Z-E-U-S استفاده می‌کند
+// اعتبارسنجی توکن با endpoint رسمی کلادفلر
 async function verifyUpdateToken(token = '') {
   const value = String(token || '').trim();
   if (!value) return { valid: false, error: 'توکن خالی است' };
@@ -1768,7 +1803,7 @@ async function verifyUpdateToken(token = '') {
   }
 }
 
-// اگر Account ID تنظیم نشده باشد، از روی توکن پیدا می‌شود (مثل پنل Z-E-U-S)
+// اگر Account ID تنظیم نشده باشد، از روی توکن پیدا می‌شود
 async function resolveAccountId(token = '', current = '') {
   if (current) return { accountId: current, detected: false };
   try {
@@ -1875,6 +1910,17 @@ async function fetchExistingBindings(accountId, scriptName, token) {
   }
 }
 
+// دریافت باندل تازه (برای دانلود مستقیم فایل نسخهٔ جدید از پنل)
+async function fetchLatestBundle(env = {}) {
+  const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
+  const bundle = await fetchTextWithFallback(
+    customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })] : mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true }),
+    { timeout: 20000 }
+  );
+  if (!bundle || !bundle.text || bundle.text.length < 50000) return null;
+  return bundle;
+}
+
 async function applyUpdate(cfg = {}, env = {}, options = {}) {
   const token = String(options.token || env?.CF_API_TOKEN || '').trim();
   const hostScriptName = String(options.hostScriptName || '').trim();
@@ -1883,16 +1929,27 @@ async function applyUpdate(cfg = {}, env = {}, options = {}) {
   ).trim();
 
   if (!token) {
+    // هیچ ورودی حساب کلودفلر از کاربر خواسته نمی‌شود؛ نسخهٔ تازه به‌صورت
+    // فایل قابل دانلود و دستور آمادهٔ استقرار برگردانده می‌شود.
+    const info = await checkForUpdate(cfg, env, { force: true });
+    const latest = info?.latest || '';
+    const target = inferScriptName(hostScriptName) || 'نام-ورکر-شما';
     return {
       success: false,
-      error: 'برای بروزرسانی از داخل پنل، ابتدا توکن کلادفلر را متصل کنید (دکمهٔ «اتصال توکن»).',
-      missing: ['CF_API_TOKEN']
+      needsManualDeploy: true,
+      latest,
+      downloadUrl: mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0],
+      command: `curl -fsSL ${mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })[0]} -o _worker.js && npx wrangler deploy _worker.js --name ${target}`,
+      error: latest
+        ? `نسخهٔ ${latest} آماده است؛ نصب خودکار بدون کلید ورکر انجام نمی‌شود. فایل نسخهٔ تازه را دانلود کنید یا دستور آماده را اجرا کنید.`
+        : 'نصب خودکار روی این استقرار ممکن نیست؛ فایل نسخهٔ تازه را دانلود کنید یا دستور آماده را اجرا کنید.',
+      missing: []
     };
   }
   if (!scriptName) {
     return {
       success: false,
-      error: 'نام اسکریپت Workers مشخص نیست؛ آن را در تنظیمات (cfScriptName) وارد کنید.',
+      error: 'نام اسکریپت Workers مشخص نیست؛ متغیر WORKER_NAME را روی ورکر تنظیم کنید.',
       missing: ['CF_SCRIPT_NAME']
     };
   }
@@ -2107,9 +2164,9 @@ async function verifyCountryProxies(proxies = [], options = {}) {
 // miliconfig - استخر یکپارچه منابع لبهٔ کلادفلر
 //
 // منابع (طبق درخواست کاربر، هر دو مخزن کامل مطالعه شده‌اند):
-//   • cfnew  (byJoey/cfnew)          → ۲۱ دامنهٔ ترجیحی، ۱۰ آی‌پی اتصال رسمی،
+//   • منابع ترجیحی داخلی          → ۲۱ دامنهٔ ترجیحی، ۱۰ آی‌پی اتصال رسمی،
 //                                       ۱۴ ProxyIP منطقه‌ای، فهرست آنلاین bestip
-//   • Z-E-U-S (panel-zeus/Z-E-U-S)   → ips.txt (IPv4)، ip6.txt (IPv6)،
+//   • آینهٔ لبهٔ عمومی             → ips.txt (IPv4)، ip6.txt (IPv6)،
 //                                       dom.txt (دامنه لبه)، ech_dom.txt و
 //                                       ech_dns.txt (دامنه/DNS برای ECH)
 //
@@ -2251,7 +2308,7 @@ function poolPushUnique(list, seen, value, limit = POOL_MAX_ITEMS) {
 function poolBuiltin() {
   const ipv4 = [];
   const ipv4Seen = new Set();
-  for (const ip of CFNEW_DIRECT_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
+  for (const ip of DIRECT_EDGE_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
   for (const ip of OFFICIAL_DIRECT_IPS) poolPushUnique(ipv4, ipv4Seen, ip);
 
   const ipv6 = [];
@@ -2260,14 +2317,14 @@ function poolBuiltin() {
 
   const domains = [];
   const domainSeen = new Set();
-  for (const domain of CFNEW_PREFERRED_DOMAINS) poolPushUnique(domains, domainSeen, domain, 120);
+  for (const domain of PREFERRED_EDGE_DOMAINS) poolPushUnique(domains, domainSeen, domain, 120);
   for (const item of DIRECT_DOMAINS) poolPushUnique(domains, domainSeen, item.domain, 120);
 
   const echDomains = [];
   const echSeen = new Set();
   for (const domain of ECH_DOMAINS) poolPushUnique(echDomains, echSeen, domain, 60);
 
-  const proxyIps = CFNEW_PROXY_IPS.map(item => ({ ...item, port: 443 }))
+  const proxyIps = EDGE_PROXY_IPS.map(item => ({ ...item, port: 443 }))
     .concat(FALLBACK_PROXY_IPS.map(item => ({ ...item })));
 
   return { ipv4, ipv6, domains, echDomains, echDns: [], proxyIps, origin: 'builtin' };
@@ -2350,12 +2407,12 @@ function poolGetCache() {
 
 async function poolFetchFresh() {
   const [ips, ip6, dom, echDom, echDns, edgeList] = await Promise.all([
-    poolFetchText(ZEUS_SOURCES.ipv4),
-    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || ZEUS_SOURCES.ipv6),
-    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || ZEUS_SOURCES.domains),
-    poolFetchText(ZEUS_SOURCES.echDomains),
-    poolFetchText(ZEUS_SOURCES.echDns),
-    poolFetchText(CFNEW_EDGE_LIST_URL, 2000)
+    poolFetchText(EDGE_MIRROR_SOURCES.ipv4),
+    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.ipv6),
+    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.domains),
+    poolFetchText(EDGE_MIRROR_SOURCES.echDomains),
+    poolFetchText(EDGE_MIRROR_SOURCES.echDns),
+    poolFetchText(EDGE_LIST_URL, 2000)
   ]);
   const v4Parsed = poolParseAddressLines(ips);
   const v6Parsed = poolParseAddressLines(ip6);
@@ -2553,6 +2610,9 @@ const memoryStore = {
   auditLogs: [],
   trafficHourly: new Map(),
   lastSyncAt: 0,
+  d1Error: null,
+  lastD1WriteAt: 0,
+  lastD1WriteError: null,
   adminPasswordHash: '',
   adminPath: ''
 };
@@ -2716,6 +2776,73 @@ async function rotateAdminPath(env = {}) {
 }
 
 // ساخت خودکار جداول D1 (Auto-Migration)
+// ستون‌های جدول users به‌تفکیک نوع — برای جدول‌هایی که با اسکیمای قدیمی‌تر
+// ساخته شده‌اند و ALTER TABLE لازم دارند.
+const USER_TABLE_COLUMNS = {
+  sub_node_count: 'INTEGER NOT NULL DEFAULT 50',
+  status: "TEXT NOT NULL DEFAULT 'active'",
+  enabled: 'INTEGER NOT NULL DEFAULT 1',
+  data_limit_gb: 'REAL NOT NULL DEFAULT 0',
+  used_bytes: 'INTEGER NOT NULL DEFAULT 0',
+  lifetime_bytes: 'INTEGER NOT NULL DEFAULT 0',
+  request_count: 'INTEGER NOT NULL DEFAULT 0',
+  expire_days: 'INTEGER NOT NULL DEFAULT 0',
+  expire_at: 'INTEGER NOT NULL DEFAULT 0',
+  start_on_first_use: 'INTEGER NOT NULL DEFAULT 1',
+  first_connected_at: 'INTEGER NOT NULL DEFAULT 0',
+  ip_limit: 'INTEGER NOT NULL DEFAULT 50',
+  node_scope: "TEXT NOT NULL DEFAULT 'all'",
+  preset: "TEXT NOT NULL DEFAULT 'iran-fast'",
+  note: "TEXT DEFAULT ''",
+  config_json: "TEXT NOT NULL DEFAULT '{}'",
+  created_at: 'INTEGER NOT NULL DEFAULT 0',
+  updated_at: 'INTEGER NOT NULL DEFAULT 0'
+};
+
+const SYSTEM_CONFIG_COLUMNS = {
+  value: "TEXT NOT NULL DEFAULT ''",
+  updated_at: 'INTEGER NOT NULL DEFAULT 0'
+};
+
+// افزودن ستون‌های جاافتادهٔ یک جدول؛ خروجی: فهرست خطاها (خالی = بدون مشکل)
+async function addMissingColumns(db, table, columns = {}) {
+  const errors = [];
+  let existing = new Set();
+  try {
+    const info = await db.prepare(`PRAGMA table_info(${table})`).all();
+    existing = new Set((info?.results || []).map(row => String(row.name || '').toLowerCase()));
+  } catch (err) {
+    return [err?.message || String(err)];
+  }
+  for (const [name, type] of Object.entries(columns)) {
+    if (existing.has(name.toLowerCase())) continue;
+    try {
+      await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`).run();
+    } catch (err) {
+      errors.push(`${table}.${name}: ${err?.message || String(err)}`);
+    }
+  }
+  return errors;
+}
+
+// تأیید واقعی نوشته‌شدن کلیدهای تنظیمات در D1 (تست خواندنی پس از ذخیره)
+async function verifyConfigInD1(env = {}, keys = []) {
+  const wanted = (Array.isArray(keys) ? keys : []).map(key => String(key));
+  const state = await ensureD1Schema(env);
+  const detected = detectD1Binding(env);
+  if (!detected || !state.d1Enabled || !memoryStore.d1SchemaReady) {
+    return { checked: wanted.length, found: 0, missing: wanted, error: state.error || 'D1 در دسترس نیست' };
+  }
+  try {
+    const res = await detected.db.prepare(`SELECT key FROM system_config`).all();
+    const stored = new Set((res?.results || []).map(row => String(row.key)));
+    const missing = wanted.filter(key => !stored.has(key));
+    return { checked: wanted.length, found: wanted.length - missing.length, missing, error: null };
+  } catch (err) {
+    return { checked: wanted.length, found: 0, missing: wanted, error: err?.message || String(err) };
+  }
+}
+
 async function ensureD1Schema(env = {}, force = false) {
   const detected = detectD1Binding(env);
   if (!detected) {
@@ -2788,11 +2915,55 @@ async function ensureD1Schema(env = {}, force = false) {
     )`
   ];
 
-  try {
-    for (const sql of ddlStatements) {
+  // هر دستور DDL جداگانه اجرا می‌شود؛ یک جدول مشکل‌دار نباید کل اسکیما (و در
+  // نتیجه ذخیرهٔ تنظیمات در D1) را از کار بیندازد.
+  const schemaErrors = [];
+  for (const sql of ddlStatements) {
+    try {
       await db.prepare(sql).run();
+    } catch (err) {
+      schemaErrors.push(err?.message || String(err));
     }
+  }
+
+  // جدول‌هایی که با نسخهٔ قدیمی ساخته شده‌اند ستون‌های تازه را ندارند و همین
+  // باعث می‌شد INSERT در D1 خطا بدهد و تنظیمات فقط در حافظه بماند.
+  try {
+    schemaErrors.push(...await addMissingColumns(db, 'users', USER_TABLE_COLUMNS));
+  } catch (err) {
+    schemaErrors.push(err?.message || String(err));
+  }
+  try {
+    schemaErrors.push(...await addMissingColumns(db, 'system_config', SYSTEM_CONFIG_COLUMNS));
+  } catch (err) {
+    schemaErrors.push(err?.message || String(err));
+  }
+
+  // فقط اگر جدول‌های اصلی قابل خواندن باشند D1 آمادهٔ استفاده اعلام می‌شود
+  let schemaUsable = true;
+  try {
+    await db.prepare(`SELECT COUNT(*) as cnt FROM users`).first();
+    await db.prepare(`SELECT COUNT(*) as cnt FROM system_config`).first();
+  } catch (err) {
+    schemaUsable = false;
+    schemaErrors.push(err?.message || String(err));
+  }
+
+  if (!schemaUsable) {
+    memoryStore.d1SchemaReady = false;
+    memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || 'D1 آماده نشد';
+    ensureMemorySeeded(env);
+    return {
+      d1Enabled: false,
+      bindingName,
+      migrated: false,
+      error: memoryStore.d1Error
+    };
+  }
+
+  try {
     memoryStore.d1SchemaReady = true;
+    memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || null;
 
     // بررسی وجود کاربر اولیه
     const countRow = await db.prepare(`SELECT COUNT(*) as cnt FROM users`).first();
@@ -2838,15 +3009,12 @@ async function ensureD1Schema(env = {}, force = false) {
       await addAuditLog(env, 'ساخت خودکار دیتابیس D1', `${firstId} · iran-fast`, 'system');
     }
 
-    return { d1Enabled: true, bindingName, migrated: true };
+    return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   } catch (err) {
-    ensureMemorySeeded(env);
-    return {
-      d1Enabled: false,
-      bindingName,
-      migrated: false,
-      error: err?.message || String(err)
-    };
+    // ساخت کاربر اولیه نباید D1 را از کار بیندازد؛ ستون‌های جدول قبلاً بررسی شده‌اند
+    memoryStore.d1SchemaReady = true;
+    memoryStore.d1Error = err?.message || String(err);
+    return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   }
 }
 
@@ -3027,63 +3195,6 @@ async function changeAdminPassword(env = {}, currentPassword, newPassword, clien
 
 // تنظیمات سراسری پنل
 // ----------------------------------------------------------------------------
-// تنظیمات محرمانه (مثل توکن بروزرسانی) — جدا از پیکربندی عمومی نگهداری می‌شوند
-// تا هرگز از مسیر /api/config یا تنظیمات کلاینت لو نروند.
-// ----------------------------------------------------------------------------
-async function getSecretSetting(env = {}, key = '') {
-  const name = String(key || '').trim();
-  if (!name) return '';
-  await ensureD1Schema(env);
-  const detected = detectD1Binding(env);
-  if (detected && memoryStore.d1SchemaReady) {
-    try {
-      const row = await safeBind(
-        detected.db.prepare(`SELECT value FROM system_config WHERE key = ?`), name
-      ).first();
-      if (row && row.value) return String(row.value);
-    } catch (_e) {}
-  }
-  const kv = detectKvBinding(env);
-  if (kv) {
-    try {
-      const val = await kv.kv.get('secret_' + name);
-      if (val) return String(val);
-    } catch (_e) {}
-  }
-  return '';
-}
-
-async function setSecretSetting(env = {}, key = '', value = '') {
-  const name = String(key || '').trim();
-  if (!name) return false;
-  await ensureD1Schema(env);
-  const detected = detectD1Binding(env);
-  const text = String(value == null ? '' : value);
-  if (detected && memoryStore.d1SchemaReady) {
-    try {
-      if (!text) {
-        await safeBind(detected.db.prepare(`DELETE FROM system_config WHERE key = ?`), name).run();
-      } else {
-        await safeBind(
-          detected.db.prepare(
-            `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-          ), name, text, Date.now()
-        ).run();
-      }
-      return true;
-    } catch (_e) {}
-  }
-  const kv = detectKvBinding(env);
-  if (kv) {
-    try {
-      await kv.kv.put('secret_' + name, text);
-      return true;
-    } catch (_e) {}
-  }
-  return false;
-}
-
 async function loadGlobalConfig(env = {}, force = false) {
   await ensureD1Schema(env);
   const envSnap = getEnvConfigSnapshot(env);
@@ -3143,12 +3254,15 @@ async function saveGlobalConfig(env = {}, newValues = {}) {
   }
 
   if (detectedD1 && memoryStore.d1SchemaReady) {
+    // همهٔ کلیدها در یک batch نوشته می‌شوند (اتمی و سریع) و خطای واقعی D1
+    // ذخیره می‌شود تا در پنل به‌جای پیام «ذخیره شد» ي‌صورت صادقانه گزارش گردد.
     try {
+      const statements = [];
       for (const [k, v] of Object.entries(newValues || {})) {
         if (v === '' || v === null || v === undefined) {
-          await safeBind(detectedD1.db.prepare(`DELETE FROM system_config WHERE key = ?`), k).run();
+          statements.push(safeBind(detectedD1.db.prepare(`DELETE FROM system_config WHERE key = ?`), k));
         } else {
-          await safeBind(
+          statements.push(safeBind(
             detectedD1.db.prepare(
               `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
@@ -3156,10 +3270,15 @@ async function saveGlobalConfig(env = {}, newValues = {}) {
             k,
             String(v),
             now
-          ).run();
+          ));
         }
       }
-    } catch (_e) {}
+      if (statements.length) await detectedD1.db.batch(statements);
+      memoryStore.lastD1WriteAt = now;
+      memoryStore.lastD1WriteError = null;
+    } catch (err) {
+      memoryStore.lastD1WriteError = err?.message || String(err);
+    }
   }
 
   if (detectedKv) {
@@ -3717,7 +3836,9 @@ async function getStorageDiagnostics(env = {}) {
     d1Enabled: d1State.d1Enabled,
     d1BindingName: d1State.bindingName || 'DB',
     d1Migrated: d1State.migrated,
-    d1Error: d1State.error || null,
+    d1Error: d1State.error || memoryStore.lastD1WriteError || null,
+    d1LastWriteAt: memoryStore.lastD1WriteAt || 0,
+    d1WriteError: memoryStore.lastD1WriteError || null,
     kvEnabled: Boolean(kvDetected),
     kvBindingName: kvDetected?.bindingName || 'C',
     hasPassword: hasPass,
@@ -3738,7 +3859,7 @@ async function getStorageDiagnostics(env = {}) {
 // --- MODULE: src/subscription/converters.js ---
 // ============================================================================
 // miliconfig v3.1 - مبدل‌های داخلی اشتراک (Clash, Sing-box, Surge, Loon, QuanX, Residential Chain)
-// منطبق ۱۰۰٪ با منطق کد اصلی CFnew v3.1 + نام‌گذاری number+miliconfig
+// تبدیل لینک‌های نود به Clash / Sing-box / Surge / QuanX / Loon
 // ============================================================================
 
 
@@ -5005,7 +5126,7 @@ async function generateResidentialChainConfig(links, options = {}) {
 
 // --- MODULE: src/subscription/generator.js ---
 // ============================================================================
-// miliconfig v3.1 - تولیدکننده ساب‌لینک چندکاربره با نام‌گذاری number+miliconfig
+// miliconfig v3.2 - تولیدکننده ساب‌لینک چندکاربره با نام‌گذاری گویای نودها
 // و اعمال دقیق تنظیمات هر کاربر + محدودیت تعداد نودها در ساب (subNodeCount)
 // ============================================================================
 
@@ -5125,8 +5246,8 @@ function buildPortVariants(cfg = {}, item = {}, index = 0) {
   return out.length ? out : [{ port: 443, tls: true }];
 }
 
-// چیدمان متناوب آی‌پی‌ها و دامنه‌های پیش‌فرض CFnew: هر ۲ آی‌پی، یک دامنه،
-// تا دامنه‌های cfnew حتی با سقف کم نود هم حتماً داخل سابلینک باشند.
+// چیدمان متناوب آی‌پی‌ها و دامنه‌های پیش‌فرض: هر ۲ آی‌پی، یک دامنه،
+// تا نودهای دامنه حتی با سقف کم نود هم حتماً داخل سابلینک باشند.
 function interleaveAddresses(ipNodes = [], domainNodes = []) {
   const out = [];
   const ips = [...ipNodes];
@@ -5140,18 +5261,85 @@ function interleaveAddresses(ipNodes = [], domainNodes = []) {
   return out;
 }
 
-// توزیع مساوی پروتکل‌ها در سابلینک (vless / trojan / ss / xhttp به‌صورت چرخشی)
-function interleaveProtocols(groups = {}) {
-  const order = ['vless', 'trojan', 'ss', 'xhttp'];
-  const queues = order.map(key => (Array.isArray(groups[key]) ? [...groups[key]] : []));
-  const total = queues.reduce((sum, q) => sum + q.length, 0);
+// ساخت یک ورودی نود همراه با فرادادهٔ لازم برای نام‌گذاری و توزیع مساوی
+function makeNodeEntry(link, proto, host, item = null, tls = true) {
+  const cc = String(item?.country || '').trim().toUpperCase();
+  const meta = {
+    proto,
+    host,
+    family: addressFamilyLabel(host),
+    cc: /^[A-Z]{2}$/.test(cc) ? cc : '',
+    proxy: Boolean(item?.proxy),
+    tls: tls !== false
+  };
+  return { link, meta };
+}
+
+// توزیع مساوی ترکیب‌های مختلف در سابلینک: هر «پروتکل × خانوادهٔ آدرس»
+// (VLESS/IPv4، VLESS/IPv6، VLESS/Domain، Trojan/IPv4 و ...) به تعداد برابر
+// در ساب حاضر می‌شود و نودهای پروکسی‌دار یک‌درمیان بین بقیه پخش می‌شوند.
+function balanceComboEntries(entries = [], limit = 0) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const groups = new Map();
+  for (const entry of entries) {
+    if (!entry || !entry.link) continue;
+    const key = `${entry.meta.proto}|${entry.meta.family || 'na'}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+  if (!groups.size) return [];
+
+  // داخل هر گروه، نودهای پروکسی‌دار و بدون پروکسی یک‌درمیان بیایند
+  for (const [key, list] of groups) {
+    const withProxy = list.filter(item => item.meta.proxy);
+    const plain = list.filter(item => !item.meta.proxy);
+    const mixed = [];
+    let a = 0;
+    let b = 0;
+    while (a < withProxy.length || b < plain.length) {
+      if ((mixed.length % 2 === 0 && a < withProxy.length) || b >= plain.length) {
+        mixed.push(withProxy[a++]);
+      } else {
+        mixed.push(plain[b++]);
+      }
+    }
+    groups.set(key, mixed);
+  }
+
+  // سهمیهٔ برابر برای هر ترکیب تا سقف نود کاربر
+  const total = entries.length;
+  const target = limit > 0 ? Math.min(limit, total) : total;
+  const keys = [...groups.keys()];
+  const quota = new Map(keys.map(key => [key, 0]));
+  let remaining = target;
+  let pending = keys.slice();
+  while (remaining > 0 && pending.length) {
+    const share = Math.max(1, Math.floor(remaining / pending.length));
+    const next = [];
+    for (const key of pending) {
+      const bucket = groups.get(key);
+      const left = bucket.length - quota.get(key);
+      const take = Math.min(share, left, remaining);
+      quota.set(key, quota.get(key) + take);
+      remaining -= take;
+      if (bucket.length - quota.get(key) > 0) next.push(key);
+      if (remaining <= 0) break;
+    }
+    if (next.length === pending.length) {
+      const progressed = next.some(key => quota.get(key) > 0);
+      if (!progressed) break;
+    }
+    pending = next;
+  }
+
+  const queues = keys.map(key => groups.get(key).slice(0, quota.get(key)));
   const out = [];
   let guard = 0;
-  while (out.length < total && guard++ < total * 4) {
+  while (out.length < target && guard++ < target * 4) {
     let moved = false;
-    for (const q of queues) {
-      if (q.length) {
-        out.push(q.shift());
+    for (const queue of queues) {
+      if (queue.length && out.length < target) {
+        out.push(queue.shift());
         moved = true;
       }
     }
@@ -5553,7 +5741,7 @@ async function getVerifiedCountryProxies(code, urls, options = {}) {
   return list;
 }
 
-function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '') {
+function buildVlessLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const defaultHttps = [443];
   const defaultHttp = disableNonTls ? [] : [80];
@@ -5570,10 +5758,15 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
 
     // مسیر یکتا برای نوع نود + کشور؛ پروکسی خروجی هم داخل همان مسیر به ورکر داده می‌شود
     const itemPath = buildNodePath('vless', cfg, wkOverride, item);
-    const baseName = namer(item);
 
     for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
-      const nodeName = tls ? baseName : `${baseName} · HTTP`;
+      const nodeName = buildNodeDisplayName({
+        proto: 'vless',
+        host: rawHost,
+        cc: item?.country,
+        proxy: Boolean(item?.proxy),
+        tls
+      });
       if (tls) {
         const params = new URLSearchParams({
           encryption: 'none',
@@ -5587,7 +5780,7 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
         if (alpn) params.set('alpn', alpn);
         if (echValue) params.set('ech', echValue);
         if (fragmentValue) params.set('fragment', fragmentValue);
-        links.push(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'vless', rawHost, item, tls));
       } else {
         const params = new URLSearchParams({
           encryption: 'none',
@@ -5596,7 +5789,7 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, namer, wkOverride = ''
           host: workerHost,
           path: itemPath
         });
-        links.push(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+        links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'vless', rawHost, item, tls));
       }
     }
   }
@@ -5623,7 +5816,7 @@ function rotateIpListByTimeBucket(list, rotationSetting = 'off') {
   return [...list.slice(shift), ...list.slice(0, shift)];
 }
 
-function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
+function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const sspass = (cfg.sspass && String(cfg.sspass).trim()) || userUuid;
   // این ورکر هدر Shadowsocks را به‌صورت متنی می‌خواند (parseShadowsocksHeader)، بنابراین cipher باید none باشد
@@ -5637,7 +5830,7 @@ function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
     // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همیشه نسخهٔ TLS انتخاب می‌شود
     const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
-    const nodeName = namer(item);
+    const nodeName = buildNodeDisplayName({ proto: 'ss', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${workerHost};path=${itemPath};tls`;
 
@@ -5645,12 +5838,12 @@ function buildShadowsocksLinks(list, userUuid, workerHost, cfg, namer) {
     // ۱) SIP002 (userinfo جدا)  ۲) قالب قدیمی base64 کامل (method:pass@host:port)
     if (idx % 2 === 0) {
       links.push(
-        `ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`
+        makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
       );
     } else {
       const legacy = encodeBase64Utf8(`${cipher}:${sspass}@${safeAddr}:${port}`);
       links.push(
-        `ss://${legacy}?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`
+        makeNodeEntry(`ss://${legacy}?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
       );
     }
   }
@@ -5672,7 +5865,7 @@ function encodeSip002UserInfo(text) {
     .replace(/=+$/, '');
 }
 
-function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '') {
+function buildTrojanLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const defaultHttps = [443];
   const defaultHttp = disableNonTls ? [] : [80];
@@ -5689,10 +5882,15 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
 
     {
-      const baseName = namer(item);
       const itemPath = buildNodePath('trojan', cfg, wkOverride, item);
       for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
-        const nodeName = tls ? baseName : `${baseName} · HTTP`;
+        const nodeName = buildNodeDisplayName({
+          proto: 'trojan',
+          host: rawHost,
+          cc: item?.country,
+          proxy: Boolean(item?.proxy),
+          tls
+        });
         if (tls) {
           const params = new URLSearchParams({
             security: 'tls',
@@ -5705,7 +5903,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
           if (alpn) params.set('alpn', alpn);
           if (echValue) params.set('ech', echValue);
           if (fragmentValue) params.set('fragment', fragmentValue);
-          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+          links.push(makeNodeEntry(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'trojan', rawHost, item, tls));
         } else {
           const params = new URLSearchParams({
             security: 'none',
@@ -5713,7 +5911,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
             host: workerHost,
             path: itemPath
           });
-          links.push(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+          links.push(makeNodeEntry(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'trojan', rawHost, item, tls));
         }
       }
     }
@@ -5721,7 +5919,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, namer, wkOverride = '
   return links;
 }
 
-function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
+function buildXhttpLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const shortPath = String(userUuid || '').substring(0, 8);
   const alpn = normalizeAlpn(cfg.alpn);
@@ -5735,7 +5933,7 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
     const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
-    const nodeName = namer(item);
+    const nodeName = buildNodeDisplayName({ proto: 'xhttp', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     // مسیر یکتای xHTTP + کشور + پروکسی خروجی
     let xhttpPath = `/${shortPath}?nt=xhttp`;
     const xhttpCountry = String(item.country || '').trim().toUpperCase();
@@ -5764,7 +5962,7 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg, namer) {
     if (alpn) params.set('alpn', alpn);
     if (echValue) params.set('ech', echValue);
     if (fragmentValue) params.set('fragment', fragmentValue);
-    links.push(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`);
+    links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'xhttp', rawHost, item, true));
   }
   return links;
 }
@@ -6279,17 +6477,19 @@ async function buildWarpFamilyLinks(cfg = {}, options = {}) {
   const base = registered || buildFallbackWarpConfig();
 
   if (wantWarp) {
-    links.push(buildWireguardLink(base, 'WARP'));
+    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard' })));
   }
   if (wantPro) {
     // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
-    links.push(buildWireguardLink(base, 'WARP PRO'));
+    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp_pro', family: 'WireGuard' })));
   }
   if (wantMl) {
     const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
     endpoints.forEach((endpoint, idx) => {
-      const suffix = endpoint.label ? ` ${endpoint.label}` : '';
-      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, `WARP-ML-${idx + 1}${suffix}`));
+      const label = String(endpoint.label || '').trim().toUpperCase();
+      const meta = { proto: 'warp_ml', family: 'WireGuard', cc: /^[A-Z]{2}$/.test(label) ? label : '' };
+      const name = `${buildNodeDisplayName(meta)} · ${label || 'EP'}-${idx + 1}`;
+      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, name));
     });
   }
   return links;
@@ -6523,11 +6723,12 @@ async function fetchOpenVpnNodes(cfg = {}, force = false) {
   return items;
 }
 
-// تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری دقیق number+miliconfig و رعایت سقف تعداد نود در ساب
+// تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری گویا (کشور/پروتکل/خانوادهٔ آدرس)
+// و رعایت سقف تعداد نود در ساب
 async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
-  // استخر لبهٔ ترکیبی cfnew + Z-E-U-S: پاسخ فوری از فهرست داخلی و تازه‌سازی
+  // استخر لبهٔ ترکیبی دامنه/آی‌پی: پاسخ فوری از فهرست داخلی و تازه‌سازی
   // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
   const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
   const userUuid = String(userOrConfig?.uuid || queryOverrides.uuid || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase();
@@ -6536,18 +6737,31 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const protoFilter = (queryOverrides.proto || '').trim().toLowerCase();
   // ساب‌لینک اختصاصی «دامنه‌های لبهٔ کلادفلر»: ?set=domain
   // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
-  const domainMode = String(queryOverrides.set || '').trim().toLowerCase() === 'domain';
+  const setParam = String(queryOverrides.set || '').trim().toLowerCase();
+  const domainMode = setParam === 'domain';
+  // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
+  // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
+  const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
+
+  if (ipv6Mode) {
+    // فقط آی‌پی نسخه ۶؛ دامنه محور/لیست ترجیحی/سرور اصلی/چندلوکیشن کنار گذاشته می‌شوند
+    cfg.ipv4 = 'no';
+    cfg.ipv6 = 'yes';
+    cfg.epd = 'no';
+    cfg.egi = 'no';
+    cfg.ena = 'no';
+    cfg.pd = 'no';
+    cfg.yxby = 'yes';
+  }
 
   const evEnabled = protoFilter ? protoFilter === 'vless' : isEnabledValue(cfg.ev, true);
   const etEnabled = protoFilter ? protoFilter === 'trojan' : isEnabledValue(cfg.et, false);
   const exEnabled = protoFilter ? protoFilter === 'xhttp' : isEnabledValue(cfg.ex, false);
   const esEnabled = protoFilter ? (protoFilter === 'ss' || protoFilter === 'shadowsocks') : isEnabledValue(cfg.es, false);
 
-  const namer = createMiliNodeNamer(BRAND_NAME);
-  // هر پروتکل در گروه جداگانه ساخته می‌شود تا در پایان با چیدمان چرخشی
-  // همه پروتکل‌ها به نسبت مساوی در سابلینک حاضر باشند (نه فقط VLESS).
+  // هر پروتکل در گروه جداگانه ساخته می‌شود تا در پایان ترکیب‌های مختلف
+  // (پروتکل × خانوادهٔ آدرس) به تعداد مساوی در ساب حاضر باشند.
   const protoGroups = { vless: [], trojan: [], ss: [], xhttp: [] };
-  const rawLinks = [];
 
   // فرگمنت TLS بر اساس پریست انتخابی مدیر (off = بدون فرگمنت)
   // شادوساکس هیچ‌وقت پارامتر fragment نمی‌گیرد و همیشه در سابلینک می‌ماند.
@@ -6556,10 +6770,19 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   function appendFromSource(sourceList) {
     const safeList = filterAddressFamily(sourceList, cfg);
     if (!Array.isArray(safeList) || safeList.length === 0) return;
-    if (evEnabled) protoGroups.vless.push(...buildVlessLinks(safeList, userUuid, workerHost, cfg, namer, wkOverride));
-    if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(safeList, userUuid, workerHost, cfg, namer, wkOverride));
-    if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(safeList, userUuid, workerHost, cfg, namer));
-    if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg, namer));
+    if (evEnabled) protoGroups.vless.push(...buildVlessLinks(safeList, userUuid, workerHost, cfg, wkOverride));
+    if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(safeList, userUuid, workerHost, cfg, wkOverride));
+    if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(safeList, userUuid, workerHost, cfg));
+    if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg));
+  }
+
+  // ساب اختصاصی IPv6: همهٔ آی‌پی‌های نسخه ۶ استخر + آی‌پی‌های رسمی کلادفلر
+  if (ipv6Mode) {
+    const v6Pool = [...new Set([
+      ...pickFromPool(edgePool.ipv6, 12),
+      ...OFFICIAL_DIRECT_IPV6
+    ])].filter(Boolean);
+    appendFromSource(v6Pool.map(ip => ({ ip, isp: 'CF-IPv6', family: 'ipv6' })));
   }
 
   // نودهای «دامنهٔ کلادفلر»: آدرس نود فقط دامنه است (بدون آی‌پی). دامنه‌ها
@@ -6571,7 +6794,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     ) || 50);
     const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
     const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
-    // اول دامنه‌های واقعی منابع (ز-یو-اس / cfnew / bestip) و بعد استخر تأییدشدهٔ داخلی
+    // اول دامنه‌های واقعی منابع بیرونی و بعد استخر تأییدشدهٔ داخلی
     const domains = [...new Set([
       ...pickFromPool(edgePool.domains, Math.ceil(addressCount / 2)),
       ...pickEdgeDomains(addressCount)
@@ -6583,7 +6806,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
-  if (!domainMode && countryFilter) {
+  if (!domainMode && !ipv6Mode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
       ? MULTI_COUNTRY_CODES.slice()
       : (COUNTRY_PROXY_SOURCES[countryFilter] ? [countryFilter] : []);
@@ -6616,12 +6839,12 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const disablePreferred = cfg.yxby === 'yes' || nodeScope === 'origin';
   const enableNative = cfg.ena === 'yes' || nodeScope === 'origin';
 
-  if (!domainMode && enableNative && nodeScope !== 'edge') {
+  if (!domainMode && !ipv6Mode && enableNative && nodeScope !== 'edge') {
     appendFromSource([{ ip: workerHost, isp: 'Origin' }]);
   }
 
   // نودهای «دامنهٔ پنل» — آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
-  if (!domainMode && isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
+  if (!domainMode && !ipv6Mode && isEnabledValue(cfg.pd, true) && nodeScope !== 'origin') {
     const panelDomainNodes = buildPanelDomainNodes(workerHost, cfg);
     if (panelDomainNodes.length) appendFromSource(panelDomainNodes);
   }
@@ -6630,11 +6853,11 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const hasCustomPreferred = customIps.length > 0 || customDomains.length > 0;
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
-  if (!domainMode && !countryMode && customProxies.length > 0) {
+  if (!domainMode && !ipv6Mode && !countryMode && customProxies.length > 0) {
     appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost));
   }
 
-  if (!domainMode && !disablePreferred && !countryMode) {
+  if (!domainMode && !ipv6Mode && !disablePreferred && !countryMode) {
     if (hasCustomPreferred) {
       if (customIps.length > 0 && cfg.epi === 'yes') {
         appendFromSource(customIps);
@@ -6643,9 +6866,9 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
         appendFromSource(customDomains.map(d => ({ ip: d.domain, port: d.port, isp: d.name || d.domain })));
       }
     } else {
-      // دامنه‌های پیش‌فرض CFnew همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
+      // دامنه‌های پیش‌فرض همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
       // چیده می‌شوند تا با سقف کم نود هم حتماً در سایلینک باشند.
-      // آی‌پی‌های تازه از استخر cfnew/Z-E-U-S (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
+      // آی‌پی‌های تازه از استخر لبهٔ کلادفلر (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
       const pooledAddresses = [
         ...pickFromPool(edgePool.ipv4, 8),
         ...(cfg.ipv6 === 'no' ? [] : pickFromPool(edgePool.ipv6, 4))
@@ -6691,33 +6914,39 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     }
   }
 
-  if (protoGroups.vless.length === 0 && protoGroups.trojan.length === 0 && protoGroups.ss.length === 0 && protoGroups.xhttp.length === 0) {
+  const allEntries = [
+    ...protoGroups.vless,
+    ...protoGroups.trojan,
+    ...protoGroups.ss,
+    ...protoGroups.xhttp
+  ];
+
+  if (allEntries.length === 0) {
     appendFromSource([{ ip: workerHost, port: 443, isp: 'Origin' }]);
   }
-
-  // چیدمان چرخشی پروتکل‌ها: vless → trojan → ss → xhttp → تکرار
-  const balancedLinks = interleaveProtocols(protoGroups);
-  if (balancedLinks.length) rawLinks.push(...balancedLinks);
 
   const subNodeCount = queryOverrides.limit !== undefined
     ? parseInt(queryOverrides.limit, 10)
     : Number(userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50);
 
-  // اعمال چرخش خودکار آی‌پی در صورت تنظیم بازه زمانی توسط مدیر
-  const rotatedLinks = rotateIpListByTimeBucket(rawLinks, cfg.ipRotation || 'off');
+  // توزیع مساوی ترکیب‌ها (پروتکل × IPv4/IPv6/Domain) و بعد چرخش زمانی اختیاری
+  const balancedEntries = balanceComboEntries(allEntries, subNodeCount);
+  const rotatedLinks = rotateIpListByTimeBucket(balancedEntries, cfg.ipRotation || 'off');
 
-  // اعمال دقیق نام‌گذاری number+miliconfig و سقف تعداد نودهای ساب‌لینک کاربر
-  const finalized = finalizeMiliSubscriptionLinks(rotatedLinks, subNodeCount, BRAND_NAME);
+  // اعمال نام گویا (کشور/نوع نود/خانوادهٔ آدرس) + سقف تعداد نود ساب‌لینک کاربر
+  const finalized = finalizeMiliSubscriptionLinks(rotatedLinks, subNodeCount);
 
   // خانوادهٔ WARP (WARP / WARP PRO / WARP چندلوکیشن) در انتهای ساب‌لینک با نام اختصاصی خودش
   const warpAllowed = !protoFilter || protoFilter === 'warp' || protoFilter === 'wireguard';
   // WARP و WARP PRO بدون نیاز به هیچ تنظیمی همیشه حاضرند؛ فقط حذف کامل آن‌ها
   // با ?proto=vless (یا پروتکل دیگر) یا ?nowarp=1 ممکن است.
   const nowarp = String(queryOverrides.nowarp || '') === '1' || cfg.warp === 'no' && cfg.warpPro === 'no';
-  const warpLinks = warpAllowed && !domainMode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
+  const warpLinks = warpAllowed && !domainMode && !ipv6Mode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
 
-  // افزودن الزامی ۳ نود هاردکدشده اطلاع‌رسانی در صدر تمام ساب‌لینک‌ها
-  return [...HARDCODED_INFO_NODES, ...finalized, ...warpLinks];
+  // ۳ نود اطلاع‌رسانی در صدر ساب‌لینک‌ها؛ در ساب اختصاصی IPv6 حذف می‌شوند
+  // تا آن ساب واقعاً فقط نودهای IPv6 داشته باشد.
+  const infoNodes = ipv6Mode ? [] : HARDCODED_INFO_NODES;
+  return [...infoNodes, ...finalized, ...warpLinks];
 }
 
 // تشخیص خودکار کلاینت از User-Agent در صورت عدم ارسال پارامتر target
@@ -6745,7 +6974,7 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
 
   // بررسی وضعیت فعال بودن، حجم و انقضای کاربر
   if (userOrConfig && userOrConfig.enabled === false) {
-    const disabledNode = `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=tls&type=ws#${encodeURIComponent('1+' + BRAND_NAME)}`;
+    const disabledNode = `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=tls&type=ws#${encodeURIComponent('⛔ حساب غیرفعال')}`;
     return new Response(btoa(disabledNode), {
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
@@ -6945,7 +7174,7 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
 // --- MODULE: src/core/runtime.js ---
 // ============================================================================
 // miliconfig v3.1 - موتور هسته پروکسی (VLESS + Trojan + xhttp + SOCKS5/HTTP + GrainTCP)
-// منطبق ۱۰۰٪ با کد اصلی CFnew v3.1 + احراز هویت چندکاربره D1 و ثبت ترافیک
+// هستهٔ پروکسی ورکر + احراز هویت چندکاربره D1 و ثبت ترافیک
 // ============================================================================
 
 
@@ -8896,11 +9125,30 @@ async function handleConfigApi(request, env) {
           config: sanitizeConfigForClient(cfg)
         });
       }
+      const keys = Object.keys(body || {}).filter(key => !key.startsWith('_'));
       const updated = await saveGlobalConfig(env, body || {});
-      await addAuditLog(env, 'ذخیره تنظیمات پنل', 'بروزرسانی پیکربندی سراسری', clientIp);
+      // تأیید واقعی: after از نوشتن، کلیدها دوباره از D1 خوانده می‌شوند
+      const verification = await verifyConfigInD1(env, keys);
+      const storedInD1 = !verification.error && verification.found === keys.length;
+      await addAuditLog(
+        env,
+        'ذخیره تنظیمات پنل',
+        storedInD1 ? `${keys.length} کلید در D1` : `D1: ${verification.error || verification.missing.join(',')}`,
+        clientIp
+      ).catch(() => {});
       return jsonResponse({
         success: true,
-        message: 'تنظیمات با موفقیت در دیتابیس ذخیره شد',
+        storedInD1,
+        storage: {
+          mode: verification.error ? 'Memory' : 'D1',
+          written: verification.found,
+          checked: verification.checked,
+          missing: verification.missing,
+          error: verification.error
+        },
+        message: storedInD1
+          ? `تنظیمات در D1 ذخیره شد (${verification.found} کلید)`
+          : `ذخیره در D1 انجام نشد: ${verification.error || verification.missing.join(', ')}`,
         config: sanitizeConfigForClient(updated)
       });
     } catch (err) {
@@ -8915,12 +9163,11 @@ async function handleConfigApi(request, env) {
 }
 
 // ۲. بروزرسانی نسخه: بررسی و استقرار نسخهٔ تازه از گیت‌هاب روی همین اسکریپت (/api/update)
-// توکن می‌تواند در env باشد یا یک‌بار از پنل ذخیره شود (مثل مکانیزم پنل Z-E-U-S).
+// هیچ اطلاعات حساب کلودفلر از کاربر گرفته نمی‌شود؛ اگر ورکر خودش کلید
+// CF_API_TOKEN داشته باشد (تنظیم‌شده در داشبورد کلادفلر) نصب خودکار انجام می‌شود.
 async function resolveUpdateToken(env) {
   const envToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
-  if (envToken) return { token: envToken, source: 'env' };
-  const stored = await getSecretSetting(env, 'cf_token');
-  return { token: stored, source: stored ? 'panel' : '' };
+  return { token: envToken, source: envToken ? 'env' : '' };
 }
 
 async function handleUpdateApi(request, env) {
@@ -8959,7 +9206,28 @@ async function handleUpdateApi(request, env) {
   return jsonResponse({ error: 'Method not allowed' }, 405);
 }
 
-// ۲-ب. اتصال/قطع توکن بروزرسانی خودکار (همان الگوی /api/auto-update-setup در Z-E-U-S)
+// ۲-الف. دانلود مستقیم فایل نسخهٔ تازه از گیت‌هاب/آینه‌ها (بدون نیاز به کلید حساب)
+async function handleUpdateBundle(request, env) {
+  const bundle = await fetchLatestBundle(env);
+  if (!bundle) {
+    return new Response('دریافت فایل نسخهٔ تازه ناموفق بود؛ چند دقیقهٔ دیگر تلاش کنید.', {
+      status: 502,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+    });
+  }
+  return new Response(bundle.text, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="miliconfig-worker.js"',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
+
+// ۲-ب. وضعیت بروزرسانی خودکار — بدون هیچ ورودی حسابی از کاربر
+// اگر ورکر کلید CF_API_TOKEN داشته باشد، نصب خودکار در دسترس است؛ در غیر این
+// صورت پنل فقط دانلود فایل و دستور استقرار را نشان می‌دهد.
 async function handleAutoUpdateSetupApi(request, env) {
   if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
   if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -8968,57 +9236,58 @@ async function handleAutoUpdateSetupApi(request, env) {
   try { body = await request.json(); } catch (_e) {}
   const action = String(body?.action || 'check').toLowerCase();
   const cfg = await loadGlobalConfig(env);
-  const stored = await getSecretSetting(env, 'cf_token');
-  const envToken = String(env?.CF_API_TOKEN || '').trim();
+  const envToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  const scriptGuess = inferScriptName(new URL(request.url).hostname) || '';
 
   if (action === 'check') {
     return jsonResponse({
       success: true,
-      has_token: Boolean(envToken || stored),
-      token_source: envToken ? 'env' : (stored ? 'panel' : ''),
+      has_token: Boolean(envToken),
+      token_source: envToken ? 'env' : '',
+      can_auto_deploy: Boolean(envToken),
       auto_update: String(cfg.autoUpdate || 'no') === 'yes',
       account_id: cfg.cfAccountId || '',
-      script_name: cfg.cfScriptName || inferScriptName(new URL(request.url).hostname),
-      worker_name: String(env?.WORKER_NAME || '')
+      script_name: cfg.cfScriptName || scriptGuess,
+      worker_name: String(env?.WORKER_NAME || ''),
+      message: envToken
+        ? 'نصب خودکار از داخل همین ورکر فعال است.'
+        : 'برای نصب خودکار کافی است کلید CF_API_TOKEN را در متغیرهای ورکر (داشبورد کلادفلر) اضافه کنید؛ پنل هیچ ورودی حسابی نمی‌خواهد.'
     });
   }
 
   if (action === 'enable') {
-    const candidate = String(body?.token || envToken || stored || '').trim();
-    if (!candidate) {
-      return jsonResponse({ success: false, error: 'TOKEN_MISSING', message: 'توکن کلادفلر را وارد کنید.' }, 400);
+    if (!envToken) {
+      return jsonResponse({
+        success: false,
+        error: 'TOKEN_MISSING',
+        can_auto_deploy: false,
+        message: 'کلید CF_API_TOKEN روی این ورکر تنظیم نشده است؛ بدون آن فقط دانلود فایل نسخهٔ تازه و دستور استقرار در دسترس است.'
+      }, 400);
     }
-    const verified = await verifyUpdateToken(candidate);
+    const verified = await verifyUpdateToken(envToken);
     if (!verified.valid) {
-      return jsonResponse({ success: false, error: 'INVALID_TOKEN', message: verified.error || 'توکن معتبر نیست.' }, 400);
+      return jsonResponse({ success: false, error: 'INVALID_TOKEN', message: verified.error || 'کلید ورکر معتبر نیست.' }, 400);
     }
-    const account = await resolveAccountId(candidate, cfg.cfAccountId || '');
+    const account = await resolveAccountId(envToken, cfg.cfAccountId || '');
     const patch = { autoUpdate: 'yes' };
     if (account.accountId && !cfg.cfAccountId) patch.cfAccountId = account.accountId;
-    const scriptGuess = cfg.cfScriptName || inferScriptName(new URL(request.url).hostname) || '';
     if (scriptGuess && !cfg.cfScriptName) patch.cfScriptName = scriptGuess;
-    await setSecretSetting(env, 'cf_token', candidate);
     const saved = await saveGlobalConfig(env, patch);
-    await addAuditLog(env, 'اتصال توکن بروزرسانی', `حساب: ${account.accountId ? account.accountId.slice(-6) : 'نامشخص'}`, clientIp).catch(() => {});
+    await addAuditLog(env, 'فعال‌سازی بروزرسانی خودکار', `حساب: ${account.accountId ? account.accountId.slice(-6) : 'نامشخص'}`, clientIp).catch(() => {});
     return jsonResponse({
       success: true,
       has_token: true,
+      can_auto_deploy: true,
       auto_update: true,
       account_id: saved?.cfAccountId || patch.cfAccountId || '',
       script_name: saved?.cfScriptName || patch.cfScriptName || '',
-      message: 'توکن تأیید شد و بروزرسانی خودکار روشن شد.'
+      message: 'کلید ورکر تأیید شد و بروزرسانی خودکار روشن شد.'
     });
   }
 
   if (action === 'disable') {
     await saveGlobalConfig(env, { autoUpdate: 'no' });
     return jsonResponse({ success: true, auto_update: false, message: 'بروزرسانی خودکار خاموش شد.' });
-  }
-
-  if (action === 'clear-token') {
-    await setSecretSetting(env, 'cf_token', '');
-    await saveGlobalConfig(env, { autoUpdate: 'no' });
-    return jsonResponse({ success: true, has_token: false, auto_update: false, message: 'توکن ذخیره‌شده حذف شد.' });
   }
 
   return jsonResponse({ success: false, error: 'action نامعتبر است' }, 400);
@@ -9526,7 +9795,7 @@ async function handleScannerApi(request, env) {
         ipv4: IP_RANGE_SOURCES.ipv4.length,
         ipv6: IP_RANGE_SOURCES.ipv6.length
       },
-      // آی‌پی‌ها و دامنه‌های پیش‌فرض CFnew برای افزودن مستقیم به yx از داخل اسکنر
+      // آی‌پی‌ها و دامنه‌های پیش‌فرض لبهٔ کلادفلر برای افزودن مستقیم به yx از داخل اسکنر
       officialIps: OFFICIAL_DIRECT_IPS,
       officialIpv6: OFFICIAL_DIRECT_IPV6,
       directDomains: DIRECT_DOMAINS.map(item => item.domain)
@@ -9639,7 +9908,7 @@ async function handleScannerApi(request, env) {
           ...(family === 'ipv4' ? [] : curatedV6)
         ];
 
-        // لیست زنده آی‌پی‌های فرانت‌شده کلادفلر (Z-E-U-S)؛ آدرس‌های تصادفی داخل رنج‌ها
+        // لیست زنده آی‌پی‌های فرانت‌شده کلادفلر؛ آدرس‌های تصادفی داخل رنج‌ها
         // از داخل ورکر کلادفلر قابل اتصال نیستند، بنابراین از خود لیست نمونه می‌گیریم.
         // فیدهای همیشه‌به‌روز: آی‌پی‌های تست‌شدهٔ IPDB (BestCF) و پروکسی‌آی‌پی‌های آمادهٔ (BestProxy)
         const ipListSources = family === 'ipv6' ? [] : [...IP_CANDIDATE_SOURCES, ...PROXY_IP_SOURCES];
@@ -9862,7 +10131,7 @@ async function handleScannerApi(request, env) {
 
 // --- MODULE: src/ui/loginHtml.js ---
 // ============================================================================
-// miliconfig v3.1 - درگاه ورود با استتار nginx (الهام از edgetunnel)
+// miliconfig v3.2 - درگاه ورود با استتار nginx
 // صفحه اول دقیقاً «Welcome to nginx!» است؛ پس از ۳ ثانیه صفحه تار می‌شود و
 // پنجره ورود آرام روی آن ظاهر می‌شود. حالت روز/شب و زبان فارسی/انگلیسی هم دارد.
 // ============================================================================
@@ -10536,6 +10805,14 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
   }
   if (isEnabledValue(userCfg.epd, true)) {
     protoCombos.push({ title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` });
+  }
+  // ساب اختصاصی همراه اول: فقط نودهای IPv6 (بدون IPv4 و دامنه)
+  if (isEnabledValue(userCfg.ipv6, true)) {
+    protoCombos.push({
+      title: 'ساب اختصاصی IPv6 — همراه اول (فقط نودهای IPv6)',
+      badge: 'IPv6',
+      url: `${baseSubUrl}?set=ipv6`
+    });
   }
   if (isEnabledValue(userCfg.warp, true) || isEnabledValue(userCfg.warpPro, false)) {
     protoCombos.push({ title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` });
@@ -11550,7 +11827,7 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
 
 // --- MODULE: src/ui/adminHtml.js ---
 // ============================================================================
-// miliconfig v3.1 - مرکز کنترل سیستم‌عامل مدیریت (تم Z-E-U-S)
+// miliconfig v3.2 - مرکز کنترل مدیریت پنل
 // بدون ایموجی - تمام آیکون‌ها SVG اختصاصی - دکمه‌ها با event delegation
 // ============================================================================
 
@@ -11575,8 +11852,8 @@ const PANEL_I18N = {
     'metric.ips': 'آی‌پی‌های سالم', 'metric.protocols': 'پروتکل‌های فعال',
     'settings.protocols': 'پروتکل‌ها و قابلیت‌ها', 'settings.network': 'شبکه و ترنسپورت', 'settings.panel': 'پنل و امنیت',
     'scanner.country': 'کشور', 'scanner.kind': 'نوع', 'scanner.family': 'خانواده آی‌پی',
-    'scanner.count': 'تعداد', 'scanner.addCfIps': 'افزودن IPهای پیش‌فرض CFnew به yx',
-    'scanner.addCfDomains': 'افزودن دامنه‌های پیش‌فرض CFnew به yx',
+    'scanner.count': 'تعداد',    'scanner.addCfIps': 'افزودن آی‌پی‌های پیش‌فرض کلادفلر به yx',
+    'scanner.addCfDomains': 'افزودن دامنه‌های پیش‌فرض کلادفلر به yx',
     'modal.create': 'ایجاد کاربر جدید', 'modal.username': 'نام کاربری', 'modal.preset': 'پریست',
     'modal.limit': 'حجم مجاز (GB) — صفر برای نامحدود', 'modal.days': 'مدت اعتبار (روز) — صفر برای بدون انقضا',
     'modal.nodes': 'تعداد نود در ساب‌لینک', 'modal.createBtn': 'ساخت کاربر', 'modal.cancel': 'انصراف',
@@ -11622,8 +11899,8 @@ const PANEL_I18N = {
     'metric.ips': 'Healthy IPs', 'metric.protocols': 'Active protocols',
     'settings.protocols': 'Protocols & features', 'settings.network': 'Network & transport', 'settings.panel': 'Panel & security',
     'scanner.country': 'Country', 'scanner.kind': 'Type', 'scanner.family': 'IP family',
-    'scanner.count': 'Count', 'scanner.addCfIps': 'Add CFnew default IPs to yx',
-    'scanner.addCfDomains': 'Add CFnew default domains to yx',
+    'scanner.count': 'Count',    'scanner.addCfIps': 'Add Cloudflare default IPs to yx',
+    'scanner.addCfDomains': 'Add Cloudflare default domains to yx',
     'modal.create': 'Create new user', 'modal.username': 'Username', 'modal.preset': 'Preset',
     'modal.limit': 'Data limit (GB) — 0 for unlimited', 'modal.days': 'Validity (days) — 0 for never',
     'modal.nodes': 'Nodes in subscription', 'modal.createBtn': 'Create user', 'modal.cancel': 'Cancel',
@@ -11699,7 +11976,8 @@ function renderAdminDashboardHtml(initialData = {}) {
     clock: icon('clock'),
     power: icon('power'),
     layers: icon('layers'),
-    download: icon('download')
+    download: icon('download'),
+    signal: icon('signal')
   });
 
   const ssmethods = ['none'];
@@ -11752,7 +12030,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    padding-bottom: 108px;
+    padding-bottom: 48px;
     -webkit-font-smoothing: antialiased;
   }
   body::before {
@@ -11812,7 +12090,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   body.light-mode .card,
   body.light-mode .user-card,
   body.light-mode .loc-card { background: #ffffff; }
-  body.light-mode .dock { background: rgba(255, 255, 255, 0.95); }
+
   body.light-mode .modal-card { background: #ffffff; }
   body.light-mode .toast-body { background: #ffffff; color: #0c1a12; }
   body.light-mode .field input,
@@ -11824,7 +12102,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   body.light-mode .icon-btn { background: #ffffff; color: #0c1a12; }
   body.light-mode .chip { background: #ffffff; }
   body.light-mode .scan-status { color: #5a6d60; }
-  body.light-mode .dock-item { color: #4b5c50; }
+
   body.light-mode .switch i { background: #cfdcd4; }
 
   .mi { width: 20px; height: 20px; display: inline-block; vertical-align: middle; flex: none; }
@@ -11891,7 +12169,45 @@ function renderAdminDashboardHtml(initialData = {}) {
   .topbar .hide-sm { display: inline-flex; }
 
   /* ---------- main ---------- */
-  .main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 10px; }
+  .main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 10px; }
+
+  /* ---------- نوار تب‌ها (جدا از منو) ---------- */
+  .tabbar {
+    position: sticky;
+    top: 61px;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 2px 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(5, 8, 10, 0.96), rgba(5, 8, 10, 0.74));
+    backdrop-filter: blur(14px);
+    scrollbar-width: none;
+  }
+  .tabbar::-webkit-scrollbar { display: none; }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    padding: 9px 15px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  }
+  .tab:hover { color: var(--text); border-color: var(--line-strong); background: var(--neon-soft); }
+  .tab.is-active { color: var(--neon); border-color: var(--line-strong); background: var(--neon-soft); }
+  .tab .mi { width: 17px; height: 17px; }
+  body.light-mode .tabbar { background: linear-gradient(180deg, rgba(238, 243, 240, 0.96), rgba(238, 243, 240, 0.72)); }
   .panel { display: none; animation: rise 0.32s ease both; }
   .panel.is-active { display: block; }
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -12115,32 +12431,6 @@ function renderAdminDashboardHtml(initialData = {}) {
   .loc-name { font-size: 0.8rem; font-weight: 700; }
   .loc-meta { font-size: 0.68rem; color: var(--muted-2); margin-top: 2px; }
 
-  /* ---------- dock ---------- */
-  .dock-wrap { position: fixed; inset-inline: 0; bottom: 14px; z-index: 60; display: flex; justify-content: center; pointer-events: none; }
-  .dock {
-    pointer-events: auto;
-    display: flex; align-items: center; gap: 4px;
-    padding: 7px;
-    border-radius: 20px;
-    border: 1px solid var(--line);
-    background: rgba(6, 10, 9, 0.9);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4) inset;
-  }
-  .dock-item {
-    appearance: none; border: 0; background: transparent; color: var(--muted);
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    min-width: 74px; padding: 8px 10px; border-radius: 14px;
-    font-family: inherit; font-size: 0.68rem; font-weight: 600; cursor: pointer;
-    transition: 0.16s; position: relative;
-  }
-  .dock-item .mi { width: 21px; height: 21px; }
-  .dock-item:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
-  .dock-item.is-active { color: var(--neon); background: var(--neon-soft); }
-  .dock-item.is-active::after {
-    content: ""; position: absolute; bottom: 4px; width: 4px; height: 4px; border-radius: 50%;
-    background: var(--neon); box-shadow: 0 0 8px var(--neon-glow);
-  }
 
   /* ---------- modal / toast ---------- */
   .modal { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(2, 5, 4, 0.72); backdrop-filter: blur(6px); }
@@ -12180,8 +12470,6 @@ function renderAdminDashboardHtml(initialData = {}) {
     .scan-controls { grid-template-columns: 1fr; }
     .window-body { padding: 14px; }
     .window-sub { display: none; }
-    .dock-item { min-width: 60px; padding: 7px 6px; font-size: 0.62rem; }
-    .dock-item .mi { width: 19px; height: 19px; }
   }
 
   /* ---------- mobile drawer (کشوی منو) ---------- */
@@ -12272,13 +12560,15 @@ function renderAdminDashboardHtml(initialData = {}) {
 
   /* قواعد موبایل آخرین بلوک استایل هستند تا بر قواعد پایهٔ بالا اولویت داشته باشند */
   @media (max-width: 820px) {
-    .dock-wrap { display: none; }
     .topbar > .icon-btn:not(.menu-btn) { display: none; }
     .topbar > .chip:not(.mobile-keep) { display: none; }
     .menu-btn { display: inline-flex; }
     .nav-drawer { display: block; }
     .drawer-backdrop { display: block; }
     .toast { bottom: 24px; }
+    .tabbar { top: 57px; padding: 8px 0 10px; gap: 6px; }
+    .tab { padding: 8px 12px; font-size: 0.79rem; }
+    .tab span { display: inline; }
   }
 </style>
 </head>
@@ -12315,14 +12605,6 @@ function renderAdminDashboardHtml(initialData = {}) {
       </div>
       <button class="icon-btn drawer-close" type="button" data-act="close-drawer" title="بستن">${icon('close')}</button>
     </div>
-    <div class="drawer-group">صفحه‌ها</div>
-    <div class="drawer-list">
-      <button class="drawer-item is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span class="drawer-label">داشبورد</span><span class="drawer-hint">وضعیت زنده</span></button>
-      <button class="drawer-item" type="button" data-tab="users">${icon('users')}<span class="drawer-label">کاربران</span><span class="drawer-hint">ساخت و مدیریت</span></button>
-      <button class="drawer-item" type="button" data-tab="scanner">${icon('radar')}<span class="drawer-label">اسکنر</span><span class="drawer-hint">آی‌پی و پروکسی</span></button>
-      <button class="drawer-item" type="button" data-tab="locations">${icon('globe')}<span class="drawer-label">چندلوکیشن</span><span class="drawer-hint">کشورها</span></button>
-      <button class="drawer-item" type="button" data-tab="settings">${icon('settings')}<span class="drawer-label">تنظیمات</span><span class="drawer-hint">همه گزینه‌ها</span></button>
-    </div>
     <div class="drawer-group">نسخه</div>
     <div class="drawer-list">
       <button class="drawer-item" type="button" data-act="check-update">${icon('refresh')}<span class="drawer-label">بررسی بروزرسانی</span><span class="drawer-hint" id="drawerVersion">v${VERSION.replace(/^v/i, '')}</span></button>
@@ -12336,6 +12618,18 @@ function renderAdminDashboardHtml(initialData = {}) {
       <button class="drawer-item danger" type="button" data-act="logout">${icon('logout')}<span class="drawer-label">خروج</span></button>
     </div>
   </nav>
+
+  <main class="main">
+
+  <!-- نوار تب‌ها: از منو جدا است و همهٔ صفحه‌ها را با یک کلیک عوض می‌کند -->
+  <nav class="tabbar" id="tabbar" aria-label="تب‌های پنل">
+    <button class="tab is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span data-i18n="nav.dashboard">داشبورد</span></button>
+    <button class="tab" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
+    <button class="tab" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
+    <button class="tab" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
+    <button class="tab" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
+  </nav>
+
     <section class="panel is-active" data-panel="dashboard">
       <div class="window">
         <div class="window-head">
@@ -12359,7 +12653,7 @@ function renderAdminDashboardHtml(initialData = {}) {
             <div class="metric">
               <div class="metric-top"><span class="metric-label" data-i18n="metric.ips">آی‌پی‌های سالم</span><span class="metric-icon">${icon('server')}</span></div>
               <div class="metric-value" id="mIps">0 <small>نود</small></div>
-              <div class="metric-foot">CFnew + نودهای ترجیحی</div>
+              <div class="metric-foot">نودهای ترجیحی · IPv4 / IPv6 / دامنه</div>
             </div>
             <div class="metric">
               <div class="metric-top"><span class="metric-label" data-i18n="metric.protocols">پروتکل‌های فعال</span><span class="metric-icon">${icon('layers')}</span></div>
@@ -12394,17 +12688,18 @@ function renderAdminDashboardHtml(initialData = {}) {
             <div class="kv"><span>نسخهٔ نصب‌شده</span><b class="mono">v${VERSION.replace(/^v/i, '')}</b></div>
             <div class="kv"><span>آخرین نسخهٔ گیت‌هاب</span><b class="mono" id="updLatest">—</b></div>
             <div class="kv"><span>وضعیت</span><b id="updState">بررسی نشده</b></div>
-            <div class="kv"><span>توکن کلادفلر</span><b id="updToken">—</b></div>
+            <div class="kv"><span>نصب خودکار</span><b id="updAuto">—</b></div>
             <div class="kv"><span>اسکریپت هدف</span><b class="mono" id="updScript">—</b></div>
             <div class="toolbar" style="margin-top:10px;flex-wrap:wrap;">
               <button class="btn sm" type="button" data-act="check-update">${icon('refresh')} بررسی بروزرسانی</button>
-              <button class="btn sm" type="button" data-act="open-token">${icon('key')} اتصال توکن</button>
-              <button class="btn sm primary" type="button" data-act="apply-update">${icon('download')} بروزرسانی خودکار</button>
+              <button class="btn sm" type="button" data-act="download-update">${icon('download')} دانلود فایل نسخهٔ تازه</button>
+              <button class="btn sm" type="button" data-act="copy-update-cmd">${icon('copy')} کپی دستور استقرار</button>
+              <button class="btn sm primary" type="button" data-act="apply-update">${icon('bolt')} نصب خودکار</button>
               <button class="btn sm ghost" type="button" data-act="disable-autoupdate">${icon('close')} خاموش کردن</button>
             </div>
             <div class="loc-meta" style="margin-top:8px;line-height:1.9;">
-              توکن را با دسترسی <b class="mono">Workers Scripts: Edit</b> بسازید و همین‌جا وصل کنید؛ پنل آن را در دیتابیس محرمانه نگه می‌دارد و بایندینگ‌های D1/KV را هنگام آپدیت حفظ می‌کند.
-              اگر پروژه به گیت‌هاب وصل باشد، هر push به main خودکار مستقر می‌شود و نیازی به این کار نیست.
+              بروزرسانی هیچ ورودی از حساب کلادفلر نمی‌خواهد. اگر این ورکر به گیت‌هاب وصل باشد، نسخهٔ تازه خودکار مستقر می‌شود؛ وگرنه فایل تازه را دانلود کنید یا دستور آمادهٔ استقرار را اجرا کنید.
+              نصب خودکار از داخل پنل فقط وقتی فعال می‌شود که متغیر محرمانهٔ <b class="mono">CF_API_TOKEN</b> در تنظیمات خود ورکر تعریف شده باشد.
             </div>
             <ul id="updNotes" class="loc-meta" style="margin:8px 0 0;padding-inline-start:18px;display:none;"></ul>
           </div>
@@ -12491,7 +12786,7 @@ function renderAdminDashboardHtml(initialData = {}) {
           <div class="form-grid">
             <div class="field">
               <label>رمز تروجان (tp)</label>
-              <input type="text" data-key="tp" placeholder="اختیاری">
+              <input type="text" data-key="tp" list="dlTp" placeholder="اختیاری">
             </div>
             <div class="field">
               <label>متد Shadowsocks</label>
@@ -12532,7 +12827,7 @@ function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>ProxyIP سفارشی (p)</label>
-              <input type="text" data-key="p" placeholder="domain:port">
+              <input type="text" data-key="p" list="dlProxyIp" placeholder="domain:port">
             </div>
             <div class="field">
               <label>تعداد نود چندلوکیشن</label>
@@ -12540,20 +12835,20 @@ function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>پروکسی خروجی (s)</label>
-              <input type="text" data-key="s" placeholder="socks5://user:pass@host:port">
+              <input type="text" data-key="s" list="dlProxy" placeholder="socks5://user:pass@host:port">
               <span class="hint">ترافیک خروجی از این پروکسی عبور می‌کند (همان مقدار در مسیر نود هم گذاشته می‌شود).</span>
             </div>
             <div class="field" data-show-when="frag">
               <label>طول فرگمنت</label>
-              <input type="text" data-key="fragmentLength" placeholder="100-200">
+              <input type="text" data-key="fragmentLength" list="dlFragmentLen" placeholder="100-200">
             </div>
             <div class="field" data-show-when="frag">
               <label>فاصله فرگمنت</label>
-              <input type="text" data-key="fragmentInterval" placeholder="10-20">
+              <input type="text" data-key="fragmentInterval" list="dlFragmentInt" placeholder="10-20">
             </div>
             <div class="field" data-show-when="frag">
               <label>نوع پکت فرگمنت</label>
-              <input type="text" data-key="fragmentPackets" placeholder="tlshello">
+              <input type="text" data-key="fragmentPackets" list="dlFragmentPackets" placeholder="tlshello">
             </div>
             <div class="field">
               <label data-i18n="field.dns">DNS سفارشی (DoH)</label>
@@ -12561,17 +12856,17 @@ function renderAdminDashboardHtml(initialData = {}) {
                 ${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}
                 <option value="custom">سفارشی (مقدار دلخواه)</option>
               </select>
-              <input type="text" data-key="customDNS" placeholder="https://223.5.5.5/dns-query" style="margin-top:8px;">
+              <input type="text" data-key="customDNS" list="dlDNS" placeholder="https://223.5.5.5/dns-query" style="margin-top:8px;">
               <span class="hint" data-i18n="field.dnsHint">یک DNS از لیست انتخاب کنید یا مقدار دلخواه DoH بنویسید.</span>
             </div>
             <div class="field">
               <label data-i18n="field.ports">پورت‌های نود (ports)</label>
-              <input type="text" data-key="ports" placeholder="443,2053,2087,8443">
+              <input type="text" data-key="ports" list="dlPorts" placeholder="443,2053,2087,8443">
               <span class="hint">لیست پورت‌ها با کاما — مجاز: ${CF_PORT_CHOICES.map(p => p.port).join(' , ')}. پورت HTTP فقط وقتی ECH خاموش است استفاده می‌شود.</span>
             </div>
             <div class="field">
               <label>پورت‌های HTTP (حالت دوم هر نود)</label>
-              <input type="text" data-key="httpPorts" placeholder="80,8080">
+              <input type="text" data-key="httpPorts" list="dlHttpPorts" placeholder="80,8080">
               <span class="hint">هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ HTTP می‌گیرد؛ خالی بگذارید تا فقط نودهای TLS ساخته شوند.</span>
             </div>
           </div>
@@ -12599,18 +12894,8 @@ function renderAdminDashboardHtml(initialData = {}) {
               <label class="switch"><input type="checkbox" data-key="ovpn"><i></i></label>
             </div>
             <div class="switch-row">
-              <div class="switch-meta">${icon('refresh')}<div><b>بروزرسانی خودکار نسخه</b><span>با توکن کلادفلر، نسخهٔ تازهٔ گیت‌هاب خودکار مستقر می‌شود</span></div></div>
+              <div class="switch-meta">${icon('refresh')}<div><b>بروزرسانی خودکار نسخه</b><span>نسخهٔ تازهٔ گیت‌هاب بدون هیچ ورودی حسابی مستقر می‌شود</span></div></div>
               <label class="switch"><input type="checkbox" data-key="autoUpdate"><i></i></label>
-            </div>
-            <div class="field">
-              <label>Cloudflare Account ID</label>
-              <input type="text" data-key="cfAccountId" placeholder="مثلاً 5f3c...">
-              <span class="hint">برای بروزرسانی خودکار؛ این مقدار محرمانه نیست.</span>
-            </div>
-            <div class="field">
-              <label>نام اسکریپت Workers</label>
-              <input type="text" data-key="cfScriptName" placeholder="miliconfig-worker-v5">
-              <span class="hint">همان نامی که در ورکر یا wrangler تنظیم شده است. توکن را در بخش Keys با نام CF_API_TOKEN اضافه کنید.</span>
             </div>
             <div class="field">
               <label>تعداد نود دامنهٔ پنل</label>
@@ -12627,7 +12912,7 @@ function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>نقاط پایانی WARP سفارشی</label>
-              <input type="text" data-key="warpEndpoint" placeholder="162.159.192.1:2408#DE,188.114.97.1:500#TR">
+              <input type="text" data-key="warpEndpoint" list="dlWarpEndpoint" placeholder="162.159.192.1:2408#DE,188.114.97.1:500#TR">
               <span class="hint">خالی بگذارید تا نقاط پایانی رسمی کلادفلر به‌صورت چرخشی استفاده شوند. برچسب هر آی‌پی نام لوکیشن نود می‌شود.</span>
             </div>
             <div class="field">
@@ -12636,7 +12921,7 @@ function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label>کشورهای OpenVPN</label>
-              <input type="text" data-key="ovpnCountries" placeholder="JP,KR,US">
+              <input type="text" data-key="ovpnCountries" list="dlCountries" placeholder="JP,KR,US">
               <span class="hint">کد کشورها با کاما (مثلاً JP,KR,US). خالی = انتخاب خودکار از کشورهای مختلف.</span>
             </div>
             <div class="field">
@@ -12659,16 +12944,16 @@ function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <div class="field">
               <label data-i18n="field.customPath">مسیر سفارشی پنل (d)</label>
-              <input type="text" data-key="d" placeholder="admin">
+              <input type="text" data-key="d" list="dlAdminPath" placeholder="admin">
               <span class="hint">در صورت خالی بودن، همان مسیر رندوم بالا استفاده می‌شود.</span>
             </div>
             <div class="field">
               <label>صفحه استتار (homepage)</label>
-              <input type="text" data-key="homepage" placeholder="https://example.com">
+              <input type="text" data-key="homepage" list="dlHomepage" placeholder="https://example.com">
             </div>
             <div class="field">
               <label>نودهای ترجیحی (yx)</label>
-              <input type="text" data-key="yx" placeholder="1.2.3.4:443#Node, 5.6.7.8:443#Node2">
+              <input type="text" data-key="yx" list="dlYx" placeholder="1.2.3.4:443#Node, 5.6.7.8:443#Node2">
             </div>
             <div class="field">
               <label data-i18n="field.nodeCount">تعداد نود هر کاربر</label>
@@ -12728,8 +13013,8 @@ function renderAdminDashboardHtml(initialData = {}) {
           </div>
           <div class="scan-status" id="scanHint">آی‌پی‌های سالم با دکمهٔ «افزودن به yx» و پروکسی‌ها با «اتصال به s» در تنظیمات ذخیره می‌شوند.</div>
           <div class="toolbar" style="margin-top: 12px;">
-            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن IPهای پیش‌فرض CFnew به yx</span></button>
-            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض CFnew به yx</span></button>
+            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن آی‌پی‌های پیش‌فرض کلادفلر به yx</span></button>
+            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض کلادفلر به yx</span></button>
           </div>
           <div class="scan-status" id="scanStatus"></div>
           <div class="table-wrap">
@@ -12769,15 +13054,6 @@ function renderAdminDashboardHtml(initialData = {}) {
     </section>
   </main>
 
-  <div class="dock-wrap">
-    <nav class="dock">
-      <button class="dock-item is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span data-i18n="nav.dashboard">داشبورد</span></button>
-      <button class="dock-item" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
-      <button class="dock-item" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
-      <button class="dock-item" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
-      <button class="dock-item" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
-    </nav>
-  </div>
 
   <div class="modal" id="createModal">
     <div class="modal-card">
@@ -12785,9 +13061,9 @@ function renderAdminDashboardHtml(initialData = {}) {
       <div class="modal-body">
         <div class="field"><label>نام کاربری</label><input type="text" id="newUsername" placeholder="مثلاً ali"></div>
         <div class="field"><label>پریست</label><select id="newPreset">${presetOptions}</select></div>
-        <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" value="0"></div>
-        <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" value="0"></div>
-        <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" value="${Number(config.subNodeCount) || 50}"></div>
+        <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" list="dlDataLimit" value="0"></div>
+        <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" list="dlExpireDays" value="0"></div>
+        <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" list="dlNodeCount" value="${Number(config.subNodeCount) || 50}"></div>
         
         <details class="adv-box" open>
           <summary data-i18n="modal.advanced">تنظیمات کامل این کاربر (همه گزینه‌ها واقعی و روی ساب اثر دارند)</summary>
@@ -12797,8 +13073,8 @@ function renderAdminDashboardHtml(initialData = {}) {
             <div class="field"><label>Trojan (WebSocket)</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label>Shadowsocks</label><select id="cfgEs"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
             <div class="field"><label>xHTTP (ضد فیلتر)</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
-            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
+            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" list="dlPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
+            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" list="dlHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
             <div class="field"><label>IPv4</label><select id="cfgIpv4"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
             <div class="field"><label>IPv6</label><select id="cfgIpv6"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
             <div class="field"><label>آی‌پی ثابت / لبهٔ CDN (epi)</label><select id="cfgEpi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
@@ -12827,8 +13103,8 @@ function renderAdminDashboardHtml(initialData = {}) {
             <div class="field"><label data-i18n="field.patt">الگوی مسیر</label>
               <select id="cfgPatt">${PATH_PATTERNS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
             </div>
-            <div class="field"><label data-i18n="field.yx">نودهای ترجیحی (yx)</label><input type="text" id="cfgYx" placeholder="1.2.3.4:443#Node"></div>
-            <div class="field"><label data-i18n="field.outProxy">پروکسی خروجی (s)</label><input type="text" id="cfgS" placeholder="socks5://host:1080"></div>
+            <div class="field"><label data-i18n="field.yx">نودهای ترجیحی (yx)</label><input type="text" id="cfgYx" list="dlYx" placeholder="1.2.3.4:443#Node"></div>
+            <div class="field"><label data-i18n="field.outProxy">پروکسی خروجی (s)</label><input type="text" id="cfgS" list="dlProxy" placeholder="socks5://host:1080"></div>
           </div>
         </details>
       </div>
@@ -12854,24 +13130,95 @@ function renderAdminDashboardHtml(initialData = {}) {
     </div>
   </div>
 
-  <div class="modal" id="tokenModal">
-    <div class="modal-card">
-      <div class="modal-head"><b>${icon('key')} اتصال توکن بروزرسانی</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="tokenModal">${icon('close')}</button></div>
-      <div class="modal-body">
-        <div class="field">
-          <label>Cloudflare API Token</label>
-          <input type="password" id="cfToken" autocomplete="off" placeholder="توکن با دسترسی Workers Scripts: Edit">
-          <span class="hint">توکن فقط برای آپلود نسخهٔ تازه استفاده می‌شود و در دیتابیس محرمانه ذخیره می‌گردد.</span>
-        </div>
-        <div class="field"><label>Account ID (اختیاری — خودکار شناسایی می‌شود)</label><input type="text" id="cfAccountInput" placeholder="خالی بگذارید تا از توکن خوانده شود"></div>
-        <div class="field"><label>نام اسکریپت Workers (اختیاری)</label><input type="text" id="cfScriptInput" placeholder="مثل miliconfig-worker-v5"></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn primary" type="button" data-act="enable-autoupdate">${icon('check')} تأیید و فعال‌سازی</button>
-        <button class="btn ghost" type="button" data-act="close-modal" data-modal="tokenModal">انصراف</button>
-      </div>
-    </div>
-  </div>
+  <!-- لیست‌های آماده: همهٔ ورودی‌های متنی فرم ساخت کاربر و تنظیمات پیشنهاد آماده دارند -->
+  <datalist id="dlPorts">
+    <option value="443,2053,2087,8443"></option>
+    <option value="443"></option>
+    <option value="8443"></option>
+    <option value="2053,2087,2096"></option>
+    <option value="443,8443"></option>
+    <option value="2053"></option>
+    <option value="2087"></option>
+    <option value="2096"></option>
+  </datalist>
+  <datalist id="dlHttpPorts">
+    <option value="80,8080"></option>
+    <option value="80"></option>
+    <option value="8080"></option>
+    <option value="8080,8880"></option>
+    <option value="2052,2082"></option>
+  </datalist>
+  <datalist id="dlNodeCount">
+    <option value="30"></option><option value="50"></option><option value="80"></option>
+    <option value="100"></option><option value="120"></option><option value="150"></option>
+    <option value="200"></option>
+  </datalist>
+  <datalist id="dlDataLimit">
+    <option value="0"></option><option value="10"></option><option value="30"></option>
+    <option value="50"></option><option value="100"></option><option value="200"></option>
+  </datalist>
+  <datalist id="dlExpireDays">
+    <option value="0"></option><option value="7"></option><option value="15"></option>
+    <option value="30"></option><option value="60"></option><option value="90"></option>
+    <option value="180"></option>
+  </datalist>
+  <datalist id="dlFragmentLen">
+    <option value="100-200"></option><option value="50-100"></option><option value="10-20"></option>
+    <option value="5-10"></option><option value="200-400"></option>
+  </datalist>
+  <datalist id="dlFragmentInt">
+    <option value="10-20"></option><option value="5-10"></option><option value="20-40"></option>
+    <option value="1-3"></option>
+  </datalist>
+  <datalist id="dlFragmentPackets">
+    <option value="tlshello"></option><option value="1-3"></option><option value="1-5"></option>
+  </datalist>
+  <datalist id="dlProxy">
+    <option value="socks5://host:1080"></option>
+    <option value="socks5://user:pass@host:1080"></option>
+    <option value="http://host:8080"></option>
+    <option value="https://host:443"></option>
+  </datalist>
+  <datalist id="dlProxyIp">
+    <option value="example.com:443"></option><option value="1.2.3.4:443"></option>
+    <option value="[2606:4700::1]:443"></option>
+  </datalist>
+  <datalist id="dlYx">
+    <option value="1.2.3.4:443#Node"></option>
+    <option value="[2606:4700::1]:443#IPv6"></option>
+    <option value="example.com:443#Domain"></option>
+    <option value="1.2.3.4:443#A,5.6.7.8:443#B"></option>
+  </datalist>
+  <datalist id="dlCountries">
+    <option value="DE"></option><option value="FR"></option><option value="NL"></option>
+    <option value="US"></option><option value="GB"></option><option value="TR"></option>
+    <option value="JP"></option><option value="KR"></option><option value="SG"></option>
+    <option value="FI"></option><option value="SE"></option><option value="AE"></option>
+  </datalist>
+  <datalist id="dlWarpEndpoint">
+    <option value="162.159.192.1:2408#DE"></option>
+    <option value="188.114.97.1:500#TR"></option>
+    <option value="[2606:4700:d0::a29f:c001]:2408#US"></option>
+    <option value="162.159.192.1:2408#DE,188.114.97.1:500#TR"></option>
+  </datalist>
+  <datalist id="dlDNS">
+    <option value="https://223.5.5.5/dns-query"></option>
+    <option value="https://1.1.1.1/dns-query"></option>
+    <option value="https://8.8.8.8/dns-query"></option>
+    <option value="https://dns.google/dns-query"></option>
+    <option value="https://cloudflare-dns.com/dns-query"></option>
+  </datalist>
+  <datalist id="dlHomepage">
+    <option value="https://www.cloudflare.com"></option>
+    <option value="https://www.google.com"></option>
+    <option value="https://example.com"></option>
+  </datalist>
+  <datalist id="dlAdminPath">
+    <option value="admin"></option><option value="panel"></option><option value="manage"></option>
+  </datalist>
+  <datalist id="dlTp">
+    <option value=""></option><option value="mili-pass"></option><option value="change-me"></option>
+  </datalist>
 
   <div class="toast"><div class="toast-body" id="toastBody"></div></div>
 
@@ -12949,7 +13296,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     document.querySelectorAll('.panel').forEach(function(p) {
       p.classList.toggle('is-active', p.getAttribute('data-panel') === name);
     });
-    document.querySelectorAll('.dock-item').forEach(function(b) {
+    document.querySelectorAll('.tab[data-tab]').forEach(function(b) {
       b.classList.toggle('is-active', b.getAttribute('data-tab') === name);
     });
     document.querySelectorAll('.drawer-item[data-tab]').forEach(function(b) {
@@ -13027,6 +13374,7 @@ function renderAdminDashboardHtml(initialData = {}) {
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=clash">' + ICO.layers + ' Clash</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=singbox">' + ICO.bolt + ' Singbox</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=domain">' + ICO.globe + ' ' + t('btn.domainSub') + '</button>',
+          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=ipv6">' + ICO.signal + ' IPv6 همراه اول</button>',
           '<a class="btn sm" href="' + statusUrl + '" target="_blank" rel="noopener">' + ICO.external + ' ' + t('btn.status') + '</a>',
           '<button class="btn sm ghost" type="button" data-act="test-nodes" data-user="' + userKey(u) + '">' + ICO.radar + ' ' + t('btn.testNodes') + '</button>',
           '<button class="btn sm ghost" type="button" data-act="reset-user" data-id="' + u.id + '">' + ICO.refresh + ' ' + t('btn.resetUser') + '</button>',
@@ -13177,7 +13525,12 @@ function renderAdminDashboardHtml(initialData = {}) {
           state.config = Object.assign({}, state.config, payload);
           fillSettings();
           renderMetrics();
-          showToast('تنظیمات در D1 ذخیره شد', 'ok');
+          // پیام سرور دقیقاً می‌گوید در D1 ذخیره شد یا نه (تأیید با خواندن مجدد)
+          showToast(data.message || 'تنظیمات ذخیره شد', data.storedInD1 === false ? 'err' : 'ok');
+          if (data.storage) {
+            state.diagnostics = Object.assign({}, state.diagnostics, { storageMode: data.storage.mode });
+            if ($('storageText')) $('storageText').textContent = 'ذخیره‌سازی ' + data.storage.mode;
+          }
         } else {
           showToast(data.message || 'خطا در ذخیره تنظیمات', 'err');
         }
@@ -13275,9 +13628,10 @@ function renderAdminDashboardHtml(initialData = {}) {
     var drawerVersion = $('drawerVersion');
     if (latest) latest.textContent = info && info.latest ? 'v' + info.latest : '—';
     if (drawerVersion && info && info.current) drawerVersion.textContent = 'v' + info.current;
-    if ($('updToken')) {
-      $('updToken').textContent = info && info.hasToken ? 'متصل' : 'تنظیم نشده';
-      $('updToken').style.color = info && info.hasToken ? 'var(--neon)' : 'var(--warn)';
+    if ($('updAuto')) {
+      var autoReady = Boolean(info && (info.autoApplyAvailable || info.tokenSource === 'env'));
+      $('updAuto').textContent = autoReady ? 'در دسترس (کلید خود ورکر)' : 'دانلود فایل / دستور استقرار';
+      $('updAuto').style.color = autoReady ? 'var(--neon)' : 'var(--warn)';
     }
     if ($('updScript')) $('updScript').textContent = (info && info.scriptName) || 'تشخیص خودکار';
     if (!stateEl) return;
@@ -13300,9 +13654,6 @@ function renderAdminDashboardHtml(initialData = {}) {
       notesEl.innerHTML = notes.map(function(n) { return '<li>' + n + '</li>'; }).join('');
       notesEl.style.display = notes.length ? 'block' : 'none';
     }
-    if (info.updateAvailable && !info.autoApplyAvailable) {
-      stateEl.textContent += ' — کلید CF_API_TOKEN یا حساب/اسکریپت تنظیم نشده';
-    }
   }
 
   function checkUpdate(silent) {
@@ -13311,54 +13662,37 @@ function renderAdminDashboardHtml(initialData = {}) {
       .catch(function() { if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err'); });
   }
 
-  function openTokenModal() {
-    openModal('tokenModal');
-    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'check' }) })
-      .then(function(data) {
-        var tokenEl = $('updToken');
-        if (tokenEl) {
-          tokenEl.textContent = data.has_token ? (data.token_source === 'env' ? 'در env تنظیم شده' : 'ذخیره‌شده در پنل') : 'تنظیم نشده';
-          tokenEl.style.color = data.has_token ? 'var(--neon)' : 'var(--warn)';
-        }
-        if ($('updScript')) $('updScript').textContent = data.script_name || 'تشخیص خودکار';
-        if ($('cfAccountInput') && data.account_id) $('cfAccountInput').value = data.account_id;
-        if ($('cfScriptInput') && data.script_name) $('cfScriptInput').value = data.script_name;
+  // بروزرسانی بدون هیچ ورودی حسابی: فایل نسخهٔ تازه یا دستور آمادهٔ استقرار
+  function downloadUpdateBundle() {
+    var base = origin() + '/api/update-bundle';
+    window.open(base, '_blank');
+    showToast('دانلود فایل نسخهٔ تازه شروع شد', 'ok');
+  }
+
+  function copyUpdateCommand() {
+    api('/api/update?t=' + Date.now())
+      .then(function(info) {
+        var cmd = info && info.command
+          ? info.command
+          : 'curl -fsSL ' + (info && info.downloadUrl ? info.downloadUrl : '') + ' -o _worker.js && npx wrangler deploy _worker.js';
+        copyText(cmd, 'دستور استقرار کپی شد');
       })
-      .catch(function() {});
+      .catch(function() { showToast('خطای شبکه در دریافت دستور', 'err'); });
   }
 
   function enableAutoUpdate() {
-    var token = $('cfToken') ? $('cfToken').value.trim() : '';
-    var accountId = $('cfAccountInput') ? $('cfAccountInput').value.trim() : '';
-    var scriptName = $('cfScriptInput') ? $('cfScriptInput').value.trim() : '';
-    if (!token && !(document.getElementById('updToken') && document.getElementById('updToken').textContent !== 'تنظیم نشده')) {
-      showToast('توکن کلادفلر را وارد کنید', 'err');
-      return;
-    }
     var btn = document.querySelector('[data-act="enable-autoupdate"]');
     if (btn) btn.disabled = true;
-    var patch = {};
-    if (accountId) patch.cfAccountId = accountId;
-    if (scriptName) patch.cfScriptName = scriptName;
-    var saveConfig = Object.keys(patch).length
-      ? api('/api/config', { method: 'POST', body: JSON.stringify(patch) })
-      : Promise.resolve({ success: true });
-    saveConfig
-      .then(function() {
-        return api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'enable', token: token }) });
-      })
+    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'enable' }) })
       .then(function(data) {
         if (data.success) {
           showToast(data.message || 'بروزرسانی خودکار فعال شد', 'ok');
-          if ($('cfToken')) $('cfToken').value = '';
-          closeModal('tokenModal');
-          openTokenModal();
           checkUpdate(true);
         } else {
-          showToast(data.message || data.error || 'توکن تأیید نشد', 'err');
+          showToast(data.message || data.error || 'نصب خودکار در دسترس نیست', 'err');
         }
       })
-      .catch(function() { showToast('خطای شبکه در اتصال توکن', 'err'); })
+      .catch(function() { showToast('خطای شبکه در فعال‌سازی', 'err'); })
       .finally(function() { if (btn) btn.disabled = false; });
   }
 
@@ -13382,6 +13716,12 @@ function renderAdminDashboardHtml(initialData = {}) {
         if (data.success) {
           showToast(data.message || 'نسخهٔ تازه مستقر شد', 'ok');
           setTimeout(function() { location.reload(); }, 2500);
+        } else if (data.needsManualDeploy) {
+          // بدون کلید ورکر: فایل نسخهٔ تازه یا دستور آماده
+          if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+          var cmd = data.command || '';
+          if (cmd) copyText(cmd, 'دستور استقرار کپی شد');
+          showToast(data.error || 'فایل نسخهٔ تازه و دستور استقرار آماده شد', 'err');
         } else {
           showToast(data.error || data.message || 'بروزرسانی ناموفق بود', 'err');
         }
@@ -13595,7 +13935,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     if (!items.length) { showToast('لیست پیش‌فرض خالی است', 'err'); return; }
     applyScanItems('yx', items).then(function(data) {
       if (data && data.success) {
-        showToast((kind === 'ips' ? 'آی‌پی‌های پیش‌فرض CFnew' : 'دامنه‌های پیش‌فرض CFnew') + ' به yx اضافه شدند', 'ok');
+        showToast((kind === 'ips' ? 'آی‌پی‌های پیش‌فرض کلادفلر' : 'دامنه‌های پیش‌فرض کلادفلر') + ' به yx اضافه شدند', 'ok');
       }
     });
   }
@@ -13712,7 +14052,8 @@ function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
     else if (act === 'apply-update') { applyUpdateNow(); }
-    else if (act === 'open-token') { openTokenModal(); }
+    else if (act === 'download-update') { downloadUpdateBundle(); }
+    else if (act === 'copy-update-cmd') { copyUpdateCommand(); }
     else if (act === 'enable-autoupdate') { enableAutoUpdate(); }
     else if (act === 'disable-autoupdate') { disableAutoUpdate(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
@@ -13838,7 +14179,7 @@ const __MILI_WORKER_EXPORT__ = {
   async scheduled(_event, env = {}, ctx = {}) {
     const task = (async () => {
       const results = [];
-      // استخر لبهٔ cfnew + Z-E-U-S (IPv4/IPv6/دامنه) در هر اجرای کرون تازه می‌شود
+      // استخر لبهٔ کلادفلر (IPv4/IPv6/دامنه) در هر اجرای کرون تازه می‌شود
       try {
         results.push({ edgePool: await warmEdgePool() });
       } catch (e) {
@@ -13847,8 +14188,8 @@ const __MILI_WORKER_EXPORT__ = {
       // بروزرسانی خودکار نسخه (فقط اگر مدیر روشن کرده و توکن کلادفلر ست شده باشد)
       try {
         const cfg = await loadGlobalConfig(env);
-        // توکن یا از env می‌آید یا از تنظیمات محرمانهٔ پنل (system_config)
-        const cronToken = String(env?.CF_API_TOKEN || '').trim() || await getSecretSetting(env, 'cf_token');
+        // کلید نصب خودکار فقط از متغیرهای خود ورکر خوانده می‌شود (نه از پنل)
+        const cronToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
         results.push({ update: await autoUpdateIfEnabled(cfg, env, { token: cronToken }) });
       } catch (e) {
         results.push({ update: { skipped: 'error', message: e?.message || String(e) } });
@@ -13874,7 +14215,7 @@ const __MILI_WORKER_EXPORT__ = {
 
       // اطمینان از آماده بودن اسکیمای D1 یا حافظه پشتیبان بدون هیچ خطایی.
       // فقط یک‌بار در عمر هر ایزوله انجام می‌شود تا هر درخواست CPU اضافی نگیرد
-      // (همان روشی که در edgetunnel جلوی خطای ۱۱۰۲/۱۱۰۱ را می‌گیرد).
+      // (روش آزموده‌شده برای جلوگیری از خطای ۱۱۰۲/۱۱۰۱).
       if (!schemaReady) {
         await ensureD1Schema(env);
         schemaReady = true;
@@ -13898,7 +14239,7 @@ const __MILI_WORKER_EXPORT__ = {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
-          // استتار nginx (الهام از edgetunnel): کلادفلر صفحه را وب‌سرور معمولی می‌بیند
+          // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
           'Server': 'nginx',
           'X-Powered-By': 'nginx'
         }
@@ -13945,6 +14286,9 @@ const __MILI_WORKER_EXPORT__ = {
         }
         if (apiSubPath === 'update') {
           return await handleUpdateApi(request, env);
+        }
+        if (apiSubPath === 'update-bundle') {
+          return await handleUpdateBundle(request, env);
         }
         if (apiSubPath === 'auto-update-setup') {
           return await handleAutoUpdateSetupApi(request, env);
@@ -14246,7 +14590,7 @@ const __MILI_WORKER_EXPORT__ = {
       });
     } catch (err) {
       // محافظ سطح بالا جهت جلوگیری ۱۰۰٪ از بروز خطای Cloudflare Error 1101.
-      // طبق روش edgetunnel، خطای مدیریت‌شده هرگز به استثنای ورکر تبدیل نمی‌شود
+      // خطای مدیریت‌شده هرگز به استثنای ورکر تبدیل نمی‌شود
       // و پاسخ سادهٔ ۲۰۰ برمی‌گردد تا هیچ صفحهٔ خطای کلادفلر ظاهر نشود.
       try { console.error('[' + BRAND_NAME + '] recovered:', err?.message || String(err)); } catch (_e) {}
       return new Response('hello', {

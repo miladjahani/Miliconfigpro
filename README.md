@@ -9,7 +9,7 @@
 
 ---
 
-## ویژگی‌های کلیدی نسخه `miliconfig v3.1`
+## ویژگی‌های کلیدی نسخه `miliconfig v3.2`
 
 1. **معماری ماژولار چندفایلی (Multi-File Modular Architecture)**:
    - دیگر یک اسکریپت تک‌فایلی شلوغ نیست؛ کدها در دایرکتری `src/` به تفکیک `config/`، `db/`، `core/`، `subscription/`، `api/` و `ui/` سازماندهی شده‌اند.
@@ -52,19 +52,18 @@
 
 ## بروزرسانی نسخه‌های نصب‌شده (از v3.2.0 به بعد)
 
-سه مسیر وجود دارد، به ترتیب سادگی:
+**هیچ‌جا از شما نام حساب، Account ID یا توکن کلادفلر خواسته نمی‌شود.** سه مسیر وجود دارد، به ترتیب سادگی:
 
 1. **اتصال گیت‌هاب (خودکارترین راه):** اگر Worker/Pages به همین مخزن وصل باشد، هر push به `main` خودکار مستقر می‌شود و کاری لازم نیست.
-2. **بروزرسانی از داخل پنل (مکانیزم مشابه پنل Z-E-U-S):** در داشبورد کارت «نسخه و بروزرسانی» → دکمهٔ **«اتصال توکن»**. توکن کلادفلر را با دسترسی *Workers Scripts: Edit* وارد کنید؛ پنل:
-   - توکن را با `GET /user/tokens/verify` تأیید می‌کند،
-   - `Account ID` را در صورت خالی بودن از `GET /accounts` خودکار می‌گیرد،
-   - نام اسکریپت را از دامنهٔ `*.workers.dev` یا `WORKER_NAME` تشخیص می‌دهد (قابل تغییر در تنظیمات)،
-   - توکن را در تنظیمات محرمانهٔ D1 نگه می‌دارد و هرگز در API/پنل نمایش نمی‌دهد،
-   - باندل تازه را از چند آینه (GitHub raw، jsDelivr، githack) می‌گیرد،
+2. **نصب خودکار از داخل پنل:** فقط اگر خودِ ورکر متغیر محرمانهٔ `CF_API_TOKEN` را داشته باشد (که در داشبورد کلادفلر تعریف می‌شود، نه در پنل)، دکمهٔ «نصب خودکار» نسخهٔ تازه را مستقر می‌کند:
+   - کلید را با `GET /user/tokens/verify` تأیید می‌کند،
+   - `Account ID` را از `GET /accounts` خودکار می‌گیرد،
+   - نام اسکریپت را از دامنهٔ `*.workers.dev` یا `WORKER_NAME` تشخیص می‌دهد،
+   - باندل تازه را از چند آینه (GitHub raw، jsDelivr، githack) می‌گیرد و **بالاترین نسخه** را انتخاب می‌کند،
    - **بایندینگ‌های فعلی (D1/KV/متن ساده) را حفظ می‌کند** و با نام ماژول تصادفی آپلود می‌کند.
 
-   با روشن شدن `autoUpdate`، کرون هم هر ۱۰ دقیقه نسخه را بررسی و در صورت وجود نسخهٔ تازه مستقر می‌کند. اگر ترجیح می‌دهید توکن در env بماند، `CF_API_TOKEN` را ست کنید و از همین دکمه هم می‌توانید استفاده کنید.
-3. **نسخه‌های قدیمی‌تر از v3.2.0:** چون کد بروزرسانی را ندارند، فقط با یک‌بار استقرار مجدد (Deploy از گیت‌هاب یا paste کردن `_worker.js`) به‌روز می‌شوند. داده‌های مشترک (لیست آی‌پی/دامنه) از منابع آنلاین حتی در نسخه‌های قدیمی تازه می‌مانند.
+   با روشن شدن `autoUpdate`، کرون هم هر ۱۰ دقیقه نسخه را بررسی و در صورت وجود نسخهٔ تازه مستقر می‌کند.
+3. **بدون کلید:** کارت «نسخه و بروزرسانی» دکمهٔ **«دانلود فایل نسخهٔ تازه»** و **«کپی دستور استقرار»** دارد؛ با همان فایل/دستور، نسخه به‌روز می‌شود. نسخه‌های قدیمی‌تر از v3.2.0 هم فقط با یک‌بار استقرار مجدد (Deploy از گیت‌هاب یا paste کردن `_worker.js`) به‌روز می‌شوند. داده‌های مشترک (لیست آی‌پی/دامنه) از منابع آنلاین حتی در نسخه‌های قدیمی تازه می‌مانند.
 
 فهرست نسخه در `version.json` مخزن نگه‌داری می‌شود؛ برای فورک‌های خصوصی می‌توانید آدرس آن را با `UPDATE_MANIFEST_URL` و `UPDATE_BUNDLE_URL` جایگزین کنید.
 
@@ -77,13 +76,13 @@ miliconfig/
 ├── src/
 │   ├── index.js                  # روتر اصلی Cloudflare Worker & Pages + محافظ ضد Error 1101
 │   ├── config/
-│   │   ├── defaults.js           # تمام ۳۱ تنظیم پیش‌فرض کد اصلی CFnew v3.1 + ثابت‌های miliconfig
+│   │   ├── defaults.js           # همهٔ تنظیم‌های پیش‌فرض هسته + ثابت‌های miliconfig
 │   │   └── presets.js            # ۵ پریست ساخت سریع کاربر (ایران پرسرعت، مصرف سنگین، بین‌المللی و...)
 │   ├── db/
 │   │   └── d1.js                 # لایه دیتابیس Cloudflare D1 با Auto-Migration و تشخیص هوشمند بایندینگ
 │   ├── core/
 │   │   ├── runtime.js            # هسته پروکسی VLESS + Trojan + xhttp + SOCKS5/HTTP + احراز هویت چندکاربره D1
-│   │   └── utils.js              # نام‌گذار نودها (number+miliconfig)، رمزنگاری MD5/SHA224 خالص و ابزارها
+│   │   └── utils.js              # نام‌گذاری گویای نودها (کشور/پروتکل/IPv4-IPv6)، رمزنگاری MD5/SHA224 خالص و ابزارها
 │   ├── subscription/
 │   │   ├── generator.js          # تولیدکننده ساب‌لینک چندکاربره با اعمال subNodeCount
 │   │   └── converters.js         # مبدل‌های داخلی Clash YAML، Sing-box JSON، Surge، Loon، QuanX و زنجیره خانگی
@@ -109,7 +108,8 @@ miliconfig/
 
 ## English Overview
 
-**miliconfig v3.1** is a modular, multi-user Cloudflare Workers & Pages proxy control center powered by **Cloudflare D1** and built on top of the complete **CFnew v3.1** engine (VLESS, Trojan, xhttp, ECH, SOCKS5/HTTP outbound proxy, Residential Chain, and built-in Clash/Sing-box/Surge/QuanX/Loon converters).
-- **Brand & Node Naming**: All client subscription nodes are named `1+miliconfig`, `2+miliconfig`, ..., `N+miliconfig`.
-- **Per-User Node Count & Full Defaults**: Every user created via D1 inherits all 31 default settings of the base engine plus custom `username` and `subNodeCount`.
+**miliconfig v3.2** is a modular, multi-user Cloudflare Workers & Pages proxy control center powered by **Cloudflare D1** and built on a complete multi-protocol engine (VLESS, Trojan, xhttp, ECH, SOCKS5/HTTP outbound proxy, Residential Chain, and built-in Clash/Sing-box/Surge/QuanX/Loon converters).
+- **Self-describing Node Names**: every node is labelled with country flag + CC, protocol (VLESS/Trojan/SS/xHTTP/WARP), address family (IPv4 / IPv6 / Domain) and a `⇄ Proxy` marker for proxy-chained nodes.
+- **Balanced Combinations**: all protocols × address families appear in equal numbers, plus dedicated `?set=domain` and `?set=ipv6` (MCI-optimised) subscriptions.
+- **Per-User Node Count & Full Defaults**: Every user created via D1 inherits all default settings of the base engine plus custom `username` and `subNodeCount`.
 - **Zero-Error D1 & 1101 Protection**: Automatic D1 binding detection, runtime table auto-migration, and Worker-safe AST obfuscation.

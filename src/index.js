@@ -7,7 +7,6 @@ import { BRAND_NAME, DIRECT_DOMAINS, OFFICIAL_DIRECT_IPS, OFFICIAL_DIRECT_IPV6 }
 import {
   ensureD1Schema,
   getOrCreateAdminPath,
-  getSecretSetting,
   getStorageDiagnostics,
   getUserByIdOrToken,
   hasAdminPassword,
@@ -37,6 +36,7 @@ import {
   handlePublicUserStatusApi,
   handleScannerApi,
   handleUpdateApi,
+  handleUpdateBundle,
   handleUsersApi
 } from './api/handlers.js';
 import { renderLoginGatewayHtml } from './ui/loginHtml.js';
@@ -67,7 +67,7 @@ export default {
   async scheduled(_event, env = {}, ctx = {}) {
     const task = (async () => {
       const results = [];
-      // استخر لبهٔ cfnew + Z-E-U-S (IPv4/IPv6/دامنه) در هر اجرای کرون تازه می‌شود
+      // استخر لبهٔ کلادفلر (IPv4/IPv6/دامنه) در هر اجرای کرون تازه می‌شود
       try {
         results.push({ edgePool: await warmEdgePool() });
       } catch (e) {
@@ -76,8 +76,8 @@ export default {
       // بروزرسانی خودکار نسخه (فقط اگر مدیر روشن کرده و توکن کلادفلر ست شده باشد)
       try {
         const cfg = await loadGlobalConfig(env);
-        // توکن یا از env می‌آید یا از تنظیمات محرمانهٔ پنل (system_config)
-        const cronToken = String(env?.CF_API_TOKEN || '').trim() || await getSecretSetting(env, 'cf_token');
+        // کلید نصب خودکار فقط از متغیرهای خود ورکر خوانده می‌شود (نه از پنل)
+        const cronToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
         results.push({ update: await autoUpdateIfEnabled(cfg, env, { token: cronToken }) });
       } catch (e) {
         results.push({ update: { skipped: 'error', message: e?.message || String(e) } });
@@ -103,7 +103,7 @@ export default {
 
       // اطمینان از آماده بودن اسکیمای D1 یا حافظه پشتیبان بدون هیچ خطایی.
       // فقط یک‌بار در عمر هر ایزوله انجام می‌شود تا هر درخواست CPU اضافی نگیرد
-      // (همان روشی که در edgetunnel جلوی خطای ۱۱۰۲/۱۱۰۱ را می‌گیرد).
+      // (روش آزموده‌شده برای جلوگیری از خطای ۱۱۰۲/۱۱۰۱).
       if (!schemaReady) {
         await ensureD1Schema(env);
         schemaReady = true;
@@ -127,7 +127,7 @@ export default {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
-          // استتار nginx (الهام از edgetunnel): کلادفلر صفحه را وب‌سرور معمولی می‌بیند
+          // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
           'Server': 'nginx',
           'X-Powered-By': 'nginx'
         }
@@ -174,6 +174,9 @@ export default {
         }
         if (apiSubPath === 'update') {
           return await handleUpdateApi(request, env);
+        }
+        if (apiSubPath === 'update-bundle') {
+          return await handleUpdateBundle(request, env);
         }
         if (apiSubPath === 'auto-update-setup') {
           return await handleAutoUpdateSetupApi(request, env);
@@ -475,7 +478,7 @@ export default {
       });
     } catch (err) {
       // محافظ سطح بالا جهت جلوگیری ۱۰۰٪ از بروز خطای Cloudflare Error 1101.
-      // طبق روش edgetunnel، خطای مدیریت‌شده هرگز به استثنای ورکر تبدیل نمی‌شود
+      // خطای مدیریت‌شده هرگز به استثنای ورکر تبدیل نمی‌شود
       // و پاسخ سادهٔ ۲۰۰ برمی‌گردد تا هیچ صفحهٔ خطای کلادفلر ظاهر نشود.
       try { console.error('[' + BRAND_NAME + '] recovered:', err?.message || String(err)); } catch (_e) {}
       return new Response('hello', {

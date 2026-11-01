@@ -72,6 +72,14 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
   if (isEnabledValue(userCfg.epd, true)) {
     protoCombos.push({ title: 'ساب‌لینک اختصاصی دامنه‌های کلادفلر (بدون آی‌پی)', badge: 'Domains', url: `${baseSubUrl}?set=domain` });
   }
+  // ساب اختصاصی همراه اول: فقط نودهای IPv6 (بدون IPv4 و دامنه)
+  if (isEnabledValue(userCfg.ipv6, true)) {
+    protoCombos.push({
+      title: 'ساب اختصاصی IPv6 — همراه اول (فقط نودهای IPv6)',
+      badge: 'IPv6',
+      url: `${baseSubUrl}?set=ipv6`
+    });
+  }
   if (isEnabledValue(userCfg.warp, true) || isEnabledValue(userCfg.warpPro, false)) {
     protoCombos.push({ title: 'فقط نودهای WARP / WARP PRO / WARP چندلوکیشن', badge: 'WARP', url: `${baseSubUrl}?proto=warp` });
   }

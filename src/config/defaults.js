@@ -1,5 +1,5 @@
 // ============================================================================
-// miliconfig v3.1 - تنظیمات پیش‌فرض پایه (الهام‌گرفته از Z-E-U-S و CFnew)
+// miliconfig v3.2 - تنظیمات پیش‌فرض پایه
 // مجهز به شادوساکس، فرگمنت، ECH، لیست‌های کشوری، قفل ۳ کاربر و چرخش خودکار آی‌پی
 // ============================================================================
 
@@ -35,7 +35,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.2.1';
+export const VERSION = 'v3.3.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
@@ -85,7 +85,7 @@ export const CONFIG_DEFAULTS = {
   jk: 'no',
   subNodeCount: 50,
   brand: BRAND_NAME,
-  // تنظیمات جدید الهام‌گرفته از ZEUS:
+  // تنظیمات ترنسپورت و رفتار کلاینت:
   fp: 'chrome', // فینگرپرینت: chrome, firefox, safari, edge, ios, randomized
   patt: '/?ed=2048', // الگوهای مسیر
   fragmentPreset: 'mci', // پریست‌های فرگمنت
@@ -278,7 +278,7 @@ export function parseNodePorts(value = '') {
 // آدرس‌های ۴۰۴ (dimzon، بخشی از فایل‌های proxy_vip و …) از این استخر حذف شده‌اند.
 
 // ============================================================================
-// ادغام منابع زنده اسکنر (Z-E-U-S + trio666 + proxifly + ProxyScrape + ClearProxy)
+// ادغام منابع زنده اسکنر (آینهٔ لبه + trio666 + proxifly + ProxyScrape + ClearProxy)
 // ============================================================================
 export const COUNTRY_PROXY_SOURCES = (() => {
   const codes = new Set([
