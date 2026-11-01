@@ -564,7 +564,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.2.0';
+const VERSION = 'v3.2.1';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';
@@ -1606,24 +1606,38 @@ function formatBytes(bytes = 0) {
 
 // --- MODULE: src/core/updater.js ---
 // ============================================================================
-// miliconfig - کانال بروزرسانی نسخه‌ها
+// miliconfig - کانال بروزرسانی نسخه‌ها (الگو: مکانیزم پنل Z-E-U-S)
 //
-// مسئله: نسخه‌های نصب‌شده روی ورکرهای دیگران از بیرون قابل جایگزینی نیستند.
+// مسئله: ورکرهای نصب‌شده روی حساب‌های دیگران از بیرون قابل جایگزینی نیستند.
 // راه‌حل‌ها به ترتیب اولویت:
-//   ۱) اگر پروژه به گیت‌هاب وصل باشد (Cloudflare Workers Builds / Pages + Git)،
-//      هر push به main خودکار مستقر می‌شود: همان بروزرسانی خودکار کامل.
-//   ۲) از این نسخه به بعد، خود پنل می‌تواند با Cloudflare API نسخهٔ تازه را روی
-//      همان اسکریپت آپلود کند (یک‌بار توکن لازم است، بعد از آن خودکار).
+//   ۱) اتصال به گیت‌هاب (Cloudflare Workers Builds / Pages + Git): هر push به
+//      main خودکار مستقر می‌شود.
+//   ۲) بروزرسانی از داخل پنل با Cloudflare API — همان روشی که پنل Z-E-U-S دارد:
+//      توکن را یک‌بار می‌گیرد، با /user/tokens/verify اعتبارسنجی می‌کند،
+//      Account ID را در صورت نبود از /accounts می‌گیرد، نام اسکریپت را از
+//      WORKER_NAME یا دامنهٔ درخواست تشخیص می‌دهد، بایندینگ‌های فعلی
+//      (D1/KV/متن ساده) را نگه می‌دارد و باندل تازه را با نام ماژول تصادفی
+//      آپلود می‌کند.
 //   ۳) نسخه‌های قدیمی‌تر که این کد را ندارند فقط با یک‌بار استقرار مجدد به‌روز
-//      می‌شوند؛ داده‌های مشترک (لیست‌ها) از راه منابع آنلاین تازه می‌مانند.
+//      می‌شوند؛ داده‌های مشترک از منابع آنلاین تازه می‌مانند.
 // ============================================================================
 
 
-const UPDATE_MANIFEST_URL =
-  'https://raw.githubusercontent.com/miladjahani/Miliconfigpro/main/version.json';
-const UPDATE_BUNDLE_URL =
-  'https://raw.githubusercontent.com/miladjahani/Miliconfigpro/main/_worker.js';
-const UPDATE_REPO_URL = 'https://github.com/miladjahani/Miliconfigpro';
+const UPDATE_REPO = 'miladjahani/Miliconfigpro';
+const UPDATE_BRANCH = 'main';
+const UPDATE_MANIFEST_PATH = 'version.json';
+const UPDATE_BUNDLE_PATH = '_worker.js';
+const UPDATE_REPO_URL = 'https://github.com/' + UPDATE_REPO;
+
+// چند آینه: اگر raw.githubusercontent فیلتر باشد، jsDelivr و githack امتحان می‌شوند
+function mirrorUrls(path) {
+  const clean = String(path || '').replace(/^\/+/, '');
+  return [
+    `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}`,
+    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}`,
+    `https://raw.githack.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}`
+  ];
+}
 
 const MANIFEST_CACHE_MS = 10 * 60 * 1000;
 let manifestCache = { at: 0, value: null };
@@ -1651,30 +1665,44 @@ function currentVersionLabel() {
   return String(VERSION || '').replace(/^v/i, '');
 }
 
-// آدرس فهرست نسخه و باندل را می‌توان با متغیر محیطی جایگزین کرد (فورک‌های خصوصی)
-function getManifestUrl(env = {}) {
-  return String(env?.UPDATE_MANIFEST_URL || '').trim() || UPDATE_MANIFEST_URL;
-}
-
-function getBundleUrl(env = {}) {
-  return String(env?.UPDATE_BUNDLE_URL || '').trim() || UPDATE_BUNDLE_URL;
+// دریافت متن از اولین آینهٔ سالم (دو دور تلاش)
+async function fetchTextWithFallback(paths, options = {}) {
+  const timeout = options.timeout || 9000;
+  const rounds = options.rounds || 2;
+  for (let attempt = 0; attempt < rounds; attempt++) {
+    for (const url of paths) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'miliconfig-updater',
+            'Cache-Control': 'no-cache',
+            ...(options.headers || {})
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (!response.ok) continue;
+        const text = await response.text();
+        if (text && text.trim()) return { text, url };
+      } catch (_e) {}
+    }
+    if (attempt < rounds - 1) await new Promise(r => setTimeout(r, 600));
+  }
+  return null;
 }
 
 async function fetchManifest(force = false, env = {}) {
   if (!force && manifestCache.value && Date.now() - manifestCache.at < MANIFEST_CACHE_MS) {
     return manifestCache.value;
   }
+  const custom = String(env?.UPDATE_MANIFEST_URL || '').trim();
+  const result = await fetchTextWithFallback(custom ? [custom, ...mirrorUrls(UPDATE_MANIFEST_PATH)] : mirrorUrls(UPDATE_MANIFEST_PATH));
+  if (!result) return null;
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    const response = await fetch(getManifestUrl(env), {
-      headers: { 'User-Agent': 'miliconfig-updater', 'Cache-Control': 'no-cache' },
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    if (!response.ok) throw new Error(`manifest ${response.status}`);
-    const manifest = await response.json();
-    if (!manifest || !manifest.version) throw new Error('manifest نامعتبر');
+    const manifest = JSON.parse(result.text);
+    if (!manifest || !manifest.version) return null;
     manifestCache = { at: Date.now(), value: manifest };
     return manifest;
   } catch (_e) {
@@ -1682,101 +1710,230 @@ async function fetchManifest(force = false, env = {}) {
   }
 }
 
-// آیا امکان آپلود مستقیم از پنل هست؟ (فقط توکن لازم است، بقیه از env یا تنظیمات)
-function getUpdateTarget(cfg = {}, env = {}) {
-  const token = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
-  const accountId = String(cfg.cfAccountId || env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || '').trim();
-  const scriptName = String(cfg.cfScriptName || env?.CF_SCRIPT_NAME || '').trim();
+// ---------------------------------------------------------------------------
+// توکن و هدف استقرار
+// ---------------------------------------------------------------------------
+
+function getUpdateTarget(cfg = {}, env = {}, options = {}) {
+  const token = String(options.token || env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  const accountId = String(cfg.cfAccountId || options.accountId || env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || '').trim();
+  const scriptName = String(
+    cfg.cfScriptName || options.scriptName || env?.CF_SCRIPT_NAME || env?.WORKER_NAME || ''
+  ).trim();
   return {
     token,
     accountId,
     scriptName,
-    ready: Boolean(token && accountId && scriptName),
+    ready: Boolean(token),
     missing: [
       !token ? 'CF_API_TOKEN' : '',
-      !accountId ? 'CF_ACCOUNT_ID (یا تنظیم cfAccountId)' : '',
-      !scriptName ? 'CF_SCRIPT_NAME (یا تنظیم cfScriptName)' : ''
+      !scriptName ? 'نام اسکریپت (خودکار از دامنه تشخیص داده می‌شود)' : ''
     ].filter(Boolean)
   };
 }
 
+// اعتبارسنجی توکن — همان endpointی که Z-E-U-S استفاده می‌کند
+async function verifyUpdateToken(token = '') {
+  const value = String(token || '').trim();
+  if (!value) return { valid: false, error: 'توکن خالی است' };
+  try {
+    const response = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+      headers: { Authorization: 'Bearer ' + value, 'User-Agent': 'miliconfig-updater' }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      return { valid: false, error: 'توکن معتبر نیست یا دسترسی لازم را ندارد' };
+    }
+    return { valid: true, status: data.result?.status || 'active' };
+  } catch (err) {
+    return { valid: false, error: 'خطای شبکه در بررسی توکن: ' + (err?.message || String(err)) };
+  }
+}
+
+// اگر Account ID تنظیم نشده باشد، از روی توکن پیدا می‌شود (مثل پنل Z-E-U-S)
+async function resolveAccountId(token = '', current = '') {
+  if (current) return { accountId: current, detected: false };
+  try {
+    const response = await fetch('https://api.cloudflare.com/client/v4/accounts', {
+      headers: { Authorization: 'Bearer ' + token, 'User-Agent': 'miliconfig-updater' }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.success && Array.isArray(data.result) && data.result.length) {
+      return { accountId: data.result[0].id, detected: true };
+    }
+    return { accountId: '', detected: false, error: 'حسابی با این توکن پیدا نشد' };
+  } catch (err) {
+    return { accountId: '', detected: false, error: err?.message || String(err) };
+  }
+}
+
+// نام اسکریپت از دامنهٔ درخواست: <script>.<subdomain>.workers.dev
+function inferScriptName(hostname = '') {
+  const host = String(hostname || '').trim().toLowerCase();
+  if (!host) return '';
+  if (host.endsWith('.workers.dev')) return host.split('.')[0];
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// بررسی نسخه
+// ---------------------------------------------------------------------------
+
 async function checkForUpdate(cfg = {}, env = {}, options = {}) {
   const manifest = await fetchManifest(options.force === true, env);
-  const target = getUpdateTarget(cfg, env);
+  const token = String(options.token || env?.CF_API_TOKEN || '').trim();
+  const scriptName = String(cfg.cfScriptName || options.scriptName || env?.CF_SCRIPT_NAME || env?.WORKER_NAME || '').trim();
+  const accountId = String(cfg.cfAccountId || env?.CF_ACCOUNT_ID || '').trim();
+  const base = {
+    current: currentVersionLabel(),
+    hasToken: Boolean(token),
+    autoUpdate: String(cfg.autoUpdate || 'no') === 'yes',
+    scriptName,
+    accountIdTail: accountId ? accountId.slice(-6) : ''
+  };
   if (!manifest) {
     return {
+      ...base,
       success: false,
-      current: currentVersionLabel(),
       updateAvailable: false,
-      error: 'دریافت فهرست نسخه‌ها از گیت‌هاب ممکن نشد؛ اتصال شبکه یا دسترسی به raw.githubusercontent.com را بررسی کنید.',
-      autoApplyAvailable: target.ready,
-      missing: target.missing
+      error: 'دریافت فهرست نسخه‌ها از گیت‌هاب ممکن نشد؛ دسترسی به گیت‌هاب/آینه‌ها را بررسی کنید.',
+      autoApplyAvailable: Boolean(token),
+      missing: [token ? '' : 'CF_API_TOKEN', scriptName ? '' : 'نام اسکریپت'].filter(Boolean)
     };
   }
-  const current = currentVersionLabel();
-  const latest = String(manifest.version || current);
+  const latest = String(manifest.version || base.current);
   return {
+    ...base,
     success: true,
-    current,
     latest,
     build: manifest.build || '',
     publishedAt: manifest.publishedAt || '',
     notes: Array.isArray(manifest.notes) ? manifest.notes : [],
     repo: manifest.repo || UPDATE_REPO_URL,
-    updateAvailable: compareVersions(latest, current) > 0,
-    autoApplyAvailable: target.ready,
-    missing: target.missing,
-    scriptName: target.scriptName,
-    accountIdTail: target.accountId ? target.accountId.slice(-6) : ''
+    updateAvailable: compareVersions(latest, base.current) > 0,
+    autoApplyAvailable: Boolean(token),
+    missing: [token ? '' : 'CF_API_TOKEN', scriptName ? '' : 'نام اسکریپت'].filter(Boolean)
   };
 }
 
-// آپلود بандل تازه روی همان اسکریپت Workers از طریق Cloudflare API
+// ---------------------------------------------------------------------------
+// استقرار نسخهٔ تازه (با حفظ بایندینگ‌ها)
+// ---------------------------------------------------------------------------
+
+const KEEP_BINDING_TYPES = ['d1', 'kv_namespace', 'plain_text', 'r2_bucket', 'queue', 'service', 'analytics_engine', 'durable_object_namespace'];
+
+function normalizeBinding(binding = {}) {
+  if (!binding || !binding.type || !binding.name) return null;
+  if (!KEEP_BINDING_TYPES.includes(binding.type)) return null;
+  const out = { type: binding.type, name: binding.name };
+  if (binding.type === 'd1') out.id = binding.database_id || binding.id || '';
+  else if (binding.type === 'kv_namespace') out.namespace_id = binding.namespace_id || binding.id || '';
+  else if (binding.type === 'plain_text') out.text = binding.text || '';
+  else if (binding.type === 'r2_bucket') out.bucket_name = binding.bucket_name || binding.name;
+  else if (binding.type === 'service') out.service = binding.service || '';
+  else if (binding.type === 'queue') out.queue_name = binding.queue_name || '';
+  else if (binding.type === 'durable_object_namespace') {
+    out.class_name = binding.class_name || '';
+    out.script_name = binding.script_name || '';
+  }
+  if (binding.type === 'd1' && !out.id) return null;
+  if (binding.type === 'kv_namespace' && !out.namespace_id) return null;
+  return out;
+}
+
+async function fetchExistingBindings(accountId, scriptName, token) {
+  try {
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/bindings`,
+      { headers: { Authorization: 'Bearer ' + token, 'User-Agent': 'miliconfig-updater' } }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      return { ok: false, error: 'دسترسی به تنظیمات ورکر ممکن نشد (کد ' + response.status + ')' };
+    }
+    return { ok: true, bindings: Array.isArray(data.result) ? data.result : [] };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
 async function applyUpdate(cfg = {}, env = {}, options = {}) {
-  const target = getUpdateTarget(cfg, env);
-  if (!target.ready) {
+  const token = String(options.token || env?.CF_API_TOKEN || '').trim();
+  const hostScriptName = String(options.hostScriptName || '').trim();
+  const scriptName = String(
+    cfg.cfScriptName || env.CF_SCRIPT_NAME || env.WORKER_NAME || inferScriptName(hostScriptName) || ''
+  ).trim();
+
+  if (!token) {
     return {
       success: false,
-      error: 'برای بروزرسانی خودکار این کلیدها لازم است: ' + target.missing.join('، '),
-      missing: target.missing
+      error: 'برای بروزرسانی از داخل پنل، ابتدا توکن کلادفلر را متصل کنید (دکمهٔ «اتصال توکن»).',
+      missing: ['CF_API_TOKEN']
     };
   }
-  const info = await checkForUpdate(cfg, env, { force: true });
-  if (!info.success) return { success: false, error: info.error };
-  if (!info.updateAvailable && !options.force) {
+  if (!scriptName) {
+    return {
+      success: false,
+      error: 'نام اسکریپت Workers مشخص نیست؛ آن را در تنظیمات (cfScriptName) وارد کنید.',
+      missing: ['CF_SCRIPT_NAME']
+    };
+  }
+
+  const info = await checkForUpdate(cfg, env, { force: true, token, scriptName });
+  if (!info.success && !options.force) return { success: false, error: info.error };
+  if (info.success && !info.updateAvailable && !options.force) {
     return { success: true, alreadyLatest: true, message: `نسخهٔ نصب‌شده (${info.current}) به‌روز است.` };
   }
 
-  const bundleUrl = (manifestCache.value && manifestCache.value.bundle) || getBundleUrl(env);
-  let code = '';
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    const response = await fetch(bundleUrl, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    code = await response.text();
-  } catch (err) {
-    return { success: false, error: 'دریافت باندل تازه ناموفق بود: ' + (err?.message || String(err)) };
+  const account = await resolveAccountId(token, String(cfg.cfAccountId || env.CF_ACCOUNT_ID || '').trim());
+  if (!account.accountId) {
+    return { success: false, error: 'Account ID پیدا نشد: ' + (account.error || 'توکن را بررسی کنید') };
   }
-  if (!code || code.length < 50000) {
+
+  const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
+  const bundle = await fetchTextWithFallback(
+    customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH)] : mirrorUrls(UPDATE_BUNDLE_PATH),
+    { timeout: 20000 }
+  );
+  if (!bundle) return { success: false, error: 'دریافت باندل تازه از گیت‌هاب و آینه‌ها ناموفق بود.' };
+  if (bundle.text.length < 50000) {
     return { success: false, error: 'باندل دریافتی معتبر نیست (حجم غیرمنتظره).' };
   }
 
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(target.accountId)}/workers/scripts/${encodeURIComponent(target.scriptName)}`;
+  // بایندینگ‌های فعلی حفظ می‌شوند تا D1 و متغیرها بعد از آپدیت از بین نروند
+  const current = await fetchExistingBindings(account.accountId, scriptName, token);
+  if (!current.ok) {
+    return { success: false, error: 'قبل از آپدیت باید دسترسی خواندن تنظیمات ورکر وجود داشته باشد: ' + current.error };
+  }
+  const bindings = [];
+  for (const raw of current.bindings) {
+    if (['CF_API_TOKEN', 'CF_ACCOUNT_ID'].includes(raw?.name)) continue;
+    if (raw?.type === 'secret_text') continue;
+    const normalized = normalizeBinding(raw);
+    if (normalized) bindings.push(normalized);
+  }
+  bindings.push({ type: 'secret_text', name: 'CF_API_TOKEN', text: token });
+  bindings.push({ type: 'secret_text', name: 'CF_ACCOUNT_ID', text: account.accountId });
+
+  const moduleName = `worker_${Math.random().toString(36).slice(2, 10)}.js`;
+  const metadata = {
+    main_module: moduleName,
+    compatibility_date: '2024-09-23',
+    bindings
+  };
   const form = new FormData();
-  form.append('metadata', JSON.stringify({
-    main_module: '_worker.js',
-    compatibility_date: '2024-09-23'
-  }));
-  form.append('_worker.js', new Blob([code], { type: 'application/javascript+module' }), '_worker.js');
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }), 'metadata.json');
+  form.append(moduleName, new Blob([bundle.text], { type: 'application/javascript+module' }), moduleName);
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${target.token}` },
-      body: form
-    });
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account.accountId)}/workers/scripts/${encodeURIComponent(scriptName)}`,
+      {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + token, 'User-Agent': 'miliconfig-updater' },
+        body: form
+      }
+    );
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.success === false) {
       const detail = (data.errors && data.errors[0] && data.errors[0].message) || `HTTP ${response.status}`;
@@ -1786,9 +1943,12 @@ async function applyUpdate(cfg = {}, env = {}, options = {}) {
       success: true,
       updated: true,
       from: info.current,
-      to: info.latest,
-      bytes: code.length,
-      message: `نسخهٔ ${info.latest} روی اسکریپت «${target.scriptName}» مستقر شد.`
+      to: info.latest || currentVersionLabel(),
+      bytes: bundle.text.length,
+      scriptName,
+      accountDetected: account.detected,
+      mirrors: bundle.url,
+      message: `نسخهٔ ${info.latest || 'تازه'} روی اسکریپت «${scriptName}» مستقر شد${account.detected ? ' (Account ID خودکار شناسایی شد)' : ''}.`
     };
   } catch (err) {
     return { success: false, error: 'خطای شبکه در آپلود: ' + (err?.message || String(err)) };
@@ -1796,14 +1956,14 @@ async function applyUpdate(cfg = {}, env = {}, options = {}) {
 }
 
 // در کرون: اگر بروزرسانی خودکار روشن و توکن موجود باشد، نسخهٔ تازه مستقر می‌شود
-async function autoUpdateIfEnabled(cfg = {}, env = {}) {
+async function autoUpdateIfEnabled(cfg = {}, env = {}, options = {}) {
   if (String(cfg.autoUpdate || 'no') !== 'yes') return { skipped: 'disabled' };
-  const target = getUpdateTarget(cfg, env);
-  if (!target.ready) return { skipped: 'no-credentials', missing: target.missing };
-  const info = await checkForUpdate(cfg, env);
+  const token = String(options.token || env?.CF_API_TOKEN || '').trim();
+  if (!token) return { skipped: 'no-token' };
+  const info = await checkForUpdate(cfg, env, { token });
   if (!info.success) return { skipped: 'manifest-unreachable' };
   if (!info.updateAvailable) return { skipped: 'up-to-date', current: info.current };
-  return await applyUpdate(cfg, env);
+  return await applyUpdate(cfg, env, { token, hostScriptName: options.hostScriptName });
 }
 
 
@@ -2848,6 +3008,64 @@ async function changeAdminPassword(env = {}, currentPassword, newPassword, clien
 }
 
 // تنظیمات سراسری پنل
+// ----------------------------------------------------------------------------
+// تنظیمات محرمانه (مثل توکن بروزرسانی) — جدا از پیکربندی عمومی نگهداری می‌شوند
+// تا هرگز از مسیر /api/config یا تنظیمات کلاینت لو نروند.
+// ----------------------------------------------------------------------------
+async function getSecretSetting(env = {}, key = '') {
+  const name = String(key || '').trim();
+  if (!name) return '';
+  await ensureD1Schema(env);
+  const detected = detectD1Binding(env);
+  if (detected && memoryStore.d1SchemaReady) {
+    try {
+      const row = await safeBind(
+        detected.db.prepare(`SELECT value FROM system_config WHERE key = ?`), name
+      ).first();
+      if (row && row.value) return String(row.value);
+    } catch (_e) {}
+  }
+  const kv = detectKvBinding(env);
+  if (kv) {
+    try {
+      const val = await kv.kv.get('secret_' + name);
+      if (val) return String(val);
+    } catch (_e) {}
+  }
+  return '';
+}
+
+async function setSecretSetting(env = {}, key = '', value = '') {
+  const name = String(key || '').trim();
+  if (!name) return false;
+  await ensureD1Schema(env);
+  const detected = detectD1Binding(env);
+  const text = String(value == null ? '' : value);
+  if (detected && memoryStore.d1SchemaReady) {
+    try {
+      if (!text) {
+        await safeBind(detected.db.prepare(`DELETE FROM system_config WHERE key = ?`), name).run();
+      } else {
+        await safeBind(
+          detected.db.prepare(
+            `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+          ), name, text, Date.now()
+        ).run();
+      }
+      return true;
+    } catch (_e) {}
+  }
+  const kv = detectKvBinding(env);
+  if (kv) {
+    try {
+      await kv.kv.put('secret_' + name, text);
+      return true;
+    } catch (_e) {}
+  }
+  return false;
+}
+
 async function loadGlobalConfig(env = {}, force = false) {
   await ensureD1Schema(env);
   const envSnap = getEnvConfigSnapshot(env);
@@ -2875,9 +3093,10 @@ async function loadGlobalConfig(env = {}, force = false) {
       const res = await detectedD1.db.prepare(`SELECT key, value FROM system_config`).all();
       const rows = res?.results || [];
       for (const r of rows) {
-        if (r && r.key) {
-          stored[r.key] = r.value;
-        }
+        // کلیدهای محرمانه (توکن بروزرسانی) وارد پیکربندی عمومی نمی‌شوند
+        if (!r || !r.key) continue;
+        if (r.key === 'cf_token' || r.key.startsWith('secret_')) continue;
+        stored[r.key] = r.value;
       }
     } catch (_e) {}
   }
@@ -8098,6 +8317,10 @@ function sanitizeConfigForClient(raw = {}) {
   const copy = { ...(raw || {}) };
   delete copy.adminPasswordHash;
   delete copy.admin_password_hash;
+  // کلیدهای محرمانه (توکن بروزرسانی و …) هرگز به کلاینت نمی‌روند
+  for (const key of Object.keys(copy)) {
+    if (key === 'cf_token' || key === 'cfToken' || key.startsWith('secret_')) delete copy[key];
+  }
   return copy;
 }
 
@@ -8674,14 +8897,24 @@ async function handleConfigApi(request, env) {
 }
 
 // ۲. بروزرسانی نسخه: بررسی و استقرار نسخهٔ تازه از گیت‌هاب روی همین اسکریپت (/api/update)
+// توکن می‌تواند در env باشد یا یک‌بار از پنل ذخیره شود (مثل مکانیزم پنل Z-E-U-S).
+async function resolveUpdateToken(env) {
+  const envToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  if (envToken) return { token: envToken, source: 'env' };
+  const stored = await getSecretSetting(env, 'cf_token');
+  return { token: stored, source: stored ? 'panel' : '' };
+}
+
 async function handleUpdateApi(request, env) {
   if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
   const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
   const cfg = await loadGlobalConfig(env);
+  const { token, source } = await resolveUpdateToken(env);
+  const hostScriptName = new URL(request.url).hostname;
 
   if (request.method === 'GET') {
-    const info = await checkForUpdate(cfg, env);
-    return jsonResponse(info);
+    const info = await checkForUpdate(cfg, env, { token, scriptName: inferScriptName(hostScriptName) });
+    return jsonResponse({ ...info, tokenSource: source });
   }
 
   if (request.method === 'POST') {
@@ -8689,10 +8922,14 @@ async function handleUpdateApi(request, env) {
     try { body = await request.json(); } catch (_e) {}
     const action = String(body?.action || 'check').toLowerCase();
     if (action === 'check') {
-      return jsonResponse(await checkForUpdate(cfg, env, { force: true }));
+      return jsonResponse(await checkForUpdate(cfg, env, { force: true, token, scriptName: inferScriptName(hostScriptName) }));
     }
     if (action === 'apply') {
-      const result = await applyUpdate(cfg, env, { force: body?.force === true });
+      const result = await applyUpdate(cfg, env, {
+        force: body?.force === true,
+        token,
+        hostScriptName
+      });
       if (result.success) {
         await addAuditLog(env, 'بروزرسانی نسخه', `از ${result.from || '?'} به ${result.to || '?'}`, clientIp).catch(() => {});
       }
@@ -8702,6 +8939,71 @@ async function handleUpdateApi(request, env) {
   }
 
   return jsonResponse({ error: 'Method not allowed' }, 405);
+}
+
+// ۲-ب. اتصال/قطع توکن بروزرسانی خودکار (همان الگوی /api/auto-update-setup در Z-E-U-S)
+async function handleAutoUpdateSetupApi(request, env) {
+  if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
+  if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+  let body = {};
+  try { body = await request.json(); } catch (_e) {}
+  const action = String(body?.action || 'check').toLowerCase();
+  const cfg = await loadGlobalConfig(env);
+  const stored = await getSecretSetting(env, 'cf_token');
+  const envToken = String(env?.CF_API_TOKEN || '').trim();
+
+  if (action === 'check') {
+    return jsonResponse({
+      success: true,
+      has_token: Boolean(envToken || stored),
+      token_source: envToken ? 'env' : (stored ? 'panel' : ''),
+      auto_update: String(cfg.autoUpdate || 'no') === 'yes',
+      account_id: cfg.cfAccountId || '',
+      script_name: cfg.cfScriptName || inferScriptName(new URL(request.url).hostname),
+      worker_name: String(env?.WORKER_NAME || '')
+    });
+  }
+
+  if (action === 'enable') {
+    const candidate = String(body?.token || envToken || stored || '').trim();
+    if (!candidate) {
+      return jsonResponse({ success: false, error: 'TOKEN_MISSING', message: 'توکن کلادفلر را وارد کنید.' }, 400);
+    }
+    const verified = await verifyUpdateToken(candidate);
+    if (!verified.valid) {
+      return jsonResponse({ success: false, error: 'INVALID_TOKEN', message: verified.error || 'توکن معتبر نیست.' }, 400);
+    }
+    const account = await resolveAccountId(candidate, cfg.cfAccountId || '');
+    const patch = { autoUpdate: 'yes' };
+    if (account.accountId && !cfg.cfAccountId) patch.cfAccountId = account.accountId;
+    const scriptGuess = cfg.cfScriptName || inferScriptName(new URL(request.url).hostname) || '';
+    if (scriptGuess && !cfg.cfScriptName) patch.cfScriptName = scriptGuess;
+    await setSecretSetting(env, 'cf_token', candidate);
+    const saved = await saveGlobalConfig(env, patch);
+    await addAuditLog(env, 'اتصال توکن بروزرسانی', `حساب: ${account.accountId ? account.accountId.slice(-6) : 'نامشخص'}`, clientIp).catch(() => {});
+    return jsonResponse({
+      success: true,
+      has_token: true,
+      auto_update: true,
+      account_id: saved?.cfAccountId || patch.cfAccountId || '',
+      script_name: saved?.cfScriptName || patch.cfScriptName || '',
+      message: 'توکن تأیید شد و بروزرسانی خودکار روشن شد.'
+    });
+  }
+
+  if (action === 'disable') {
+    await saveGlobalConfig(env, { autoUpdate: 'no' });
+    return jsonResponse({ success: true, auto_update: false, message: 'بروزرسانی خودکار خاموش شد.' });
+  }
+
+  if (action === 'clear-token') {
+    await setSecretSetting(env, 'cf_token', '');
+    await saveGlobalConfig(env, { autoUpdate: 'no' });
+    return jsonResponse({ success: true, has_token: false, auto_update: false, message: 'توکن ذخیره‌شده حذف شد.' });
+  }
+
+  return jsonResponse({ success: false, error: 'action نامعتبر است' }, 400);
 }
 
 // ۳. مدیریت کامل کاربران در دیتابیس D1 (/api/users)
@@ -12074,12 +12376,16 @@ function renderAdminDashboardHtml(initialData = {}) {
             <div class="kv"><span>نسخهٔ نصب‌شده</span><b class="mono">v${VERSION.replace(/^v/i, '')}</b></div>
             <div class="kv"><span>آخرین نسخهٔ گیت‌هاب</span><b class="mono" id="updLatest">—</b></div>
             <div class="kv"><span>وضعیت</span><b id="updState">بررسی نشده</b></div>
+            <div class="kv"><span>توکن کلادفلر</span><b id="updToken">—</b></div>
+            <div class="kv"><span>اسکریپت هدف</span><b class="mono" id="updScript">—</b></div>
             <div class="toolbar" style="margin-top:10px;flex-wrap:wrap;">
               <button class="btn sm" type="button" data-act="check-update">${icon('refresh')} بررسی بروزرسانی</button>
+              <button class="btn sm" type="button" data-act="open-token">${icon('key')} اتصال توکن</button>
               <button class="btn sm primary" type="button" data-act="apply-update">${icon('download')} بروزرسانی خودکار</button>
+              <button class="btn sm ghost" type="button" data-act="disable-autoupdate">${icon('close')} خاموش کردن</button>
             </div>
             <div class="loc-meta" style="margin-top:8px;line-height:1.9;">
-              بروزرسانی خودکار به کلید <b class="mono">CF_API_TOKEN</b> (دسترسی Workers Scripts:Edit) و تنظیم <b class="mono">cfAccountId</b> و <b class="mono">cfScriptName</b> در تب تنظیمات نیاز دارد.
+              توکن را با دسترسی <b class="mono">Workers Scripts: Edit</b> بسازید و همین‌جا وصل کنید؛ پنل آن را در دیتابیس محرمانه نگه می‌دارد و بایندینگ‌های D1/KV را هنگام آپدیت حفظ می‌کند.
               اگر پروژه به گیت‌هاب وصل باشد، هر push به main خودکار مستقر می‌شود و نیازی به این کار نیست.
             </div>
             <ul id="updNotes" class="loc-meta" style="margin:8px 0 0;padding-inline-start:18px;display:none;"></ul>
@@ -12530,6 +12836,25 @@ function renderAdminDashboardHtml(initialData = {}) {
     </div>
   </div>
 
+  <div class="modal" id="tokenModal">
+    <div class="modal-card">
+      <div class="modal-head"><b>${icon('key')} اتصال توکن بروزرسانی</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="tokenModal">${icon('close')}</button></div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Cloudflare API Token</label>
+          <input type="password" id="cfToken" autocomplete="off" placeholder="توکن با دسترسی Workers Scripts: Edit">
+          <span class="hint">توکن فقط برای آپلود نسخهٔ تازه استفاده می‌شود و در دیتابیس محرمانه ذخیره می‌گردد.</span>
+        </div>
+        <div class="field"><label>Account ID (اختیاری — خودکار شناسایی می‌شود)</label><input type="text" id="cfAccountInput" placeholder="خالی بگذارید تا از توکن خوانده شود"></div>
+        <div class="field"><label>نام اسکریپت Workers (اختیاری)</label><input type="text" id="cfScriptInput" placeholder="مثل miliconfig-worker-v5"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn primary" type="button" data-act="enable-autoupdate">${icon('check')} تأیید و فعال‌سازی</button>
+        <button class="btn ghost" type="button" data-act="close-modal" data-modal="tokenModal">انصراف</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast"><div class="toast-body" id="toastBody"></div></div>
 
 <script>
@@ -12932,6 +13257,11 @@ function renderAdminDashboardHtml(initialData = {}) {
     var drawerVersion = $('drawerVersion');
     if (latest) latest.textContent = info && info.latest ? 'v' + info.latest : '—';
     if (drawerVersion && info && info.current) drawerVersion.textContent = 'v' + info.current;
+    if ($('updToken')) {
+      $('updToken').textContent = info && info.hasToken ? 'متصل' : 'تنظیم نشده';
+      $('updToken').style.color = info && info.hasToken ? 'var(--neon)' : 'var(--warn)';
+    }
+    if ($('updScript')) $('updScript').textContent = (info && info.scriptName) || 'تشخیص خودکار';
     if (!stateEl) return;
     if (!info || info.success === false) {
       stateEl.textContent = 'بررسی ناموفق';
@@ -12961,6 +13291,67 @@ function renderAdminDashboardHtml(initialData = {}) {
     api('/api/update?t=' + Date.now())
       .then(function(info) { renderUpdateInfo(info, silent); })
       .catch(function() { if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err'); });
+  }
+
+  function openTokenModal() {
+    openModal('tokenModal');
+    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'check' }) })
+      .then(function(data) {
+        var tokenEl = $('updToken');
+        if (tokenEl) {
+          tokenEl.textContent = data.has_token ? (data.token_source === 'env' ? 'در env تنظیم شده' : 'ذخیره‌شده در پنل') : 'تنظیم نشده';
+          tokenEl.style.color = data.has_token ? 'var(--neon)' : 'var(--warn)';
+        }
+        if ($('updScript')) $('updScript').textContent = data.script_name || 'تشخیص خودکار';
+        if ($('cfAccountInput') && data.account_id) $('cfAccountInput').value = data.account_id;
+        if ($('cfScriptInput') && data.script_name) $('cfScriptInput').value = data.script_name;
+      })
+      .catch(function() {});
+  }
+
+  function enableAutoUpdate() {
+    var token = $('cfToken') ? $('cfToken').value.trim() : '';
+    var accountId = $('cfAccountInput') ? $('cfAccountInput').value.trim() : '';
+    var scriptName = $('cfScriptInput') ? $('cfScriptInput').value.trim() : '';
+    if (!token && !(document.getElementById('updToken') && document.getElementById('updToken').textContent !== 'تنظیم نشده')) {
+      showToast('توکن کلادفلر را وارد کنید', 'err');
+      return;
+    }
+    var btn = document.querySelector('[data-act="enable-autoupdate"]');
+    if (btn) btn.disabled = true;
+    var patch = {};
+    if (accountId) patch.cfAccountId = accountId;
+    if (scriptName) patch.cfScriptName = scriptName;
+    var saveConfig = Object.keys(patch).length
+      ? api('/api/config', { method: 'POST', body: JSON.stringify(patch) })
+      : Promise.resolve({ success: true });
+    saveConfig
+      .then(function() {
+        return api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'enable', token: token }) });
+      })
+      .then(function(data) {
+        if (data.success) {
+          showToast(data.message || 'بروزرسانی خودکار فعال شد', 'ok');
+          if ($('cfToken')) $('cfToken').value = '';
+          closeModal('tokenModal');
+          openTokenModal();
+          checkUpdate(true);
+        } else {
+          showToast(data.message || data.error || 'توکن تأیید نشد', 'err');
+        }
+      })
+      .catch(function() { showToast('خطای شبکه در اتصال توکن', 'err'); })
+      .finally(function() { if (btn) btn.disabled = false; });
+  }
+
+  function disableAutoUpdate() {
+    if (!confirm('بروزرسانی خودکار خاموش شود؟')) return;
+    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'disable' }) })
+      .then(function(data) {
+        showToast(data.success ? 'بروزرسانی خودکار خاموش شد' : 'خطا', data.success ? 'ok' : 'err');
+        checkUpdate(true);
+      })
+      .catch(function() { showToast('خطای شبکه', 'err'); });
   }
 
   function applyUpdateNow() {
@@ -13303,6 +13694,9 @@ function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
     else if (act === 'apply-update') { applyUpdateNow(); }
+    else if (act === 'open-token') { openTokenModal(); }
+    else if (act === 'enable-autoupdate') { enableAutoUpdate(); }
+    else if (act === 'disable-autoupdate') { disableAutoUpdate(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }
@@ -13435,7 +13829,9 @@ const __MILI_WORKER_EXPORT__ = {
       // بروزرسانی خودکار نسخه (فقط اگر مدیر روشن کرده و توکن کلادفلر ست شده باشد)
       try {
         const cfg = await loadGlobalConfig(env);
-        results.push({ update: await autoUpdateIfEnabled(cfg, env) });
+        // توکن یا از env می‌آید یا از تنظیمات محرمانهٔ پنل (system_config)
+        const cronToken = String(env?.CF_API_TOKEN || '').trim() || await getSecretSetting(env, 'cf_token');
+        results.push({ update: await autoUpdateIfEnabled(cfg, env, { token: cronToken }) });
       } catch (e) {
         results.push({ update: { skipped: 'error', message: e?.message || String(e) } });
       }
@@ -13531,6 +13927,9 @@ const __MILI_WORKER_EXPORT__ = {
         }
         if (apiSubPath === 'update') {
           return await handleUpdateApi(request, env);
+        }
+        if (apiSubPath === 'auto-update-setup') {
+          return await handleAutoUpdateSetupApi(request, env);
         }
         if (apiSubPath === 'preferred-ips') {
           return await handlePreferredIpsApi(request, env, true);

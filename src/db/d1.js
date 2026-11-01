@@ -497,6 +497,64 @@ export async function changeAdminPassword(env = {}, currentPassword, newPassword
 }
 
 // تنظیمات سراسری پنل
+// ----------------------------------------------------------------------------
+// تنظیمات محرمانه (مثل توکن بروزرسانی) — جدا از پیکربندی عمومی نگهداری می‌شوند
+// تا هرگز از مسیر /api/config یا تنظیمات کلاینت لو نروند.
+// ----------------------------------------------------------------------------
+export async function getSecretSetting(env = {}, key = '') {
+  const name = String(key || '').trim();
+  if (!name) return '';
+  await ensureD1Schema(env);
+  const detected = detectD1Binding(env);
+  if (detected && memoryStore.d1SchemaReady) {
+    try {
+      const row = await safeBind(
+        detected.db.prepare(`SELECT value FROM system_config WHERE key = ?`), name
+      ).first();
+      if (row && row.value) return String(row.value);
+    } catch (_e) {}
+  }
+  const kv = detectKvBinding(env);
+  if (kv) {
+    try {
+      const val = await kv.kv.get('secret_' + name);
+      if (val) return String(val);
+    } catch (_e) {}
+  }
+  return '';
+}
+
+export async function setSecretSetting(env = {}, key = '', value = '') {
+  const name = String(key || '').trim();
+  if (!name) return false;
+  await ensureD1Schema(env);
+  const detected = detectD1Binding(env);
+  const text = String(value == null ? '' : value);
+  if (detected && memoryStore.d1SchemaReady) {
+    try {
+      if (!text) {
+        await safeBind(detected.db.prepare(`DELETE FROM system_config WHERE key = ?`), name).run();
+      } else {
+        await safeBind(
+          detected.db.prepare(
+            `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+          ), name, text, Date.now()
+        ).run();
+      }
+      return true;
+    } catch (_e) {}
+  }
+  const kv = detectKvBinding(env);
+  if (kv) {
+    try {
+      await kv.kv.put('secret_' + name, text);
+      return true;
+    } catch (_e) {}
+  }
+  return false;
+}
+
 export async function loadGlobalConfig(env = {}, force = false) {
   await ensureD1Schema(env);
   const envSnap = getEnvConfigSnapshot(env);
@@ -524,9 +582,10 @@ export async function loadGlobalConfig(env = {}, force = false) {
       const res = await detectedD1.db.prepare(`SELECT key, value FROM system_config`).all();
       const rows = res?.results || [];
       for (const r of rows) {
-        if (r && r.key) {
-          stored[r.key] = r.value;
-        }
+        // کلیدهای محرمانه (توکن بروزرسانی) وارد پیکربندی عمومی نمی‌شوند
+        if (!r || !r.key) continue;
+        if (r.key === 'cf_token' || r.key.startsWith('secret_')) continue;
+        stored[r.key] = r.value;
       }
     } catch (_e) {}
   }

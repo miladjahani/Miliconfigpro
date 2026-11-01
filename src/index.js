@@ -7,6 +7,7 @@ import { BRAND_NAME, DIRECT_DOMAINS, OFFICIAL_DIRECT_IPS, OFFICIAL_DIRECT_IPV6 }
 import {
   ensureD1Schema,
   getOrCreateAdminPath,
+  getSecretSetting,
   getStorageDiagnostics,
   getUserByIdOrToken,
   hasAdminPassword,
@@ -29,6 +30,7 @@ import {
 import { buildZip } from './core/utils.js';
 import {
   handleAuthApi,
+  handleAutoUpdateSetupApi,
   handleConfigApi,
   handleDashboardStatsApi,
   handlePreferredIpsApi,
@@ -74,7 +76,9 @@ export default {
       // بروزرسانی خودکار نسخه (فقط اگر مدیر روشن کرده و توکن کلادفلر ست شده باشد)
       try {
         const cfg = await loadGlobalConfig(env);
-        results.push({ update: await autoUpdateIfEnabled(cfg, env) });
+        // توکن یا از env می‌آید یا از تنظیمات محرمانهٔ پنل (system_config)
+        const cronToken = String(env?.CF_API_TOKEN || '').trim() || await getSecretSetting(env, 'cf_token');
+        results.push({ update: await autoUpdateIfEnabled(cfg, env, { token: cronToken }) });
       } catch (e) {
         results.push({ update: { skipped: 'error', message: e?.message || String(e) } });
       }
@@ -170,6 +174,9 @@ export default {
         }
         if (apiSubPath === 'update') {
           return await handleUpdateApi(request, env);
+        }
+        if (apiSubPath === 'auto-update-setup') {
+          return await handleAutoUpdateSetupApi(request, env);
         }
         if (apiSubPath === 'preferred-ips') {
           return await handlePreferredIpsApi(request, env, true);

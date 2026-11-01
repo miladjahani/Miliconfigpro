@@ -860,12 +860,16 @@ export function renderAdminDashboardHtml(initialData = {}) {
             <div class="kv"><span>نسخهٔ نصب‌شده</span><b class="mono">v${VERSION.replace(/^v/i, '')}</b></div>
             <div class="kv"><span>آخرین نسخهٔ گیت‌هاب</span><b class="mono" id="updLatest">—</b></div>
             <div class="kv"><span>وضعیت</span><b id="updState">بررسی نشده</b></div>
+            <div class="kv"><span>توکن کلادفلر</span><b id="updToken">—</b></div>
+            <div class="kv"><span>اسکریپت هدف</span><b class="mono" id="updScript">—</b></div>
             <div class="toolbar" style="margin-top:10px;flex-wrap:wrap;">
               <button class="btn sm" type="button" data-act="check-update">${icon('refresh')} بررسی بروزرسانی</button>
+              <button class="btn sm" type="button" data-act="open-token">${icon('key')} اتصال توکن</button>
               <button class="btn sm primary" type="button" data-act="apply-update">${icon('download')} بروزرسانی خودکار</button>
+              <button class="btn sm ghost" type="button" data-act="disable-autoupdate">${icon('close')} خاموش کردن</button>
             </div>
             <div class="loc-meta" style="margin-top:8px;line-height:1.9;">
-              بروزرسانی خودکار به کلید <b class="mono">CF_API_TOKEN</b> (دسترسی Workers Scripts:Edit) و تنظیم <b class="mono">cfAccountId</b> و <b class="mono">cfScriptName</b> در تب تنظیمات نیاز دارد.
+              توکن را با دسترسی <b class="mono">Workers Scripts: Edit</b> بسازید و همین‌جا وصل کنید؛ پنل آن را در دیتابیس محرمانه نگه می‌دارد و بایندینگ‌های D1/KV را هنگام آپدیت حفظ می‌کند.
               اگر پروژه به گیت‌هاب وصل باشد، هر push به main خودکار مستقر می‌شود و نیازی به این کار نیست.
             </div>
             <ul id="updNotes" class="loc-meta" style="margin:8px 0 0;padding-inline-start:18px;display:none;"></ul>
@@ -1316,6 +1320,25 @@ export function renderAdminDashboardHtml(initialData = {}) {
     </div>
   </div>
 
+  <div class="modal" id="tokenModal">
+    <div class="modal-card">
+      <div class="modal-head"><b>${icon('key')} اتصال توکن بروزرسانی</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="tokenModal">${icon('close')}</button></div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Cloudflare API Token</label>
+          <input type="password" id="cfToken" autocomplete="off" placeholder="توکن با دسترسی Workers Scripts: Edit">
+          <span class="hint">توکن فقط برای آپلود نسخهٔ تازه استفاده می‌شود و در دیتابیس محرمانه ذخیره می‌گردد.</span>
+        </div>
+        <div class="field"><label>Account ID (اختیاری — خودکار شناسایی می‌شود)</label><input type="text" id="cfAccountInput" placeholder="خالی بگذارید تا از توکن خوانده شود"></div>
+        <div class="field"><label>نام اسکریپت Workers (اختیاری)</label><input type="text" id="cfScriptInput" placeholder="مثل miliconfig-worker-v5"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn primary" type="button" data-act="enable-autoupdate">${icon('check')} تأیید و فعال‌سازی</button>
+        <button class="btn ghost" type="button" data-act="close-modal" data-modal="tokenModal">انصراف</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast"><div class="toast-body" id="toastBody"></div></div>
 
 <script>
@@ -1718,6 +1741,11 @@ export function renderAdminDashboardHtml(initialData = {}) {
     var drawerVersion = $('drawerVersion');
     if (latest) latest.textContent = info && info.latest ? 'v' + info.latest : '—';
     if (drawerVersion && info && info.current) drawerVersion.textContent = 'v' + info.current;
+    if ($('updToken')) {
+      $('updToken').textContent = info && info.hasToken ? 'متصل' : 'تنظیم نشده';
+      $('updToken').style.color = info && info.hasToken ? 'var(--neon)' : 'var(--warn)';
+    }
+    if ($('updScript')) $('updScript').textContent = (info && info.scriptName) || 'تشخیص خودکار';
     if (!stateEl) return;
     if (!info || info.success === false) {
       stateEl.textContent = 'بررسی ناموفق';
@@ -1747,6 +1775,67 @@ export function renderAdminDashboardHtml(initialData = {}) {
     api('/api/update?t=' + Date.now())
       .then(function(info) { renderUpdateInfo(info, silent); })
       .catch(function() { if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err'); });
+  }
+
+  function openTokenModal() {
+    openModal('tokenModal');
+    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'check' }) })
+      .then(function(data) {
+        var tokenEl = $('updToken');
+        if (tokenEl) {
+          tokenEl.textContent = data.has_token ? (data.token_source === 'env' ? 'در env تنظیم شده' : 'ذخیره‌شده در پنل') : 'تنظیم نشده';
+          tokenEl.style.color = data.has_token ? 'var(--neon)' : 'var(--warn)';
+        }
+        if ($('updScript')) $('updScript').textContent = data.script_name || 'تشخیص خودکار';
+        if ($('cfAccountInput') && data.account_id) $('cfAccountInput').value = data.account_id;
+        if ($('cfScriptInput') && data.script_name) $('cfScriptInput').value = data.script_name;
+      })
+      .catch(function() {});
+  }
+
+  function enableAutoUpdate() {
+    var token = $('cfToken') ? $('cfToken').value.trim() : '';
+    var accountId = $('cfAccountInput') ? $('cfAccountInput').value.trim() : '';
+    var scriptName = $('cfScriptInput') ? $('cfScriptInput').value.trim() : '';
+    if (!token && !(document.getElementById('updToken') && document.getElementById('updToken').textContent !== 'تنظیم نشده')) {
+      showToast('توکن کلادفلر را وارد کنید', 'err');
+      return;
+    }
+    var btn = document.querySelector('[data-act="enable-autoupdate"]');
+    if (btn) btn.disabled = true;
+    var patch = {};
+    if (accountId) patch.cfAccountId = accountId;
+    if (scriptName) patch.cfScriptName = scriptName;
+    var saveConfig = Object.keys(patch).length
+      ? api('/api/config', { method: 'POST', body: JSON.stringify(patch) })
+      : Promise.resolve({ success: true });
+    saveConfig
+      .then(function() {
+        return api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'enable', token: token }) });
+      })
+      .then(function(data) {
+        if (data.success) {
+          showToast(data.message || 'بروزرسانی خودکار فعال شد', 'ok');
+          if ($('cfToken')) $('cfToken').value = '';
+          closeModal('tokenModal');
+          openTokenModal();
+          checkUpdate(true);
+        } else {
+          showToast(data.message || data.error || 'توکن تأیید نشد', 'err');
+        }
+      })
+      .catch(function() { showToast('خطای شبکه در اتصال توکن', 'err'); })
+      .finally(function() { if (btn) btn.disabled = false; });
+  }
+
+  function disableAutoUpdate() {
+    if (!confirm('بروزرسانی خودکار خاموش شود؟')) return;
+    api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'disable' }) })
+      .then(function(data) {
+        showToast(data.success ? 'بروزرسانی خودکار خاموش شد' : 'خطا', data.success ? 'ok' : 'err');
+        checkUpdate(true);
+      })
+      .catch(function() { showToast('خطای شبکه', 'err'); });
   }
 
   function applyUpdateNow() {
@@ -2089,6 +2178,9 @@ export function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
     else if (act === 'apply-update') { applyUpdateNow(); }
+    else if (act === 'open-token') { openTokenModal(); }
+    else if (act === 'enable-autoupdate') { enableAutoUpdate(); }
+    else if (act === 'disable-autoupdate') { disableAutoUpdate(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }

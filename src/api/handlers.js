@@ -20,7 +20,13 @@ import {
   getFeedKind
 } from '../config/defaults.js';
 import { USER_PRESETS } from '../config/presets.js';
-import { applyUpdate, checkForUpdate } from '../core/updater.js';
+import {
+  applyUpdate,
+  checkForUpdate,
+  inferScriptName,
+  resolveAccountId,
+  verifyUpdateToken
+} from '../core/updater.js';
 import { isValidDomain, isValidIpAddress, normalizeNodeHost, parseAddressAndPort } from '../core/utils.js';
 import {
   addAuditLog,
@@ -30,6 +36,7 @@ import {
   deleteUser,
   ensureD1Schema,
   getOrCreateAdminPath,
+  getSecretSetting,
   getStorageDiagnostics,
   rotateAdminPath,
   verifyAdminSession,
@@ -41,6 +48,7 @@ import {
   resetUserStats,
   saveGlobalConfig,
   setAdminPassword,
+  setSecretSetting,
   updateUser,
   verifyAdminPassword
 } from '../db/d1.js';
@@ -65,6 +73,10 @@ function sanitizeConfigForClient(raw = {}) {
   const copy = { ...(raw || {}) };
   delete copy.adminPasswordHash;
   delete copy.admin_password_hash;
+  // کلیدهای محرمانه (توکن بروزرسانی و …) هرگز به کلاینت نمی‌روند
+  for (const key of Object.keys(copy)) {
+    if (key === 'cf_token' || key === 'cfToken' || key.startsWith('secret_')) delete copy[key];
+  }
   return copy;
 }
 
@@ -641,14 +653,24 @@ export async function handleConfigApi(request, env) {
 }
 
 // ۲. بروزرسانی نسخه: بررسی و استقرار نسخهٔ تازه از گیت‌هاب روی همین اسکریپت (/api/update)
+// توکن می‌تواند در env باشد یا یک‌بار از پنل ذخیره شود (مثل مکانیزم پنل Z-E-U-S).
+async function resolveUpdateToken(env) {
+  const envToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  if (envToken) return { token: envToken, source: 'env' };
+  const stored = await getSecretSetting(env, 'cf_token');
+  return { token: stored, source: stored ? 'panel' : '' };
+}
+
 export async function handleUpdateApi(request, env) {
   if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
   const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
   const cfg = await loadGlobalConfig(env);
+  const { token, source } = await resolveUpdateToken(env);
+  const hostScriptName = new URL(request.url).hostname;
 
   if (request.method === 'GET') {
-    const info = await checkForUpdate(cfg, env);
-    return jsonResponse(info);
+    const info = await checkForUpdate(cfg, env, { token, scriptName: inferScriptName(hostScriptName) });
+    return jsonResponse({ ...info, tokenSource: source });
   }
 
   if (request.method === 'POST') {
@@ -656,10 +678,14 @@ export async function handleUpdateApi(request, env) {
     try { body = await request.json(); } catch (_e) {}
     const action = String(body?.action || 'check').toLowerCase();
     if (action === 'check') {
-      return jsonResponse(await checkForUpdate(cfg, env, { force: true }));
+      return jsonResponse(await checkForUpdate(cfg, env, { force: true, token, scriptName: inferScriptName(hostScriptName) }));
     }
     if (action === 'apply') {
-      const result = await applyUpdate(cfg, env, { force: body?.force === true });
+      const result = await applyUpdate(cfg, env, {
+        force: body?.force === true,
+        token,
+        hostScriptName
+      });
       if (result.success) {
         await addAuditLog(env, 'بروزرسانی نسخه', `از ${result.from || '?'} به ${result.to || '?'}`, clientIp).catch(() => {});
       }
@@ -669,6 +695,71 @@ export async function handleUpdateApi(request, env) {
   }
 
   return jsonResponse({ error: 'Method not allowed' }, 405);
+}
+
+// ۲-ب. اتصال/قطع توکن بروزرسانی خودکار (همان الگوی /api/auto-update-setup در Z-E-U-S)
+export async function handleAutoUpdateSetupApi(request, env) {
+  if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
+  if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+  let body = {};
+  try { body = await request.json(); } catch (_e) {}
+  const action = String(body?.action || 'check').toLowerCase();
+  const cfg = await loadGlobalConfig(env);
+  const stored = await getSecretSetting(env, 'cf_token');
+  const envToken = String(env?.CF_API_TOKEN || '').trim();
+
+  if (action === 'check') {
+    return jsonResponse({
+      success: true,
+      has_token: Boolean(envToken || stored),
+      token_source: envToken ? 'env' : (stored ? 'panel' : ''),
+      auto_update: String(cfg.autoUpdate || 'no') === 'yes',
+      account_id: cfg.cfAccountId || '',
+      script_name: cfg.cfScriptName || inferScriptName(new URL(request.url).hostname),
+      worker_name: String(env?.WORKER_NAME || '')
+    });
+  }
+
+  if (action === 'enable') {
+    const candidate = String(body?.token || envToken || stored || '').trim();
+    if (!candidate) {
+      return jsonResponse({ success: false, error: 'TOKEN_MISSING', message: 'توکن کلادفلر را وارد کنید.' }, 400);
+    }
+    const verified = await verifyUpdateToken(candidate);
+    if (!verified.valid) {
+      return jsonResponse({ success: false, error: 'INVALID_TOKEN', message: verified.error || 'توکن معتبر نیست.' }, 400);
+    }
+    const account = await resolveAccountId(candidate, cfg.cfAccountId || '');
+    const patch = { autoUpdate: 'yes' };
+    if (account.accountId && !cfg.cfAccountId) patch.cfAccountId = account.accountId;
+    const scriptGuess = cfg.cfScriptName || inferScriptName(new URL(request.url).hostname) || '';
+    if (scriptGuess && !cfg.cfScriptName) patch.cfScriptName = scriptGuess;
+    await setSecretSetting(env, 'cf_token', candidate);
+    const saved = await saveGlobalConfig(env, patch);
+    await addAuditLog(env, 'اتصال توکن بروزرسانی', `حساب: ${account.accountId ? account.accountId.slice(-6) : 'نامشخص'}`, clientIp).catch(() => {});
+    return jsonResponse({
+      success: true,
+      has_token: true,
+      auto_update: true,
+      account_id: saved?.cfAccountId || patch.cfAccountId || '',
+      script_name: saved?.cfScriptName || patch.cfScriptName || '',
+      message: 'توکن تأیید شد و بروزرسانی خودکار روشن شد.'
+    });
+  }
+
+  if (action === 'disable') {
+    await saveGlobalConfig(env, { autoUpdate: 'no' });
+    return jsonResponse({ success: true, auto_update: false, message: 'بروزرسانی خودکار خاموش شد.' });
+  }
+
+  if (action === 'clear-token') {
+    await setSecretSetting(env, 'cf_token', '');
+    await saveGlobalConfig(env, { autoUpdate: 'no' });
+    return jsonResponse({ success: true, has_token: false, auto_update: false, message: 'توکن ذخیره‌شده حذف شد.' });
+  }
+
+  return jsonResponse({ success: false, error: 'action نامعتبر است' }, 400);
 }
 
 // ۳. مدیریت کامل کاربران در دیتابیس D1 (/api/users)
