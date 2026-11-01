@@ -12171,43 +12171,69 @@ function renderAdminDashboardHtml(initialData = {}) {
   /* ---------- main ---------- */
   .main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 10px; }
 
-  /* ---------- نوار تب‌ها (جدا از منو) ---------- */
+  /* ---------- نوار تب‌ها (جدا از منو، به سبک نوار شناور قبلی) ---------- */
   .tabbar {
     position: sticky;
     top: 61px;
     z-index: 35;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 10px 2px 12px;
-    margin-bottom: 14px;
-    border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, rgba(5, 8, 10, 0.96), rgba(5, 8, 10, 0.74));
+    justify-content: center;
+    padding: 10px 0 12px;
+    margin-bottom: 12px;
+    background: linear-gradient(180deg, rgba(5, 8, 10, 0.96), rgba(5, 8, 10, 0.7));
     backdrop-filter: blur(14px);
+  }
+  .tabbar-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 7px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: rgba(6, 10, 9, 0.9);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4) inset;
     scrollbar-width: none;
   }
-  .tabbar::-webkit-scrollbar { display: none; }
+  .tabbar-pill::-webkit-scrollbar { display: none; }
   .tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    white-space: nowrap;
-    padding: 9px 15px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.02);
+    appearance: none;
+    border: 0;
+    background: transparent;
     color: var(--muted);
-    font: inherit;
-    font-size: 0.84rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 74px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    font-family: inherit;
+    font-size: 0.68rem;
     font-weight: 600;
+    white-space: nowrap;
     cursor: pointer;
-    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+    transition: 0.16s;
+    position: relative;
   }
-  .tab:hover { color: var(--text); border-color: var(--line-strong); background: var(--neon-soft); }
-  .tab.is-active { color: var(--neon); border-color: var(--line-strong); background: var(--neon-soft); }
-  .tab .mi { width: 17px; height: 17px; }
-  body.light-mode .tabbar { background: linear-gradient(180deg, rgba(238, 243, 240, 0.96), rgba(238, 243, 240, 0.72)); }
+  .tab .mi { width: 21px; height: 21px; }
+  .tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+  .tab.is-active { color: var(--neon); background: var(--neon-soft); }
+  .tab.is-active::after {
+    content: "";
+    position: absolute;
+    bottom: 4px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--neon);
+    box-shadow: 0 0 8px var(--neon-glow);
+  }
+  body.light-mode .tabbar { background: linear-gradient(180deg, rgba(238, 243, 240, 0.96), rgba(238, 243, 240, 0.7)); }
+  body.light-mode .tabbar-pill { background: rgba(255, 255, 255, 0.95); }
+  body.light-mode .tab { color: #4b5c50; }
   .panel { display: none; animation: rise 0.32s ease both; }
   .panel.is-active { display: block; }
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -12566,9 +12592,11 @@ function renderAdminDashboardHtml(initialData = {}) {
     .nav-drawer { display: block; }
     .drawer-backdrop { display: block; }
     .toast { bottom: 24px; }
-    .tabbar { top: 57px; padding: 8px 0 10px; gap: 6px; }
-    .tab { padding: 8px 12px; font-size: 0.79rem; }
-    .tab span { display: inline; }
+    .tabbar { top: 57px; padding: 8px 0 10px; }
+    .tabbar-pill { width: 100%; justify-content: space-between; padding: 6px; }
+    .tab { flex: 1; min-width: 0; padding: 7px 4px; font-size: 0.62rem; }
+    .tab .mi { width: 19px; height: 19px; }
+    .tab span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   }
 </style>
 </head>
@@ -12622,13 +12650,15 @@ function renderAdminDashboardHtml(initialData = {}) {
   <main class="main">
 
   <!-- نوار تب‌ها: از منو جدا است و همهٔ صفحه‌ها را با یک کلیک عوض می‌کند -->
-  <nav class="tabbar" id="tabbar" aria-label="تب‌های پنل">
-    <button class="tab is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span data-i18n="nav.dashboard">داشبورد</span></button>
-    <button class="tab" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
-    <button class="tab" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
-    <button class="tab" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
-    <button class="tab" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
-  </nav>
+  <div class="tabbar" id="tabbar">
+    <nav class="tabbar-pill" aria-label="تب‌های پنل">
+      <button class="tab is-active" type="button" data-tab="dashboard">${icon('dashboard')}<span data-i18n="nav.dashboard">داشبورد</span></button>
+      <button class="tab" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
+      <button class="tab" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
+      <button class="tab" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
+      <button class="tab" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
+    </nav>
+  </div>
 
     <section class="panel is-active" data-panel="dashboard">
       <div class="window">
