@@ -558,12 +558,12 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
       <button type="button" class="acc-header" onclick="toggleAcc('accScope')">
         <div class="acc-title-wrap">
           <span class="acc-title">فقط بخشی از نودها را می‌خواهید؟</span>
-          <span class="acc-count">5 گزینه · ${totalNodes} نود در کل</span>
+          <span class="acc-count">۴ گزینه · ${totalNodes} نود در کل</span>
         </div>
         <span class="acc-arrow">⌄</span>
       </button>
       <div class="acc-body">
-        <p class="client-desc">می‌توانید تعداد نودهای خروجی یا محدوده نودها را در لینک اشتراک خود فیلتر کنید:</p>
+        <p class="client-desc">تعداد کانفیگ‌ها توسط موتور کانفیگ‌ساز تعیین می‌شود و قابل انتخاب نیست؛ فقط می‌توانید محدودهٔ نودها (دامنه/سرور اصلی/لوکیشن) را فیلتر کنید:</p>
         <div class="client-item">
           <div class="client-top">
             <span class="client-name">همه نودهای کاربر (${totalNodes} نود)</span>
@@ -572,16 +572,6 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
           <div class="url-copy-box">
             <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}', 'کپی شد')">${icon('copy')}</button>
             <div class="url-text">${baseSubUrl}</div>
-          </div>
-        </div>
-        <div class="client-item">
-          <div class="client-top">
-            <span class="client-name">۱۰ نود اول (1+${BRAND_NAME} تا 10+${BRAND_NAME})</span>
-            <span class="tag-green">سبک و سریع</span>
-          </div>
-          <div class="url-copy-box">
-            <button type="button" class="copy-btn" onclick="copyText('${baseSubUrl}?limit=10', 'کپی شد')">${icon('copy')}</button>
-            <div class="url-text">${baseSubUrl}?limit=10</div>
           </div>
         </div>
         <div class="client-item">

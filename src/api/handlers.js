@@ -5,6 +5,15 @@
 import {
   BRAND_NAME,
   CONFIG_DEFAULTS,
+  CFNEW_API_KEY_SALT,
+  CFNEW_API_SECRET,
+  CFNEW_API_URL,
+  CFNEW_DOMAIN_SOURCES,
+  CFNEW_IPV4_SOURCES,
+  CFNEW_IPV6_SOURCES,
+  CFNEW_ISP_GROUPS,
+  CFNEW_PROXYIP_SOURCES,
+  isEnabledValue,
   COUNTRY_PROXY_SOURCES,
   DIRECT_DOMAINS,
   GLOBAL_PROXY_SOURCES,
@@ -29,7 +38,7 @@ import {
   resolveAccountId,
   verifyUpdateToken
 } from '../core/updater.js';
-import { isValidDomain, isValidIpAddress, normalizeNodeHost, parseAddressAndPort } from '../core/utils.js';
+import { isValidDomain, isValidIpAddress, md5Hex, normalizeNodeHost, parseAddressAndPort } from '../core/utils.js';
 import {
   addAuditLog,
   buildAdminSessionToken,
@@ -1265,6 +1274,204 @@ export async function handleAuthApi(request, env) {
   return jsonResponse({ error: 'Endpoint not found' }, 404);
 }
 
+// ============================================================================
+// مخازن cfnew — همان منابعی که موتور خود cfnew برای ساخت نودها می‌خواند
+// (فهرست IPv4 / IPv6 / دامنه / ProxyIP + گروه‌های اپراتوری سرویس youuin)
+// اسکنر پنل فقط از همین‌ها تغذیه می‌شود تا نتیجه دقیقاً مثل cfnew باشد.
+// ============================================================================
+const SCAN_FAMILY_SOURCES = {
+  ipv4: CFNEW_IPV4_SOURCES,
+  ipv6: CFNEW_IPV6_SOURCES,
+  proxyip: CFNEW_PROXYIP_SOURCES,
+  domain: CFNEW_DOMAIN_SOURCES
+};
+
+// گرو‌ه‌های اپراتوری زندهٔ cfnew (移动/联通/电信/多线/IPv6) — با همان کلید md5
+async function fetchCfnewIspGroups(cfg = {}) {
+  try {
+    const time = String(Date.now());
+    const inner = await md5Hex(CFNEW_API_SECRET);
+    const key = await md5Hex(inner + CFNEW_API_KEY_SALT + time);
+    const res = await fetch(`${CFNEW_API_URL}?key=${key}&time=${time}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (!res.ok) return { ok: false, status: res.status, groups: [] };
+    const data = await res.json().catch(() => null);
+    const groups = data && data.data ? data.data : null;
+    if (!groups) return { ok: false, status: res.status, groups: [] };
+    const out = [];
+    for (const [name, meta] of Object.entries(CFNEW_ISP_GROUPS)) {
+      if (meta.family === 'ipv6' && isEnabledValue(cfg.ipv6, true) === false) continue;
+      if (meta.family === 'ipv4' && isEnabledValue(cfg.ipv4, true) === false) continue;
+      if (meta.isp && isEnabledValue(cfg[meta.isp], true) === false) continue;
+      const bucket = groups[name];
+      const list = bucket && Array.isArray(bucket.info) ? bucket.info : [];
+      for (const item of list) {
+        const ip = normalizeNodeHost(item && item.ip);
+        if (!ip) continue;
+        out.push({ ip, family: meta.family, isp: meta.label, code: meta.code });
+      }
+    }
+    return { ok: true, status: res.status, groups: out };
+  } catch (err) {
+    return { ok: false, status: 0, error: String(err && err.message || err), groups: [] };
+  }
+}
+
+// خواندن همهٔ مخازن یک خانواده به‌صورت موازی + گزارش سلامت هر منبع
+async function readCfnewFamilySources(family, timeoutMs = 4500) {
+  const sources = SCAN_FAMILY_SOURCES[family] || [];
+  return Promise.all(sources.map(async url => {
+    const text = await fetchSourceText(url, timeoutMs);
+    let entries = [];
+    if (family === 'domain') {
+      entries = String(text || '').split(/\r?\n/)
+        .map(line => normalizeNodeHost(String(line || '').trim()))
+        .filter(host => host && !host.startsWith('#') && isValidDomain(host))
+        .map(host => ({ host, port: 443, family: 'domain' }));
+    } else {
+      entries = parseIpCandidateLines(text, family === 'proxyip' ? 'any' : family);
+    }
+    return { url, reachable: Boolean(text && text.length), entries };
+  }));
+}
+
+// اسکن مخازن cfnew: IPv4 / IPv6 / دامنه / ProxyIP + گروه‌های اپراتوری youuin
+async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
+  const startedAt = Date.now();
+  const family = mode === 'proxyip' ? 'proxyip' : mode === 'domain' ? 'domain' : mode;
+  const feeds = await readCfnewFamilySources(family);
+  const diagnostics = feeds.map(feed => ({
+    source: feed.url,
+    reachable: feed.reachable,
+    entries: feed.entries.length
+  }));
+
+  const candidates = [];
+  const seen = new Set();
+  for (const feed of feeds) {
+    for (const entry of feed.entries) {
+      const key = `${entry.host}:${entry.port || 443}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(entry);
+    }
+  }
+
+  // cfnew برای IPv4/IPv6 اول از گروه‌های اپراتوری سرویس می‌خواند (移动/联通/电信/多线/IPv6)
+  if ((mode === 'ipv4' || mode === 'ipv6') && !cfg.yxURL) {
+    const isp = await fetchCfnewIspGroups(cfg);
+    diagnostics.push({
+      source: CFNEW_API_URL,
+      reachable: isp.ok,
+      entries: isp.groups.length,
+      label: 'گروه‌های اپراتوری'
+    });
+    for (const group of isp.groups) {
+      if (mode === 'ipv4' && group.family !== 'ipv4') continue;
+      if (mode === 'ipv6' && group.family !== 'ipv6') continue;
+      if (seen.has(group.ip)) continue;
+      seen.add(group.ip);
+      candidates.push({ host: group.ip, port: 443, family: group.family, isp: group.isp });
+    }
+  }
+
+  if (!candidates.length) {
+    return {
+      success: false,
+      kind: mode,
+      family,
+      count: 0,
+      sourceCount: feeds.length,
+      testedCount: 0,
+      capacity: candidates.length,
+      proxies: [],
+      diagnostics,
+      message: 'هیچ‌یک از منابع آدرس پاسخ ندادند؛ چند لحظه بعد دوباره تلاش کنید.',
+      elapsedMs: Date.now() - startedAt
+    };
+  }
+
+  const pool = shuffleList(candidates).slice(0, Math.min(candidates.length, Math.max(limit * 3, 24)));
+  const probed = [];
+  const deadline = Date.now() + 22000;
+  await runLimited(pool, MAX_PARALLEL_SOCKETS, async candidate => {
+    if (probed.length >= limit || Date.now() > deadline) return;
+    const probe = await probeTcp(candidate.host, candidate.port || 443, 2600);
+    if (!probe.ok) return;
+    probed.push({ ...candidate, latencyMs: probe.latencyMs });
+  }, deadline);
+
+  // ورکر کلادفلر خروجی IPv6 ندارد؛ اگر تست TCP برای IPv6 چیزی برنگرداند،
+  // آدرس‌های مخزن به‌صورت «تأییدنشده» برمی‌گردند تا قابل افزودن به yx باشند.
+  if (mode === 'ipv6' && probed.length === 0) {
+    const fallback = shuffleList(candidates).slice(0, limit).map(item => ({ ...item, latencyMs: 0 }));
+    const unverified = fallback.map(item => ({
+      kind: 'ip',
+      ip: item.host,
+      port: item.port || 443,
+      name: item.host,
+      proxy: '',
+      country: region || 'IPv6',
+      code: region || 'CF',
+      family: 'ipv6',
+      protocol: 'IPv6',
+      latencyMs: 0,
+      verified: false,
+      status: 'unverified'
+    }));
+    return {
+      success: unverified.length > 0,
+      kind: mode,
+      family,
+      count: unverified.length,
+      sourceCount: feeds.length + 1,
+      testedCount: pool.length,
+      capacity: candidates.length,
+      proxies: unverified,
+      diagnostics,
+      elapsedMs: Date.now() - startedAt,
+      message: unverified.length
+        ? `${unverified.length} آدرس IPv6 از منابع آدرس خوانده شد؛ ورکر خروجی IPv6 ندارد پس تست اتصال ممکن نیست — با کلاینت خودتان امتحان کنید.`
+        : 'منبع IPv6 در دسترس نبود؛ دوباره تلاش کنید.'
+    };
+  }
+
+  const proxies = probed
+    .sort((a, b) => (a.latencyMs || 0) - (b.latencyMs || 0))
+    .slice(0, limit)
+    .map(item => ({
+      kind: mode === 'proxyip' ? 'proxyip' : 'ip',
+      ip: item.host,
+      port: item.port || 443,
+      name: item.host,
+      proxy: mode === 'proxyip' ? `https://${item.host}:${item.port || 443}` : '',
+      country: region || (mode === 'ipv6' ? 'IPv6' : mode === 'proxyip' ? 'ProxyIP' : 'CF'),
+      code: region || 'CF',
+      family: item.family || (mode === 'ipv6' ? 'ipv6' : 'ipv4'),
+      protocol: mode === 'domain' ? 'Domain' : mode === 'proxyip' ? 'ProxyIP' : (mode === 'ipv6' ? 'IPv6' : 'IPv4'),
+      latencyMs: item.latencyMs || 0,
+      verified: true,
+      status: 'online'
+    }));
+
+  return {
+    success: proxies.length > 0,
+    kind: mode,
+    family,
+    count: proxies.length,
+    sourceCount: feeds.length + (mode === 'ipv4' || mode === 'ipv6' ? 1 : 0),
+    testedCount: pool.length,
+    capacity: candidates.length,
+    proxies,
+    diagnostics,
+    elapsedMs: Date.now() - startedAt,
+    message: proxies.length
+      ? `${proxies.length} مورد سالم از منابع آدرس (${candidates.length} ورودی خوانده شد)`
+      : `از ${pool.length} آدرس تست‌شده هیچ‌کدام TCP پاسخ نداد؛ احتمالاً این محیط خروجی ${mode === 'ipv6' ? 'IPv6' : 'شبکه'} ندارد.`
+  };
+}
+
 // ۷. اسکنر زنده پروکسی‌های کشوری و ساخت سابلینک مولتی‌لوکیشن (/api/scanner/...)
 export async function handleScannerApi(request, env) {
   if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
@@ -1345,10 +1552,41 @@ export async function handleScannerApi(request, env) {
     });
   }
 
+  // رجیستری مخازن cfnew: کدام مخزن برای IPv4/IPv6/دامنه/ProxyIP استفاده می‌شود
+  if (action === 'cfnew-sources' && request.method === 'GET') {
+    return jsonResponse({
+      success: true,
+      engine: 'cfnew',
+      api: CFNEW_API_URL,
+      ispGroups: Object.values(CFNEW_ISP_GROUPS).map(g => ({ code: g.code, label: g.label, family: g.family })),
+      sources: {
+        ipv4: CFNEW_IPV4_SOURCES,
+        ipv6: CFNEW_IPV6_SOURCES,
+        domain: CFNEW_DOMAIN_SOURCES,
+        proxyip: CFNEW_PROXYIP_SOURCES
+      }
+    });
+  }
+
   // اسکن زنده: هر بار لیست‌ها از منابع خوانده می‌شوند (بدون کش) و فقط یک برش چرخشی تست می‌شود
   if (action === 'fetch-and-test' && request.method === 'POST') {
     try {
       const body = await request.json().catch(() => ({}));
+      // حالت‌های موتور cfnew: ipv4 / ipv6 / domain / proxyip
+      const cfMode = ['ipv4', 'ipv6', 'domain', 'proxyip'].includes(String(body.mode || body.kind || '').toLowerCase())
+        ? String(body.mode || body.kind).toLowerCase()
+        : '';
+      if (cfMode) {
+        const cfg = await loadGlobalConfig(env);
+        const limit = Math.min(Math.max(parseInt(body.limit || '10', 10), 1), 30);
+        const result = await scanCfnewMode({
+          mode: cfMode,
+          limit,
+          region: String(body.country || '').toUpperCase(),
+          cfg
+        });
+        return jsonResponse(result);
+      }
       const kind = body.kind === 'ip' ? 'ip' : 'proxy';
       const family = body.family === 'ipv4' || body.family === 'ipv6' ? body.family : 'any';
       const limit = Math.min(Math.max(parseInt(body.limit || '10', 10), 1), 25);
@@ -1605,13 +1843,73 @@ export async function handleScannerApi(request, env) {
       return jsonResponse({ success: false, message: 'دسترسی غیرمجاز' }, 403);
     }
     try {
+      const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
       const body = await request.json().catch(() => ({}));
-      const target = body.target === 's' ? 's' : body.target === 'yx' ? 'yx' : '';
+      const target = ['s', 'yx', 'p'].indexOf(body.target) > -1 ? body.target : '';
       const items = Array.isArray(body.items) ? body.items : [body];
       const cfg = await loadGlobalConfig(env);
+      // اگر کاربر هدف مشخص شده باشد، نتیجهٔ اسکن داخل تنظیمات همان کاربر
+      // نوشته می‌شود (تب تنظیمات حذف شده و همهٔ متغیرها per-user هستند).
+      const targetUser = body.userId ? await getUserByIdOrToken(env, String(body.userId)) : null;
+
+      if (targetUser && target === 'yx') {
+        const list = parseYxArray(targetUser.config?.yx || '');
+        let added = 0;
+        for (const item of items) {
+          const ip = String(item?.ip || '').trim();
+          const port = parseInt(item?.port || 443, 10) || 443;
+          if (!ip || (!isValidIpAddress(ip) && !isValidDomain(ip))) continue;
+          if (list.some(x => x.ip === ip && x.port === port)) continue;
+          list.push({ ip, port, name: String(item?.name || ip) });
+          added++;
+        }
+        if (added > 0) {
+          await updateUser(env, targetUser.id, { config: { yx: serializeYxArray(list), epi: 'yes' } }, clientIp);
+        }
+        return jsonResponse({
+          success: added > 0,
+          added,
+          userId: targetUser.id,
+          total: list.length,
+          message: added > 0
+            ? `${added} آدرس به آدرس‌های دستی کاربر «${targetUser.username}» اضافه شد`
+            : 'آی‌پی جدیدی برای افزودن نبود'
+        });
+      }
+
+      if (targetUser && target === 'p') {
+        // آدرس واسط (ProxyIP): تنها یک نشانی پذیرفته می‌شود و به‌صورت host:port ذخیره می‌گردد
+        const item = items[0] || {};
+        const host = String(item.ip || item.proxy || '').trim();
+        const port = parseInt(item.port || 443, 10) || 443;
+        if (!host || (!isValidIpAddress(host) && !isValidDomain(host))) {
+          return jsonResponse({ success: false, message: 'آدرس واسط معتبری ارسال نشد' }, 400);
+        }
+        const proxyIp = (host.includes(':') ? `[${host}]` : host) + ':' + port;
+        await updateUser(env, targetUser.id, { config: { p: proxyIp } }, clientIp);
+        return jsonResponse({ success: true, p: proxyIp, userId: targetUser.id, message: `آدرس واسط کاربر «${targetUser.username}» روی ${proxyIp} تنظیم شد` });
+      }
+
+      if (targetUser && target === 's') {
+        const item = items[0] || {};
+        const proxyUrl = String(item.proxy || '').trim();
+        if (!proxyUrl) return jsonResponse({ success: false, message: 'پروکسی معتبری ارسال نشد' }, 400);
+        await updateUser(env, targetUser.id, { config: { s: proxyUrl } }, clientIp);
+        return jsonResponse({ success: true, s: proxyUrl, userId: targetUser.id, message: 'پروکسی خروجی برای این کاربر تنظیم شد' });
+      }      if (target === 'p') {
+        const item = items[0] || {};
+        const host = String(item.ip || item.proxy || '').trim();
+        const port = parseInt(item.port || 443, 10) || 443;
+        if (!host || (!isValidIpAddress(host) && !isValidDomain(host))) {
+          return jsonResponse({ success: false, message: 'آدرس واسط معتبری ارسال نشد' }, 400);
+        }
+        const proxyIp = (host.includes(':') ? `[${host}]` : host) + ':' + port;
+        await saveGlobalConfig(env, { p: proxyIp });
+        return jsonResponse({ success: true, p: proxyIp, message: `آدرس واسط روی ${proxyIp} تنظیم شد` });
+      }
 
       if (target === 's') {
-        const item = items[0] || {};
+        const item = items[0] || { };
         const proxyUrl = String(item.proxy || '').trim();
         if (!proxyUrl) return jsonResponse({ success: false, message: 'پروکسی معتبری ارسال نشد' }, 400);
         await saveGlobalConfig(env, { s: proxyUrl });
@@ -1634,11 +1932,11 @@ export async function handleScannerApi(request, env) {
           success: added > 0,
           added,
           total: list.length,
-          message: added > 0 ? `${added} آی‌پی به نودهای ترجیحی (yx) اضافه شد` : 'آی‌پی جدیدی برای افزودن نبود'
+          message: added > 0 ? `${added} آدرس به آدرس‌های دستی اضافه شد` : 'آدرس جدیدی برای افزودن نبود'
         });
       }
 
-      return jsonResponse({ success: false, message: 'مقصد نامعتبر است (yx یا s)' }, 400);
+      return jsonResponse({ success: false, message: 'مقصد نتیجه نامعتبر است' }, 400);
     } catch (err) {
       return jsonResponse({ success: false, message: 'خطا در اعمال نتیجه اسکن: ' + (err?.message || err) }, 500);
     }

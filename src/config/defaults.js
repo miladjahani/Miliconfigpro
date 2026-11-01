@@ -5,6 +5,14 @@
 
 import { CF_EDGE_DOMAINS } from './edgeDomains.js';
 import {
+  CFNEW_API_KEY_SALT,
+  CFNEW_API_SECRET,
+  CFNEW_API_URL,
+  CFNEW_DOMAIN_SOURCES,
+  CFNEW_IPV4_SOURCES,
+  CFNEW_IPV6_SOURCES,
+  CFNEW_ISP_GROUPS,
+  CFNEW_PROXYIP_SOURCES,
   COUNTRY_EXTRA_PROXY_SOURCES,
   COUNTRY_META,
   GLOBAL_HTTP_SOURCES,
@@ -35,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.3.2';
+export const VERSION = 'v3.4.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
@@ -47,12 +55,14 @@ export const HARDCODED_INFO_NODES = [
   'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=none&type=ws#%DB%B3.%20%D8%A8%D9%87%20%D8%B7%D9%88%D8%B1%20%D8%B4%D8%AE%D8%B5%DB%8C%20%D8%A7%D8%B3%D8%AA%D9%81%D8%A7%D8%AF%D9%87%20%DA%A9%D9%86%DB%8C%D8%AF'
 ];
 
+// مقادیر پیش‌فرض دقیقاً مطابق cfnew (byJoey): vless روشن، بقیهٔ پروتکل‌ها و
+// امکانات اضافه خاموش تا کاربر خودش از فرم ساخت/ویرایش کاربر روشن کند.
 export const CONFIG_DEFAULTS = {
   wk: '',
   ev: 'yes',
-  et: 'yes',
-  ex: 'yes',
-  es: 'yes', // شادوساکس (Shadowsocks) — طبق درخواست همیشه در سابلینک حاضر است
+  et: 'no',
+  ex: 'no',
+  es: 'no', // شادوساکس (Shadowsocks) — امکانات اضافه پیش‌فرض خاموش
   sspass: '',
   // هسته این ورکر هدر Shadowsocks را به‌صورت متنی (بدون AEAD) می‌خواند، بنابراین تنها متد سازگار «none» است
   ssmethod: 'none',
@@ -68,7 +78,7 @@ export const CONFIG_DEFAULTS = {
   s: '',
   homepage: '',
   scu: 'https://url.v1.mk/sub',
-  ena: 'no',
+  ena: 'yes',
   epd: 'yes',
   epi: 'yes',
   egi: 'yes',
@@ -83,7 +93,10 @@ export const CONFIG_DEFAULTS = {
   ispUnicom: 'yes',
   ispTelecom: 'yes',
   jk: 'no',
-  subNodeCount: 50,
+  // صفر = بدون سقف؛ تعداد کانفیگ را کاربر/پنل انتخاب نمی‌کند و موتور خودش
+  // همهٔ آدرس‌های منابع را مثل cfnew به نود تبدیل می‌کند.
+  subNodeCount: 0,
+  region: 'auto', // منطقهٔ لوکیشن نودها: auto | CF | کد کشور (مثل DE/NL/US)
   brand: BRAND_NAME,
   // تنظیمات ترنسپورت و رفتار کلاینت:
   fp: 'chrome', // فینگرپرینت: chrome, firefox, safari, edge, ios, randomized
@@ -92,26 +105,26 @@ export const CONFIG_DEFAULTS = {
   fragmentLength: '100-200',
   fragmentInterval: '10-20',
   fragmentPackets: 'tlshello',
-  ipRotation: 15, // چرخش خودکار آی‌پی به دقیقه (۰ = خاموش)
+  ipRotation: 'off', // چرخش آی‌پی: پیش‌فرض خاموش تا آی‌پی نود در کلاینت ثابت بماند
   locationNodeCount: 8, // تعداد نود چندلوکیشن که در ساب‌لینک کشوری ساخته می‌شود
   frag: 'yes', // کلید روشن/خاموش فرگمنت (شادوساکس فرگمنت ندارد)
-  ports: '443,2053,2087,8443', // پورت‌های TLS نودهای ساب‌لینک (لیست جداشده با کاما)
-  // پورت‌های بدون TLS که به‌عنوان «حالت دوم» هر نود ساخته می‌شوند؛ خالی = هیچ نود HTTP‌ای ساخته نشود
-  httpPorts: '80,8080',
+  ports: '443', // پورت‌های TLS نودهای ساب‌لینک (cfnew: فقط 443)
+  // پورت‌های بدون TLS که به‌عنوان «حالت دوم» هر نود ساخته می‌شوند؛ cfnew: 80
+  httpPorts: '80',
   adminPasswordHash: '', // هش رمز عبور مدیر
   supportChannel: TELEGRAM_SUPPORT,
   // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
-  pd: 'yes',
+  pd: 'no',
   pdCount: 2,
   // — WARP / WARP PRO / WARP چندلوکیشن
-  warp: 'yes',
+  warp: 'no',
   warpPro: 'no',
-  warpMl: 'yes',
+  warpMl: 'no',
   warpCount: 8,
   warpLicense: '', // لایسنس WARP+ برای نود WARP PRO
   warpEndpoint: '', // لیست سفارشی نقاط پایانی: ip:port#برچسب,ip2:port2#برچسب (خالی = نقاط پایانی رسمی کلادفلر)
   // — OpenVPN (پروفایل‌های عمومی زنده از VPNGate)
-  ovpn: 'yes',
+  ovpn: 'no',
   ovpnCount: 8,
   ovpnCountries: '',
   ovpnSource: '', // آدرس‌های سفارشی ‎.ovpn‎ (کاما) — خالی = منابع پیش‌فرض
@@ -163,6 +176,7 @@ export const ENV_KEY_MAPPING = {
   ispTelecom: ['ispTelecom', 'ISPTELECOM', 'ISP_TELECOM'],
   jk: ['jk', 'JK'],
   subNodeCount: ['subNodeCount', 'SUB_NODE_COUNT', 'nodeCount', 'NODE_COUNT'],
+  region: ['region', 'REGION', 'LOCATION_REGION'],
   fp: ['fp', 'FP', 'FINGERPRINT'],
   patt: ['patt', 'PATT', 'PATH_PATTERN'],
   fragmentPreset: ['fragmentPreset', 'FRAGMENT_PRESET'],
@@ -307,6 +321,14 @@ export const GLOBAL_PROXY_SOURCES = {
 
 export {
   CF_EDGE_DOMAINS,
+  CFNEW_API_KEY_SALT,
+  CFNEW_API_SECRET,
+  CFNEW_API_URL,
+  CFNEW_DOMAIN_SOURCES,
+  CFNEW_IPV4_SOURCES,
+  CFNEW_IPV6_SOURCES,
+  CFNEW_ISP_GROUPS,
+  CFNEW_PROXYIP_SOURCES,
   IP_CANDIDATE_SOURCES,
   IPV6_CANDIDATE_SOURCES,
   PROXY_IP_SOURCES,
@@ -474,8 +496,18 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   }
   snap.alpn = normalizeAlpn(snap.alpn);
   const parsedCount = parseInt(snap.subNodeCount, 10);
-  snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 50;
-  snap.ipRotation = Number.isFinite(parseInt(snap.ipRotation, 10)) ? parseInt(snap.ipRotation, 10) : 15;
+  // ۰ = بدون سقف (موتور خودش تعداد نودها را تعیین می‌کند)
+  snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
+  snap.region = String(snap.region || 'auto').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(snap.region)) snap.region = 'auto';
+  // چرخش آی‌پی: «off» یا ۰ یعنی خاموش (پیش‌فرض)؛ عدد = دقیقه
+  const rotationRaw = String(snap.ipRotation == null ? '' : snap.ipRotation).trim().toLowerCase();
+  if (!rotationRaw || rotationRaw === 'off' || rotationRaw === '0' || rotationRaw === 'false') {
+    snap.ipRotation = 'off';
+  } else {
+    const rotNum = parseInt(rotationRaw, 10);
+    snap.ipRotation = Number.isFinite(rotNum) && rotNum > 0 ? String(rotNum) + 'm' : 'off';
+  }
   // تنها متد Shadowsocks پشتیبانی‌شده توسط هسته همین ورکر «none» است؛ انتخاب‌های دیگر باعث بی‌پاسخ شدن نود می‌شدند
   snap.ssmethod = 'none';
   // اگر پریست فرگمنت روی حالت سفارشی باشد و مقادیر خالی بمانند، از مقادیر پیش‌فرض ضد-DPI استفاده می‌شود

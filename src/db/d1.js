@@ -385,7 +385,7 @@ export async function ensureD1Schema(env = {}, force = false) {
     if (totalUsers === 0) {
       const adminUuid = generateSeedUuid();
       const envSnap = getEnvConfigSnapshot(env);
-      const defaultUserConfig = buildUserDefaultConfig(envSnap, 'iran-fast', { subNodeCount: 50 });
+      const defaultUserConfig = buildUserDefaultConfig(envSnap, 'iran-fast', { subNodeCount: 0 });
       const now = Date.now();
       const firstId = generateShortId('mili');
       await safeBind(
@@ -400,7 +400,7 @@ export async function ensureD1Schema(env = {}, force = false) {
         firstId,
         firstId,
         adminUuid,
-        50,
+        0,
         'active',
         1,
         0,
@@ -442,12 +442,12 @@ function ensureMemorySeeded(env = {}) {
   if (memoryStore.users.size === 0) {
     const now = Date.now();
     const firstId = 'mili-default';
-    const cfg = buildUserDefaultConfig(envSnap, 'iran-fast', { subNodeCount: 50 });
+    const cfg = buildUserDefaultConfig(envSnap, 'iran-fast', { subNodeCount: 0 });
     memoryStore.users.set(firstId, {
       id: firstId,
       username: firstId,
       uuid: adminUuid,
-      subNodeCount: 50,
+      subNodeCount: 0,
       status: 'active',
       enabled: true,
       dataLimitGb: 0,
@@ -922,6 +922,7 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
   memoryStore.users.set(id, userObj);
 
   const detectedD1 = detectD1Binding(env);
+  let insertError = null;
   if (detectedD1 && memoryStore.d1SchemaReady) {
     try {
       await safeBind(
@@ -955,7 +956,17 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
         now,
         now
       ).run();
-    } catch (_e) {}
+      // تأیید واقعی نوشتن: اگر ردیف در D1 نباشد، کاربر «ساخته‌شده» ولی ناپایدار است
+      const check = await detectedD1.db.prepare(`SELECT id FROM users WHERE id = ?`).bind(userObj.id).first();
+      if (!check || !check.id) throw new Error('ردیف کاربر پس از نوشتن در D1 پیدا نشد');
+    } catch (err) {
+      insertError = err?.message || String(err);
+    }
+  }
+
+  if (insertError) {
+    memoryStore.users.delete(userObj.id);
+    throw new Error('ذخیرهٔ کاربر در D1 ناموفق بود: ' + insertError);
   }
 
   await addAuditLog(env, 'ساخت کاربر جدید', `${userObj.username} (${currentUsers.length + 1}/3)`, clientIp);
@@ -1077,7 +1088,16 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
         now,
         existing.id
       ).run();
-    } catch (_e) {}
+      const check = await detectedD1.db.prepare(`SELECT config_json, updated_at FROM users WHERE id = ?`).bind(existing.id).first();
+      if (!check || Number(check.updated_at) !== Number(now)) throw new Error('تغییرات کاربر در D1 ثبت نشد');
+      const storedCfg = JSON.parse(check.config_json || '{}');
+      const wantedKeys = Object.keys(updated.config || {});
+      const lost = wantedKeys.filter(key => !(key in storedCfg));
+      if (lost.length) throw new Error('این کلیدها در D1 ذخیره نشدند: ' + lost.slice(0, 6).join(', '));
+    } catch (err) {
+      memoryStore.users.set(existing.id, existing);
+      throw new Error('ذخیرهٔ تغییرات در D1 ناموفق بود: ' + (err?.message || String(err)));
+    }
   }
 
   await addAuditLog(env, 'ویرایش کاربر', `${updated.username}`, clientIp);

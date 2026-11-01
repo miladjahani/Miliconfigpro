@@ -19,6 +19,7 @@ import {
   VERSION
 } from '../config/defaults.js';
 import { USER_PRESETS } from '../config/presets.js';
+import { EDGE_VIP_COUNTRIES } from '../config/sources.js';
 import { FAVICON_DATA_URI, SHIELD_LOGO_SVG, icon, stripEmoji } from './icons.js';
 
 const SUPPORT_URL = `https://t.me/${String(TELEGRAM_SUPPORT).replace(/^@/, '')}`;
@@ -41,8 +42,9 @@ const PANEL_I18N = {
     'metric.ips': 'آی‌پی‌های سالم', 'metric.protocols': 'پروتکل‌های فعال',
     'settings.protocols': 'پروتکل‌ها و قابلیت‌ها', 'settings.network': 'شبکه و ترنسپورت', 'settings.panel': 'پنل و امنیت',
     'scanner.country': 'کشور', 'scanner.kind': 'نوع', 'scanner.family': 'خانواده آی‌پی',
-    'scanner.count': 'تعداد',    'scanner.addCfIps': 'افزودن آی‌پی‌های پیش‌فرض کلادفلر به yx',
-    'scanner.addCfDomains': 'افزودن دامنه‌های پیش‌فرض کلادفلر به yx',
+    'scanner.count': 'تعداد',    'scanner.addCfIps': 'افزودن آی‌پی‌های پیش‌فرض کلادفلر به آدرس‌های دستی',
+    'scanner.addCfDomains': 'افزودن دامنه‌های پیش‌فرض کلادفلر به آدرس‌های دستی',
+    'btn.editUser': 'ویرایش', 'card.nodesAuto': 'تعداد نود: خودکار',
     'modal.create': 'ایجاد کاربر جدید', 'modal.username': 'نام کاربری', 'modal.preset': 'پریست',
     'modal.limit': 'حجم مجاز (GB) — صفر برای نامحدود', 'modal.days': 'مدت اعتبار (روز) — صفر برای بدون انقضا',
     'modal.nodes': 'تعداد نود در ساب‌لینک', 'modal.createBtn': 'ساخت کاربر', 'modal.cancel': 'انصراف',
@@ -50,18 +52,18 @@ const PANEL_I18N = {
     'modal.password': 'تغییر رمز مدیر', 'modal.old': 'رمز فعلی', 'modal.new': 'رمز جدید',
     'modal.confirmNew': 'تکرار رمز جدید', 'modal.savePassword': 'ذخیره رمز',
     'field.echDomain': 'دامنه ECH', 'field.dns': 'DNS سفارشی (DoH)', 'field.fragPreset': 'پریست فرگمنت',
-    'field.ports': 'پورت‌های نود (ports)', 'field.fp': 'فینگرپرینت TLS', 'field.patt': 'الگوی مسیر (patt)',
-    'field.rotation': 'چرخش آی‌پی', 'field.proxyIP': 'ProxyIP سفارشی (p)', 'field.locCount': 'تعداد نود چندلوکیشن',
-    'field.outProxy': 'پروکسی خروجی (s)', 'field.dnsHint': 'یک DNS از لیست انتخاب کنید یا مقدار دلخواه DoH بنویسید.',
-    'field.adminPath': 'مسیر مدیریت (رندوم)', 'field.customPath': 'مسیر سفارشی پنل (d)',
-    'field.homepage': 'صفحه استتار (homepage)', 'field.yx': 'نودهای ترجیحی (yx)', 'field.nodeCount': 'تعداد نود هر کاربر',
+    'field.ports': 'پورت‌های نود', 'field.fp': 'اثر انگشت TLS', 'field.patt': 'الگوی مسیر',
+    'field.rotation': 'چرخش آی‌پی', 'field.proxyIP': 'آدرس واسط سفارشی', 'field.locCount': 'تعداد نود چندلوکیشن',
+    'field.outProxy': 'پروکسی خروجی', 'field.dnsHint': 'یک DNS از لیست انتخاب کنید یا مقدار دلخواه DoH بنویسید.',
+    'field.adminPath': 'مسیر مدیریت تصادفی', 'field.customPath': 'مسیر سفارشی پنل',
+    'field.homepage': 'صفحهٔ استتار', 'field.yx': 'آدرس‌های دستی', 'field.nodeCount': 'تعداد نود هر کاربر',
     'warn.title': 'هشدار تداخل تنظیمات:',
     'card.usage': 'مصرف', 'card.expiry': 'انقضا', 'card.unlimited': 'نامحدود',
     'card.noExpiry': 'بدون انقضا', 'card.nodes': 'نود', 'card.active': 'فعال',
     'card.inactive': 'غیرفعال', 'card.preset': 'پریست', 'card.subscription': 'اشتراک فعال',
     'btn.copySub': 'ساب', 'btn.status': 'وضعیت', 'btn.resetUser': 'ریست', 'btn.testNodes': 'تست اتصال',
     'btn.domainSub': 'دامنه‌ها',
-    'btn.rotatePath': 'مسیر جدید', 'btn.addToYx': 'افزودن به yx', 'btn.connectS': 'اتصال به s',
+    'btn.rotatePath': 'مسیر جدید', 'btn.addToYx': 'افزودن به آدرس‌های دستی', 'btn.connectS': 'اتصال به پروکسی خروجی',
     'scan.colCountry': 'کشور', 'scan.colAddr': 'آدرس / پورت', 'scan.colType': 'نوع / پروتکل',
     'scan.colPing': 'پینگ', 'scan.colStatus': 'وضعیت', 'scan.colAction': 'عملیات',
     'scan.online': 'آنلاین', 'scan.unverified': 'پیشنهادی', 'scan.ipStatic': 'آی‌پی ثابت',
@@ -88,8 +90,9 @@ const PANEL_I18N = {
     'metric.ips': 'Healthy IPs', 'metric.protocols': 'Active protocols',
     'settings.protocols': 'Protocols & features', 'settings.network': 'Network & transport', 'settings.panel': 'Panel & security',
     'scanner.country': 'Country', 'scanner.kind': 'Type', 'scanner.family': 'IP family',
-    'scanner.count': 'Count',    'scanner.addCfIps': 'Add Cloudflare default IPs to yx',
-    'scanner.addCfDomains': 'Add Cloudflare default domains to yx',
+    'scanner.count': 'Count',    'scanner.addCfIps': 'Add Cloudflare default IPs to manual addresses',
+    'scanner.addCfDomains': 'Add Cloudflare default domains to manual addresses',
+    'btn.editUser': 'Edit', 'card.nodesAuto': 'Nodes: automatic',
     'modal.create': 'Create new user', 'modal.username': 'Username', 'modal.preset': 'Preset',
     'modal.limit': 'Data limit (GB) — 0 for unlimited', 'modal.days': 'Validity (days) — 0 for never',
     'modal.nodes': 'Nodes in subscription', 'modal.createBtn': 'Create user', 'modal.cancel': 'Cancel',
@@ -97,18 +100,18 @@ const PANEL_I18N = {
     'modal.password': 'Change admin password', 'modal.old': 'Current password', 'modal.new': 'New password',
     'modal.confirmNew': 'Confirm new password', 'modal.savePassword': 'Save password',
     'field.echDomain': 'ECH domain', 'field.dns': 'Custom DNS (DoH)', 'field.fragPreset': 'Fragment preset',
-    'field.ports': 'Node ports (ports)', 'field.fp': 'TLS fingerprint', 'field.patt': 'Path pattern (patt)',
-    'field.rotation': 'IP rotation', 'field.proxyIP': 'Custom ProxyIP (p)', 'field.locCount': 'Location node count',
-    'field.outProxy': 'Outbound proxy (s)', 'field.dnsHint': 'Pick a DNS from the list or type a custom DoH value.',
-    'field.adminPath': 'Admin path (random)', 'field.customPath': 'Custom panel path (d)',
-    'field.homepage': 'Camouflage page (homepage)', 'field.yx': 'Preferred nodes (yx)', 'field.nodeCount': 'Nodes per user',
+    'field.ports': 'Node ports', 'field.fp': 'TLS fingerprint', 'field.patt': 'Path pattern',
+    'field.rotation': 'IP rotation', 'field.proxyIP': 'Custom proxy address', 'field.locCount': 'Location node count',
+    'field.outProxy': 'Outbound proxy', 'field.dnsHint': 'Pick a DNS from the list or type a custom DoH value.',
+    'field.adminPath': 'Random admin path', 'field.customPath': 'Custom panel path',
+    'field.homepage': 'Camouflage page', 'field.yx': 'Manual addresses', 'field.nodeCount': 'Nodes per user',
     'warn.title': 'Settings conflict warning:',
     'card.usage': 'Usage', 'card.expiry': 'Expiry', 'card.unlimited': 'Unlimited',
     'card.noExpiry': 'No expiry', 'card.nodes': 'nodes', 'card.active': 'Active',
     'card.inactive': 'Disabled', 'card.preset': 'Preset', 'card.subscription': 'Active subscription',
     'btn.copySub': 'Sub', 'btn.status': 'Status', 'btn.resetUser': 'Reset', 'btn.testNodes': 'Test',
     'btn.domainSub': 'Domains',
-    'btn.rotatePath': 'New path', 'btn.addToYx': 'Add to yx', 'btn.connectS': 'Connect to s',
+    'btn.rotatePath': 'New path', 'btn.addToYx': 'Add to manual addresses', 'btn.connectS': 'Connect to egress proxy',
     'scan.colCountry': 'Country', 'scan.colAddr': 'Address / port', 'scan.colType': 'Type / protocol',
     'scan.colPing': 'Ping', 'scan.colStatus': 'Status', 'scan.colAction': 'Action',
     'scan.online': 'Online', 'scan.unverified': 'Suggested', 'scan.ipStatic': 'Static IP',
@@ -138,12 +141,21 @@ export function renderAdminDashboardHtml(initialData = {}) {
     users: initialData.users || [],
     diagnostics: initialData.diagnostics || {},
     adminPath: initialData.adminPath || '',
-    countrySources: COUNTRY_PROXY_SOURCES,
+    // فقط نام کشورها به کلاینت می‌رود (آدرس منابع داخلی لازم نیست در صفحه باشد)
+    countrySources: Object.keys(COUNTRY_PROXY_SOURCES).reduce(function(acc, code) {
+      var item = COUNTRY_PROXY_SOURCES[code] || {};
+      acc[code] = { name: item.name || code, flag: item.flag || '' };
+      return acc;
+    }, {}),
+    vipCountries: EDGE_VIP_COUNTRIES,
     maxUsersLimit: MAX_USERS_LIMIT,
     telegramSupport: TELEGRAM_SUPPORT,
     dnsPresets: DNS_PRESETS,
     portChoices: CF_PORT_CHOICES,
     echDomains: ECH_DOMAINS,
+    fragmentPresets: FRAGMENT_PRESETS,
+    pathPatterns: PATH_PATTERNS,
+    fingerprints: FINGERPRINT_PRESETS,
     officialIps: initialData.officialIps || [],
     officialIpv6: initialData.officialIpv6 || [],
     directDomains: initialData.directDomains || [],
@@ -166,7 +178,9 @@ export function renderAdminDashboardHtml(initialData = {}) {
     power: icon('power'),
     layers: icon('layers'),
     download: icon('download'),
-    signal: icon('signal')
+    signal: icon('signal'),
+    settings: icon('settings'),
+    edit: icon('settings')
   });
 
   const ssmethods = ['none'];
@@ -190,6 +204,36 @@ export function renderAdminDashboardHtml(initialData = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${BRAND_UPPER} ${VERSION} — مرکز کنترل</title>
 <link rel="icon" href="${FAVICON_DATA_URI}">
+<script>
+// ——— عیب‌یابی: هر خطای اجرایی را روی صفحه نشان بده (نه سکوت) ———
+(function() {
+  var shown = false;
+  function banner(title, detail) {
+    if (shown) return; shown = true;
+    try {
+      var box = document.createElement('div');
+      box.setAttribute('dir', 'rtl');
+      box.style.cssText = 'position:fixed;z-index:99999;left:0;right:0;top:0;padding:10px 14px;background:#3a0d0d;color:#ffd9d9;font:12px/1.8 system-ui,Tahoma,sans-serif;border-bottom:1px solid #a33;text-align:right';
+      box.textContent = title + (detail ? ' | ' + detail : '');
+      (document.body || document.documentElement).appendChild(box);
+      window.__miliBootError = box.textContent;
+    } catch (e) {}
+  }
+  window.__miliDiag = { ready: false, banner: banner };
+  window.addEventListener('error', function(e) {
+    banner('خطای اجرای پنل: ' + ((e && e.message) || 'نامشخص'), ((e && e.filename) || '') + ':' + ((e && e.lineno) || ''));
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    var r = e && e.reason;
+    banner('خطای غیرمنتظره: ' + ((r && r.message) || String(r || '')), '');
+  });
+  setTimeout(function() {
+    if (!window.__miliDiag.ready && !shown) {
+      banner('اسکریپت پنل اجرا نشد؛ صفحه را با Ctrl+F5 (پاک‌کردن کش) باز کنید.', 'در صورت تکرار این پیام را بفرستید.');
+    }
+  }, 4000);
+})();
+</script>
 <style>
   :root {
     --bg: #05080a;
@@ -651,14 +695,49 @@ export function renderAdminDashboardHtml(initialData = {}) {
   .modal { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(2, 5, 4, 0.72); backdrop-filter: blur(6px); }
   .modal.is-open { display: flex; }
   .modal-card { width: min(460px, 100%); border-radius: var(--radius); border: 1px solid var(--line-strong); background: #070d0b; box-shadow: var(--shadow); overflow: hidden; }
+  .modal-card.wide { width: min(860px, 100%); }
+  .user-form-modal { display: flex; flex-direction: column; max-height: min(90vh, 880px); }
+  .user-form-modal .modal-body { flex: 1 1 auto; min-height: 0; max-height: none; }
   .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
   .modal-head b { font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
   .modal-head .mi { color: var(--neon); }
   .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 74vh; overflow-y: auto; }
+  .form-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 11px 14px; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid var(--line); scrollbar-width: none; scroll-snap-type: x proximity; }
+  .form-tabs::-webkit-scrollbar { height: 0; }
+  .ftab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: transparent; color: inherit; opacity: 0.7; border-radius: 999px; padding: 7px 13px; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: 0.18s ease; scroll-snap-align: center; }
+  .ftab:hover { opacity: 1; border-color: var(--line-strong); }
+  .ftab .ftab-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+  .ftab.is-active { opacity: 1; color: var(--neon); border-color: rgba(181, 255, 77, 0.45); background: rgba(181, 255, 77, 0.1); }
+  .ftab.is-active .ftab-dot { opacity: 1; box-shadow: 0 0 8px var(--neon); }
+  body.light-mode .form-tabs { background: #f6faf8; }
+  .uf-pane { display: none; }
+  .uf-pane.is-active { display: block; animation: rise 0.22s ease both; }
+  .uf-section { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; }
+  .uf-section:first-child { margin-top: 0; }
+  .uf-section span { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.02em; color: var(--neon); opacity: 0.85; white-space: nowrap; }
+  .uf-section i { flex: 1; height: 1px; background: var(--line); }
+  .uf-pane .field textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.35); color: var(--text); font-family: inherit; font-size: 0.82rem; line-height: 2; outline: none; resize: vertical; transition: 0.15s; }
+  .uf-pane .field textarea:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px rgba(181, 255, 77, 0.08); }
+  body.light-mode .uf-pane .field textarea { background: #ffffff; color: #0c1a12; }
+  .field-hint { display: block; margin-top: 4px; font-size: 0.72rem; line-height: 1.7; opacity: 0.6; }
+  .field-hint code { font-size: 0.7rem; padding: 1px 5px; border-radius: 5px; background: rgba(181, 255, 77, 0.1); color: var(--neon); direction: ltr; display: inline-block; }
   .adv-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: rgba(255, 255, 255, 0.015); }
   .adv-box summary { cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--neon); }
   body.light-mode .adv-box { background: #f8faf9; }
-  .modal-foot { padding: 0 16px 16px; display: flex; gap: 8px; justify-content: flex-start; }
+  .modal-foot { padding: 0 16px 16px; display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; }
+  .user-form-modal .modal-foot { padding: 12px 16px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.02); }
+  @media (max-width: 640px) {
+    .modal { padding: 0; }
+    .modal-card { border-radius: 0; border-inline: 0; }
+    .user-form-modal { width: 100%; height: 100%; max-height: none; }
+    .user-form-modal .modal-head { padding: 11px 13px; }
+    .user-form-modal .form-tabs { padding: 9px 12px; }
+    .user-form-modal .modal-body { padding: 14px 12px 6px; }
+    .user-form-modal .modal-foot { padding: 10px 12px calc(12px + env(safe-area-inset-bottom)); }
+    .user-form-modal .modal-foot .btn { flex: 1; justify-content: center; }
+    .user-form-modal .form-grid { grid-template-columns: 1fr; gap: 12px; }
+    .ftab { font-size: 0.75rem; padding: 7px 11px; }
+  }
   .toast {
     position: fixed; z-index: 120; inset-inline: 0; bottom: 96px;
     display: flex; justify-content: center; pointer-events: none;
@@ -845,7 +924,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
       <button class="tab" type="button" data-tab="users">${icon('users')}<span data-i18n="nav.users">کاربران</span></button>
       <button class="tab" type="button" data-tab="scanner">${icon('radar')}<span data-i18n="nav.scanner">اسکنر</span></button>
       <button class="tab" type="button" data-tab="locations">${icon('globe')}<span data-i18n="nav.locations">چندلوکیشن</span></button>
-      <button class="tab" type="button" data-tab="settings">${icon('settings')}<span data-i18n="nav.settings">تنظیمات</span></button>
     </nav>
   </div>
 
@@ -896,7 +974,9 @@ export function renderAdminDashboardHtml(initialData = {}) {
                 <button class="btn primary" type="button" data-act="open-create">${icon('plus')} <span data-i18n="btn.newUser">کاربر جدید</span></button>
                 <button class="btn" type="button" data-act="go-scan">${icon('radar')} <span data-i18n="nav.scanner">اسکنر</span></button>
                 <button class="btn" type="button" data-act="copy-master">${icon('copy')} <span data-i18n="btn.copyMaster">کپی سابلینک اصلی</span></button>
-                <button class="btn ghost" type="button" data-act="go-settings">${icon('settings')} <span data-i18n="nav.settings">تنظیمات</span></button>
+                <button class="btn ghost" type="button" data-act="open-password">${icon('key')} <span data-i18n="btn.password">تغییر رمز مدیر</span></button>
+                <button class="btn ghost" type="button" data-act="copy-admin-path">${icon('copy')} کپی مسیر مدیریت</button>
+                <button class="btn ghost" type="button" data-act="rotate-path">${icon('refresh')} مسیر مدیریت جدید</button>
               </div>
             </div>
           </div>
@@ -946,256 +1026,6 @@ export function renderAdminDashboardHtml(initialData = {}) {
       </div>
     </section>
 
-    <section class="panel" data-panel="settings">
-      <div class="window">
-        <div class="window-head">
-          <span class="dots"><i></i><i></i><i></i></span>
-          <div class="window-title">${icon('settings')} <span data-i18n="panel.settings">تنظیمات</span> <span class="window-sub" data-i18n="panel.settingsSub">هسته پروکسی، شبکه و پنل</span></div>
-        </div>
-        <div class="window-body">
-          <div class="group-title">${icon('layers')} <span data-i18n="settings.protocols">پروتکل‌ها و قابلیت‌ها</span></div>
-          <div class="form-grid">
-            <div class="switch-row">
-              <div class="switch-meta">${icon('shield')}<div><b>VLESS</b><span>پروتکل اصلی اشتراک</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="ev"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('shield')}<div><b>Shadowsocks</b><span>پروتکل جایگزین · بدون فرگمنت</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="es"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('shield')}<div><b>Trojan</b><span>پورت و رمز عبور</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="et"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('terminal')}<div><b>xHTTP</b><span>استریمینگ HTTP جدید</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="ex"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('lock')}<div><b>ECH</b><span>رمزنگاری SNI</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="ech"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('bolt')}<div><b>فرگمنت TLS</b><span>ضد DPI — شادوساکس فرگمنت ندارد</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="frag"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('wifi')}<div><b>EPI</b><span>IP پیش‌فرض کلاینت</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="epi"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('branch')}<div><b>زنجیره خانگی (JK)</b><span>اتصال زنجیره‌ای</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="jk"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('wifi')}<div><b>IPv4</b><span>آی‌پی‌های ثابت نسخه ۴</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="ipv4"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('wifi')}<div><b>IPv6</b><span>آی‌پی‌های ثابت نسخه ۶</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="ipv6"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('globe')}<div><b>دامنه‌های مستقیم (EPD)</b><span>نودهای دامنه CNAME</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="epd"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('globe')}<div><b>لیست آی‌پی خارجی (EGI)</b><span>واکشی از آدرس yxURL</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="egi"><i></i></label>
-            </div>
-          </div>
-
-          <div class="group-title" style="margin-top: 22px;">${icon('sliders')} <span data-i18n="settings.network">شبکه و ترنسپورت</span></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>رمز تروجان (tp)</label>
-              <input type="text" data-key="tp" list="dlTp" placeholder="اختیاری">
-            </div>
-            <div class="field">
-              <label>متد Shadowsocks</label>
-              <select data-key="ssmethod">
-                ${ssmethods.map(m => `<option value="${m}">${m} (سازگار با هسته)</option>`).join('')}
-              </select>
-              <span class="hint">هسته این ورکر فقط هدر متنی SS را می‌خواند؛ متدهای AEAD باعث بی‌پاسخ شدن نود می‌شوند.</span>
-            </div>
-            <div class="field" data-show-when="ech">
-              <label>دامنه ECH</label>
-              <select data-key="customECHDomain">
-                ${ECH_DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field" data-show-when="frag">
-              <label>پریست فرگمنت</label>
-              <select data-key="fragmentPreset">
-                ${Object.entries(FRAGMENT_PRESETS).map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>فینگرپرینت TLS</label>
-              <select data-key="fp">
-                ${FINGERPRINT_PRESETS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>الگوی مسیر (patt)</label>
-              <select data-key="patt">
-                ${PATH_PATTERNS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>چرخش آی‌پی</label>
-              <select data-key="ipRotation">
-                ${ipRotationOptions.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>ProxyIP سفارشی (p)</label>
-              <input type="text" data-key="p" list="dlProxyIp" placeholder="domain:port">
-            </div>
-            <div class="field">
-              <label>تعداد نود چندلوکیشن</label>
-              <input type="number" data-key="locationNodeCount" min="1" max="40" step="1" placeholder="8">
-            </div>
-            <div class="field">
-              <label>پروکسی خروجی (s)</label>
-              <input type="text" data-key="s" list="dlProxy" placeholder="socks5://user:pass@host:port">
-              <span class="hint">ترافیک خروجی از این پروکسی عبور می‌کند (همان مقدار در مسیر نود هم گذاشته می‌شود).</span>
-            </div>
-            <div class="field" data-show-when="frag">
-              <label>طول فرگمنت</label>
-              <input type="text" data-key="fragmentLength" list="dlFragmentLen" placeholder="100-200">
-            </div>
-            <div class="field" data-show-when="frag">
-              <label>فاصله فرگمنت</label>
-              <input type="text" data-key="fragmentInterval" list="dlFragmentInt" placeholder="10-20">
-            </div>
-            <div class="field" data-show-when="frag">
-              <label>نوع پکت فرگمنت</label>
-              <input type="text" data-key="fragmentPackets" list="dlFragmentPackets" placeholder="tlshello">
-            </div>
-            <div class="field">
-              <label data-i18n="field.dns">DNS سفارشی (DoH)</label>
-              <select id="dnsPreset">
-                ${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}
-                <option value="custom">سفارشی (مقدار دلخواه)</option>
-              </select>
-              <input type="text" data-key="customDNS" list="dlDNS" placeholder="https://223.5.5.5/dns-query" style="margin-top:8px;">
-              <span class="hint" data-i18n="field.dnsHint">یک DNS از لیست انتخاب کنید یا مقدار دلخواه DoH بنویسید.</span>
-            </div>
-            <div class="field">
-              <label data-i18n="field.ports">پورت‌های نود (ports)</label>
-              <input type="text" data-key="ports" list="dlPorts" placeholder="443,2053,2087,8443">
-              <span class="hint">لیست پورت‌ها با کاما — مجاز: ${CF_PORT_CHOICES.map(p => p.port).join(' , ')}. پورت HTTP فقط وقتی ECH خاموش است استفاده می‌شود.</span>
-            </div>
-            <div class="field">
-              <label>پورت‌های HTTP (حالت دوم هر نود)</label>
-              <input type="text" data-key="httpPorts" list="dlHttpPorts" placeholder="80,8080">
-              <span class="hint">هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ HTTP می‌گیرد؛ خالی بگذارید تا فقط نودهای TLS ساخته شوند.</span>
-            </div>
-          </div>
-
-          <div class="group-title" style="margin-top: 22px;">${icon('bolt')} <span data-i18n="settings.extra">دامنهٔ پنل، WARP و OpenVPN</span></div>
-          <div class="form-grid">
-            <div class="switch-row">
-              <div class="switch-meta">${icon('globe')}<div><b>نود دامنهٔ پنل</b><span>آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="pd"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('shield')}<div><b>WARP</b><span>نود WireGuard با ثبت‌نام واقعی کلادفلر</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="warp"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('bolt')}<div><b>WARP PRO</b><span>نیازمند لایسنس WARP+ برای حساب ثبت‌شده</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="warpPro"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('branch')}<div><b>WARP چندلوکیشن</b><span>چند نود با نقاط پایانی متفاوت کلادفلر</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="warpMl"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('lock')}<div><b>OpenVPN</b><span>پروفایل‌های زندهٔ VPNGate (چندکشوری)</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="ovpn"><i></i></label>
-            </div>
-            <div class="switch-row">
-              <div class="switch-meta">${icon('refresh')}<div><b>بروزرسانی خودکار نسخه</b><span>نسخهٔ تازهٔ گیت‌هاب بدون هیچ ورودی حسابی مستقر می‌شود</span></div></div>
-              <label class="switch"><input type="checkbox" data-key="autoUpdate"><i></i></label>
-            </div>
-            <div class="field">
-              <label>تعداد نود دامنهٔ پنل</label>
-              <input type="number" data-key="pdCount" min="0" max="20" step="1" placeholder="2">
-            </div>
-            <div class="field">
-              <label>تعداد نود WARP چندلوکیشن</label>
-              <input type="number" data-key="warpCount" min="1" max="30" step="1" placeholder="6">
-            </div>
-            <div class="field">
-              <label>لایسنس WARP+ (برای WARP PRO)</label>
-              <input type="text" data-key="warpLicense" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx">
-              <span class="hint">لایسنس روی حساب ثبت‌شده اعمال می‌شود؛ بدون آن نود با برچسب «بدون لایسنس» ساخته می‌شود.</span>
-            </div>
-            <div class="field">
-              <label>نقاط پایانی WARP سفارشی</label>
-              <input type="text" data-key="warpEndpoint" list="dlWarpEndpoint" placeholder="162.159.192.1:2408#DE,188.114.97.1:500#TR">
-              <span class="hint">خالی بگذارید تا نقاط پایانی رسمی کلادفلر به‌صورت چرخشی استفاده شوند. برچسب هر آی‌پی نام لوکیشن نود می‌شود.</span>
-            </div>
-            <div class="field">
-              <label>تعداد نود OpenVPN</label>
-              <input type="number" data-key="ovpnCount" min="0" max="12" step="1" placeholder="4">
-            </div>
-            <div class="field">
-              <label>کشورهای OpenVPN</label>
-              <input type="text" data-key="ovpnCountries" list="dlCountries" placeholder="JP,KR,US">
-              <span class="hint">کد کشورها با کاما (مثلاً JP,KR,US). خالی = انتخاب خودکار از کشورهای مختلف.</span>
-            </div>
-            <div class="field">
-              <label>منبع سفارشی OpenVPN</label>
-              <input type="text" data-key="ovpnSource" placeholder="https://raw.githubusercontent.com/.../server_0_JP.ovpn">
-              <span class="hint">آدرس یک یا چند فایل ‎.ovpn‎ با کاما. خالی = منابع پیش‌فرض گیت‌هاب.</span>
-            </div>
-          </div>
-
-          <div class="group-title" style="margin-top: 22px;">${icon('shield')} <span data-i18n="settings.panel">پنل و امنیت</span></div>
-          <div class="form-grid">
-            <div class="field">
-              <label data-i18n="field.adminPath">مسیر مدیریت (رندوم)</label>
-              <div class="toolbar">
-                <input type="text" id="adminPathView" class="mono" readonly style="flex:1;">
-                <button class="btn sm" type="button" data-act="copy-admin-path">${icon('copy')} کپی</button>
-                <button class="btn sm ghost" type="button" data-act="rotate-path">${icon('refresh')} <span data-i18n="btn.rotatePath">مسیر جدید</span></button>
-              </div>
-              <span class="hint">آدرس ثابت پنل همیشه <b>/admin</b> است؛ مسیر رندوم بالا (یا مسیر سفارشی d) هم به‌عنوان آدرس جایگزین کار می‌کند.</span>
-            </div>
-            <div class="field">
-              <label data-i18n="field.customPath">مسیر سفارشی پنل (d)</label>
-              <input type="text" data-key="d" list="dlAdminPath" placeholder="admin">
-              <span class="hint">در صورت خالی بودن، همان مسیر رندوم بالا استفاده می‌شود.</span>
-            </div>
-            <div class="field">
-              <label>صفحه استتار (homepage)</label>
-              <input type="text" data-key="homepage" list="dlHomepage" placeholder="https://example.com">
-            </div>
-            <div class="field">
-              <label>نودهای ترجیحی (yx)</label>
-              <input type="text" data-key="yx" list="dlYx" placeholder="1.2.3.4:443#Node, 5.6.7.8:443#Node2">
-            </div>
-            <div class="field">
-              <label data-i18n="field.nodeCount">تعداد نود هر کاربر</label>
-              <input type="number" data-key="subNodeCount" min="1" max="200" step="1">
-            </div>
-          </div>
-
-          <div id="configWarnings" class="warn-box" style="display:none;"></div>
-
-          <div class="toolbar" style="margin-top: 18px;">
-            <button class="btn primary" type="button" data-act="save-config">${icon('check')} <span data-i18n="btn.save">ذخیره تنظیمات</span></button>
-            <button class="btn ghost" type="button" data-act="reset-config">${icon('refresh')} <span data-i18n="btn.reset">بازنشانی پیش‌فرض</span></button>
-            <div class="spacer"></div>
-            <button class="btn" type="button" data-act="open-password">${icon('key')} <span data-i18n="btn.password">تغییر رمز مدیر</span></button>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="panel" data-panel="scanner">
       <div class="window">
         <div class="window-head">
@@ -1209,18 +1039,33 @@ export function renderAdminDashboardHtml(initialData = {}) {
               <select id="scanCountry">${countryOptions()}</select>
             </div>
             <div class="field">
-              <label data-i18n="scanner.kind">نوع</label>
+              <label data-i18n="scanner.kind">منبع آدرس</label>
               <select id="scanKind">
-                <option value="proxy" selected>پروکسی زنده (SOCKS5 / HTTP)</option>
-                <option value="ip">آی‌پی ثابت CF</option>
+                <option value="ipv4" selected>IPv4 — فهرست آی‌پی نسخهٔ ۴</option>
+                <option value="ipv6">IPv6 — فهرست آی‌پی نسخهٔ ۶</option>
+                <option value="domain">دامنه — فهرست دامنه‌های جایگزین</option>
+                <option value="proxyip">آدرس واسط — فهرست آمادهٔ ProxyIP</option>
+                <option value="proxy">پروکسی کشوری (SOCKS5 / HTTP)</option>
               </select>
             </div>
-            <div class="field" id="scanFamilyWrap">
+            <div class="field" id="scanFamilyWrap" style="display:none;">
               <label data-i18n="scanner.family">خانواده آی‌پی</label>
               <select id="scanFamily">
                 <option value="any" selected>IPv4 + IPv6</option>
                 <option value="ipv4">فقط IPv4</option>
                 <option value="ipv6">فقط IPv6</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>افزودن نتیجه به کاربر</label>
+              <select id="scanUser"><option value="">تنظیمات پیش‌فرض پنل</option></select>
+            </div>
+            <div class="field">
+              <label>مقصد نتیجه</label>
+              <select id="scanTarget">
+                <option value="yx" selected>آدرس‌های دستی</option>
+                <option value="p">آدرس واسط (ProxyIP)</option>
+                <option value="s">پروکسی خروجی</option>
               </select>
             </div>
             <div class="field">
@@ -1234,10 +1079,10 @@ export function renderAdminDashboardHtml(initialData = {}) {
             </div>
             <button class="btn primary" type="button" id="btnScan" data-act="run-scan">${icon('bolt')} <span data-i18n="btn.scan">دریافت و تست</span></button>
           </div>
-          <div class="scan-status" id="scanHint">آی‌پی‌های سالم با دکمهٔ «افزودن به yx» و پروکسی‌ها با «اتصال به s» در تنظیمات ذخیره می‌شوند.</div>
+          <div class="scan-status" id="scanHint">اسکنر منابع آدرس را مستقیم می‌خواند و هر آدرس را با تست اتصال بررسی می‌کند. نتیجهٔ آی‌پی در «آدرس‌های دستی» و پروکسی در «پروکسی خروجی» همان کاربری نوشته می‌شود که بالا انتخاب کردید.</div>
           <div class="toolbar" style="margin-top: 12px;">
-            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن آی‌پی‌های پیش‌فرض کلادفلر به yx</span></button>
-            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض کلادفلر به yx</span></button>
+            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن آی‌پی‌های پیش‌فرض کلادفلر به آدرس‌های دستی</span></button>
+            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض کلادفلر به آدرس‌های دستی</span></button>
           </div>
           <div class="scan-status" id="scanStatus"></div>
           <div class="table-wrap">
@@ -1270,7 +1115,21 @@ export function renderAdminDashboardHtml(initialData = {}) {
           <button class="btn sm ghost" type="button" data-act="copy-master">${icon('copy')} همه لوکیشن‌ها</button>
         </div>
         <div class="window-body">
-          <p class="loc-meta" style="margin: 0 0 12px;">بدون نیاز به اسکنر: هر لوکیشن از منابع داخلی و فیدهای همیشه‌به‌روز ساخته می‌شود؛ فقط لینک را کپی کنید. وارپ و وارپ‌پرو هم آماده و بدون تنظیم با فرمت ZIP قابل دانلود است.</p>
+          <p class="loc-meta" style="margin: 0 0 12px;">برای هر منطقه، آدرس‌های همان کشور از منابع عمومی خوانده و تست می‌شوند. با «آی‌پی تصادفی» چند آدرس سالم همان منطقه داخل تنظیمات کاربر انتخابی نوشته می‌شود.</p>
+          <div class="scan-controls" style="margin-bottom:12px;">
+            <div class="field">
+              <label>منطقه</label>
+              <select id="locRegion">${countryOptions()}</select>
+            </div>
+            <div class="field">
+              <label>کاربر هدف</label>
+              <select id="locUser"><option value="">تنظیمات پیش‌فرض پنل</option></select>
+            </div>
+            <button class="btn primary" type="button" data-act="loc-random-ip">${icon('bolt')} افزودن آی‌پی تصادفی</button>
+            <button class="btn" type="button" data-act="loc-random-ipv6">${icon('signal')} آی‌پی تصادفی IPv6</button>
+            <button class="btn ghost" type="button" data-act="loc-copy-region">${icon('copy')} کپی ساب همین منطقه</button>
+          </div>
+          <div class="scan-status" id="locStatus"></div>
           <div class="loc-grid" id="locGrid"></div>
         </div>
       </div>
@@ -1278,61 +1137,15 @@ export function renderAdminDashboardHtml(initialData = {}) {
   </main>
 
 
+  <!-- فرم ساخت/ویرایش کاربر: همهٔ گزینه‌های موتور به‌صورت داینامیک از
+       USER_FORM_SCHEMA ساخته می‌شوند تا هیچ متغیری جا نیفتد. -->
   <div class="modal" id="createModal">
-    <div class="modal-card">
-      <div class="modal-head"><b>${icon('plus')} ایجاد کاربر جدید</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="createModal">${icon('close')}</button></div>
-      <div class="modal-body">
-        <div class="field"><label>نام کاربری</label><input type="text" id="newUsername" placeholder="مثلاً ali"></div>
-        <div class="field"><label>پریست</label><select id="newPreset">${presetOptions}</select></div>
-        <div class="field"><label>حجم مجاز (GB) — صفر برای نامحدود</label><input type="number" id="newLimit" min="0" step="1" list="dlDataLimit" value="0"></div>
-        <div class="field"><label>مدت اعتبار (روز) — صفر برای بدون انقضا</label><input type="number" id="newDays" min="0" step="1" list="dlExpireDays" value="0"></div>
-        <div class="field"><label>تعداد نود در سابلینک</label><input type="number" id="newNodes" min="1" max="200" step="1" list="dlNodeCount" value="${Number(config.subNodeCount) || 50}"></div>
-        
-        <details class="adv-box" open>
-          <summary data-i18n="modal.advanced">تنظیمات کامل این کاربر (همه گزینه‌ها واقعی و روی ساب اثر دارند)</summary>
-          <div class="loc-meta" style="margin:8px 0 0;">با انتخاب پریست، مقادیر زیر پر می‌شوند و هر کدام را می‌توانید جداگانه تغییر دهید؛ ساب‌لینک و صفحه وضعیت دقیقاً از همین مقادیر ساخته می‌شوند.</div>
-          <div class="form-grid" style="margin-top:10px;">
-            <div class="field"><label>VLESS (WebSocket)</label><select id="cfgEv"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>Trojan (WebSocket)</label><select id="cfgEt"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>Shadowsocks</label><select id="cfgEs"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>xHTTP (ضد فیلتر)</label><select id="cfgEx"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>پورت‌های TLS</label><input type="text" id="cfgPorts" list="dlPorts" value="${config.ports || '443,2053,2087,8443'}" placeholder="443,2053,2087,8443"></div>
-            <div class="field"><label>پورت‌های HTTP (حالت دوم هر نود)</label><input type="text" id="cfgHttpPorts" list="dlHttpPorts" value="${config.httpPorts ?? '80,8080'}" placeholder="80,8080 — خالی برای حذف"></div>
-            <div class="field"><label>IPv4</label><select id="cfgIpv4"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
-            <div class="field"><label>IPv6</label><select id="cfgIpv6"><option value="yes">فعال</option><option value="no">غیرفعال</option></select></div>
-            <div class="field"><label>آی‌پی ثابت / لبهٔ CDN (epi)</label><select id="cfgEpi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>دامنه‌های لبه (epd)</label><select id="cfgEpd"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>لیست ترجیحی آنلاین (egi)</label><select id="cfgEgi"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>WARP</label><select id="cfgWarp"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>WARP PRO</label><select id="cfgWarpPro"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>OpenVPN</label><select id="cfgOvpn"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>فرگمنت TLS</label><select id="cfgFrag"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label>پریست فرگمنت</label>
-              <select id="cfgFragPreset">${Object.entries(FRAGMENT_PRESETS).map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>ECH</label><select id="cfgEch"><option value="yes">روشن</option><option value="no">خاموش</option></select></div>
-            <div class="field"><label data-i18n="field.echDomain">دامنه ECH</label>
-              <select id="cfgEchDomain">${ECH_DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label data-i18n="field.dns">DNS سفارشی</label>
-              <select id="cfgDNS">${DNS_PRESETS.map(d => `<option value="${d.value}">${d.name}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>ALPN</label>
-              <select id="cfgAlpn"><option value="">خودکار</option><option value="h2,http/1.1">h2 + http/1.1</option><option value="h3,h2,http/1.1">h3 + h2 + http/1.1</option></select>
-            </div>
-            <div class="field"><label data-i18n="field.fp">فینگرپرینت TLS</label>
-              <select id="cfgFp">${FINGERPRINT_PRESETS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label data-i18n="field.patt">الگوی مسیر</label>
-              <select id="cfgPatt">${PATH_PATTERNS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label data-i18n="field.yx">نودهای ترجیحی (yx)</label><input type="text" id="cfgYx" list="dlYx" placeholder="1.2.3.4:443#Node"></div>
-            <div class="field"><label data-i18n="field.outProxy">پروکسی خروجی (s)</label><input type="text" id="cfgS" list="dlProxy" placeholder="socks5://host:1080"></div>
-          </div>
-        </details>
-      </div>
+    <div class="modal-card wide user-form-modal">
+      <div class="modal-head"><b id="userFormTitle">${icon('plus')} ایجاد کاربر جدید</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="createModal">${icon('close')}</button></div>
+      <div class="form-tabs" id="userFormTabs" role="tablist"></div>
+      <div class="modal-body" id="userFormBody"></div>
       <div class="modal-foot">
-        <button class="btn primary" type="button" data-act="create-user">${icon('check')} <span data-i18n="modal.createBtn">ساخت کاربر</span></button>
+        <button class="btn primary" type="button" data-act="save-user" id="userFormSubmit">${icon('check')} <span data-i18n="modal.createBtn">ساخت کاربر</span></button>
         <button class="btn ghost" type="button" data-act="close-modal" data-modal="createModal"><span data-i18n="modal.cancel">انصراف</span></button>
       </div>
     </div>
@@ -1460,6 +1273,14 @@ export function renderAdminDashboardHtml(initialData = {}) {
 
   function $(id) { return document.getElementById(id); }
   function origin() { return window.location.origin; }
+  // دسترسی امن به حافظهٔ مرورگر (در حالت‌های مسدود/خصوصی خطا ندهد)
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  // اگر مرورگر پنجرهٔ تأیید را مسدود کند، به‌جای «هیچ اتفاقی نیفتادن» ادامه بده
+  function ask(msg) {
+    try { var r = window.confirm(msg); if (typeof r === 'boolean') return r; } catch (e) {}
+    return true;
+  }
   function userKey(u) { return (u && (u.uuid || u.id)) || ''; }
 
   function showToast(text, kind) {
@@ -1585,12 +1406,12 @@ export function renderAdminDashboardHtml(initialData = {}) {
       card.innerHTML = [
         '<div class="user-head">',
           '<div><div class="user-name">' + (u.username || ('کاربر ' + (idx + 1))) + '</div>',
-          '<div class="user-uuid">' + (u.preset ? t('card.preset') + ': ' + u.preset : t('card.subscription')) + ' · ' + (u.subNodeCount || 0) + ' ' + t('card.nodes') + '</div></div>',
+          '<div class="user-uuid">' + (u.preset ? t('card.preset') + ': ' + u.preset : t('card.subscription')) + ' · ' + t('card.nodesAuto') + '</div></div>',
           '<span class="pill ' + (u.enabled ? 'on' : 'off') + '">' + (u.enabled ? t('card.active') : t('card.inactive')) + '</span>',
         '</div>',
         '<div class="usage"><span>' + t('card.usage') + ' ' + fmtGb(used) + ' GB</span><span>' + (limitGb > 0 ? limitGb + ' GB' : t('card.unlimited')) + '</span></div>',
         '<div class="bar"><i style="width:' + Math.max(pct, 2) + '%"></i></div>',
-        '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + (u.subNodeCount || 0) + ' ' + t('card.nodes') + '</span></div>',
+        '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + t('card.nodesAuto') + '</span></div>',
         '<div class="user-tags">' + activeProtocols().map(function(p) { return '<span class="tag on">' + p + '</span>'; }).join('') + '</div>',
         '<div class="user-actions">',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '">' + ICO.copy + ' ' + t('btn.copySub') + '</button>',
@@ -1599,6 +1420,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=domain">' + ICO.globe + ' ' + t('btn.domainSub') + '</button>',
           '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=ipv6">' + ICO.signal + ' IPv6 همراه اول</button>',
           '<a class="btn sm" href="' + statusUrl + '" target="_blank" rel="noopener">' + ICO.external + ' ' + t('btn.status') + '</a>',
+          '<button class="btn sm primary" type="button" data-act="edit-user" data-id="' + u.id + '">' + ICO.settings + ' ' + t('btn.editUser') + '</button>',
           '<button class="btn sm ghost" type="button" data-act="test-nodes" data-user="' + userKey(u) + '">' + ICO.radar + ' ' + t('btn.testNodes') + '</button>',
           '<button class="btn sm ghost" type="button" data-act="reset-user" data-id="' + u.id + '">' + ICO.refresh + ' ' + t('btn.resetUser') + '</button>',
           '<button class="btn sm danger" type="button" data-act="delete-user" data-id="' + u.id + '">' + ICO.trash + '</button>',
@@ -1606,6 +1428,15 @@ export function renderAdminDashboardHtml(initialData = {}) {
       ].join('');
       grid.appendChild(card);
     });
+    // انتخاب کاربر هدف برای نوشتن نتیجهٔ اسکن (yx / s)
+    var targetSel = $('scanUser');
+    if (targetSel) {
+      var current = targetSel.value;
+      targetSel.innerHTML = '<option value="">تنظیمات پیش‌فرض پنل</option>' + users.map(function(u) {
+        return '<option value="' + u.id + '">' + (u.username || u.id) + '</option>';
+      }).join('');
+      targetSel.value = current && users.some(function(u) { return u.id === current; }) ? current : '';
+    }
     renderMetrics();
   }
 
@@ -1629,8 +1460,10 @@ export function renderAdminDashboardHtml(initialData = {}) {
       '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.download + ' ZIP</a>' +
       '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +
       '</div></div>';
+    var vipList = INITIAL_DATA.vipCountries || [];
     Object.keys(countries).forEach(function(code) {
-      html += '<div class="loc-card"><div><div class="loc-name">' + countries[code].name + '</div><div class="loc-meta">' + code + '</div></div>' +
+      var vip = vipList.indexOf(code) > -1;
+      html += '<div class="loc-card"><div><div class="loc-name">' + countries[code].name + (vip ? ' <span class="tag on">VIP</span>' : '') + '</div><div class="loc-meta">' + code + ' · ' + (vip ? 'منابع ویژه + منابع عادی' : 'منابع منطقه‌ای') + '</div></div>' +
         '<div class="toolbar">' +
         '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=' + code + '">' + ICO.copy + ' کپی</button>' +
         '<button class="btn sm ghost" type="button" data-act="country-proxy" data-code="' + code + '">' + ICO.link + ' پروکسی → s</button>' +
@@ -1638,6 +1471,59 @@ export function renderAdminDashboardHtml(initialData = {}) {
         '</div></div>';
     });
     grid.innerHTML = html;
+    var locUser = $('locUser');
+    if (locUser) {
+      var current = locUser.value;
+      locUser.innerHTML = '<option value="">تنظیمات پیش‌فرض پنل</option>' + (state.users || []).map(function(u) {
+        return '<option value="' + u.id + '">' + (u.username || u.id) + '</option>';
+      }).join('');
+      locUser.value = current && (state.users || []).some(function(u) { return u.id === current; }) ? current : '';
+    }
+  }
+
+  // افزودن تصادفی آی‌پی سالم همان منطقه به نودهای ترجیحی (yx) کاربر انتخابی
+  function locRandomIp(ipv6) {
+    var code = $('locRegion') ? $('locRegion').value : 'DE';
+    var status = $('locStatus');
+    var userId = $('locUser') ? $('locUser').value : '';
+    if (status) { status.className = 'scan-status'; status.textContent = 'در حال خواندن منابع آدرس و تست اتصال برای ' + code + '...'; }
+    var send = function(payload) {
+      return fetch(origin() + '/api/scanner/fetch-and-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(res) { return res.json(); });
+    };
+    send({ mode: ipv6 ? 'ipv6' : 'ipv4', country: code, limit: 8 })
+      .then(function(data) {
+        if (!data.success || !data.proxies || !data.proxies.length) {
+          if (status) { status.className = 'scan-status err'; status.textContent = data.message || 'آی‌پی سالمی پیدا نشد.'; }
+          return null;
+        }
+        var items = data.proxies.map(function(p) { return { ip: p.ip, port: p.port, name: p.ip }; });
+        return fetch(origin() + '/api/scanner/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Mili-Admin': '1' },
+          body: JSON.stringify({ target: 'yx', items: items, userId: userId })
+        }).then(function(res) { return res.json(); }).then(function(applied) {
+          if (status) {
+            status.className = applied.success ? 'scan-status' : 'scan-status err';
+            status.textContent = applied.message || (applied.success ? 'آی‌پی‌ها اضافه شدند' : 'افزودن آی‌پی ناموفق بود');
+          }
+          if (applied.success) reloadUsers();
+          return applied;
+        });
+      })
+      .catch(function() {
+        if (status) { status.className = 'scan-status err'; status.textContent = 'خطای شبکه در افزودن آی‌پی تصادفی.'; }
+      });
+  }
+
+  function locCopyRegion() {
+    var code = $('locRegion') ? $('locRegion').value : 'DE';
+    var user = (state.users || []).filter(function(u) { return u.id === ($('locUser') ? $('locUser').value : ''); })[0] || state.users[0];
+    var token = userKey(user) || ADMIN_PATH;
+    copyText(origin() + '/sub/' + token + '?country=' + code, 'ساب منطقهٔ ' + code + ' کپی شد');
   }
 
   function fillSettings() {
@@ -1666,7 +1552,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     }
   }
 
-  var LANG = localStorage.getItem('mili_lang') === 'en' ? 'en' : 'fa';
+  var LANG = lsGet('mili_lang') === 'en' ? 'en' : 'fa';
   function t(key) {
     var dict = (INITIAL_DATA.i18n || {})[LANG] || (INITIAL_DATA.i18n || {}).fa || {};
     return dict[key] || key;
@@ -1691,12 +1577,12 @@ export function renderAdminDashboardHtml(initialData = {}) {
   }
   function toggleTheme() {
     var light = document.body.classList.toggle('light-mode');
-    localStorage.setItem('mili_theme', light ? 'light' : 'dark');
+    lsSet('mili_theme', light ? 'light' : 'dark');
     updateThemeLabel();
   }
   function toggleLang() {
     LANG = LANG === 'fa' ? 'en' : 'fa';
-    localStorage.setItem('mili_lang', LANG);
+    lsSet('mili_lang', LANG);
     applyLanguage();
     renderUsers();
     renderLocations();
@@ -1712,135 +1598,382 @@ export function renderAdminDashboardHtml(initialData = {}) {
     if (c.frag === 'yes' && (!c.fragmentPreset || c.fragmentPreset === 'off')) out.push('فرگمنت روشن است اما پریست روی «غیرفعال» است؛ پارامتری ساخته نمی‌شود.');
     if (c.epi === 'no' && c.epd === 'no' && !String(c.yx || '').trim()) out.push('همه منابع آدرس خاموش‌اند؛ سابلینک فقط از هاست ورکر ساخته می‌شود.');
     if (c.ev === 'no' && c.et === 'no' && c.ex === 'no' && c.es === 'no') out.push('هیچ پروتکلی روشن نیست؛ هسته به‌ناچار VLESS را فعال می‌کند.');
-    if (String(c.s || '').trim() && !/^(socks5?|https?):\\/\\//i.test(String(c.s).trim())) out.push('آدرس پروکسی خروجی (s) باید با socks5:// یا http:// شروع شود.');
-    if (c.yxURL && c.egi === 'no') out.push('آدرس yxURL وارد شده اما لیست آی‌پی خارجی (EGI) خاموش است.');
+    if (String(c.s || '').trim() && !/^(socks5?|https?):\\/\\//i.test(String(c.s).trim())) out.push('آدرس پروکسی خروجی باید با socks5:// یا http:// شروع شود.');
+    if (c.yxURL && c.egi === 'no') out.push('منبع آنلاین آدرس وارد شده اما گزینهٔ «منبع آنلاین آدرس» خاموش است.');
     var ports = String(c.ports || '').split(/[,\\s]+/).filter(Boolean).map(Number).filter(function(p) { return p >= 1 && p <= 65535; });
     if (!ports.length) out.push('لیست پورت‌های نود خالی/نامعتبر است؛ از 443 استفاده می‌شود.');
-    if (c.ipRotation && c.ipRotation !== 'off' && !String(c.yx || '').trim()) out.push('چرخش آی‌پی فعال است اما لیست yx خالی است.');
-    if (c.warpPro === 'yes' && !String(c.warpLicense || '').trim()) out.push('WARP PRO روشن است اما لایسنس WARP+ وارد نشده؛ نود با برچسب «بدون لایسنس» ساخته می‌شود.');
+    if (c.ipRotation && c.ipRotation !== 'off' && !String(c.yx || '').trim()) out.push('چرخش آی‌پی فعال است اما فهرست آدرس‌های دستی خالی است.');
+    if (c.warpPro === 'yes' && !String(c.warpLicense || '').trim()) out.push('WARP پلاس روشن است اما لایسنس آن وارد نشده؛ نود با برچسب «بدون لایسنس» ساخته می‌شود.');
     return out;
   }
-  function renderWarnings(list) {
-    var box = $('configWarnings');
-    if (!box) return;
-    if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-    box.style.display = 'block';
-    box.innerHTML = '<b>' + t('warn.title') + '</b><ul>' + list.map(function(w) { return '<li>' + w + '</li>'; }).join('') + '</ul>';
+  // ------------------------------------------------------------------
+  // فرم ساخت/ویرایش کاربر — همهٔ گزینه‌های موتور
+  // ------------------------------------------------------------------
+  var USER_FORM_SCHEMA = [
+    {
+      id: 'protocols',
+      title: 'پروتکل‌ها',
+      fields: [
+        { key: 'ev', section: 'پروتکل‌های فعال', label: 'VLESS', hint: 'پروتکل اصلی؛ بهتر است روشن بماند', type: 'switch', def: 'yes' },
+        { key: 'et', section: 'پروتکل‌های فعال', label: 'Trojan', type: 'switch', def: 'no' },
+        { key: 'ex', section: 'پروتکل‌های فعال', label: 'xHTTP', type: 'switch', def: 'no' },
+        { key: 'es', section: 'پروتکل‌های فعال', label: 'Shadowsocks', type: 'switch', def: 'no' },
+        { key: 'tp', section: 'تنظیمات پروتکل', label: 'رمز Trojan', type: 'text', def: '', list: 'dlTp', ph: 'خالی = شناسهٔ خودکار کاربر' },
+        { key: 'sspass', section: 'تنظیمات پروتکل', label: 'رمز Shadowsocks', type: 'text', def: '', ph: 'خالی = شناسهٔ خودکار کاربر' },
+        { key: 'jk', section: 'تنظیمات پروتکل', label: 'زنجیرهٔ خانگی', type: 'switch', def: 'no' },
+        { key: 'dkby', section: 'تنظیمات پروتکل', label: 'حذف پورت‌های HTTP', type: 'switch', def: 'no' }
+      ]
+    },
+    {
+      id: 'transport',
+      title: 'امنیت و انتقال',
+      fields: [
+        { key: 'ech', section: 'امنیت', label: 'رمزنگاری ECH', type: 'switch', def: 'no' },
+        { key: 'customECHDomain', section: 'امنیت', label: 'دامنهٔ ECH', type: 'select', def: 'cloudflare-ech.com', options: 'echDomains', raw: true },
+        { key: 'customDNS', section: 'امنیت', label: 'سرور DNS رمزنگاری‌شده', type: 'select', def: 'https://223.5.5.5/dns-query', options: 'dnsPresets', raw: true },
+        { key: 'alpn', section: 'امنیت', label: 'پروتکل‌های لایهٔ انتقال (ALPN)', type: 'select', def: '', options: [['', 'خودکار'], ['h2,http/1.1', 'h2 + http/1.1'], ['h3,h2,http/1.1', 'h3 + h2 + http/1.1']] },
+        { key: 'fp', section: 'امنیت', label: 'اثر انگشت TLS', type: 'select', def: 'chrome', options: 'fingerprints' },
+        { key: 'patt', section: 'انتقال و فرگمنت', label: 'مسیر WebSocket', type: 'select', def: '/?ed=2048', options: 'pathPatterns' },
+        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'text', def: '443', list: 'dlPorts', ph: '443' },
+        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'text', def: '80', list: 'dlHttpPorts', ph: '80 — خالی برای حذف' },
+        { key: 'frag', section: 'انتقال و فرگمنت', label: 'فرگمنت TLS', type: 'switch', def: 'yes' },
+        { key: 'fragmentPreset', section: 'انتقال و فرگمنت', label: 'پریست فرگمنت', type: 'select', def: 'mci', options: 'fragmentPresets' },
+        { key: 'fragmentLength', section: 'انتقال و فرگمنت', label: 'طول فرگمنت', type: 'text', def: '100-200', list: 'dlFragmentLen' },
+        { key: 'fragmentInterval', section: 'انتقال و فرگمنت', label: 'فاصلهٔ فرگمنت', type: 'text', def: '10-20', list: 'dlFragmentInt' },
+        { key: 'fragmentPackets', section: 'انتقال و فرگمنت', label: 'نوع بسته‌های فرگمنت', type: 'text', def: 'tlshello', list: 'dlFragmentPackets' }
+      ]
+    },
+    {
+      id: 'addresses',
+      title: 'آدرس‌ها و منطقه',
+      fields: [
+        { key: 'ena', section: 'منابع آدرس', label: 'نود روی آدرس خود پنل', hint: 'آدرس پنل به‌عنوان یکی از نودها (مثل حالت پیش‌فرض کلادفلر)', type: 'switch', def: 'yes' },
+        { key: 'epi', section: 'منابع آدرس', label: 'آی‌پی‌های ثابت کلادفلر', type: 'switch', def: 'yes' },
+        { key: 'epd', section: 'منابع آدرس', label: 'دامنه‌های جایگزین', type: 'switch', def: 'yes' },
+        { key: 'egi', section: 'منابع آدرس', label: 'منبع آنلاین آدرس', type: 'switch', def: 'yes' },
+        { key: 'ipv4', section: 'منابع آدرس', label: 'آدرس‌های IPv4', type: 'switch', def: 'yes' },
+        { key: 'ipv6', section: 'منابع آدرس', label: 'آدرس‌های IPv6', type: 'switch', def: 'yes' },
+        { key: 'ispMobile', section: 'گروه‌های اپراتور', label: 'گروه اپراتور همراه اول', type: 'switch', def: 'yes' },
+        { key: 'ispUnicom', section: 'گروه‌های اپراتور', label: 'گروه اپراتور ایرانسل', type: 'switch', def: 'yes' },
+        { key: 'ispTelecom', section: 'گروه‌های اپراتور', label: 'گروه اپراتور مخابرات', type: 'switch', def: 'yes' },
+        { key: 'region', section: 'منطقه و آدرس‌های دلخواه', label: 'منطقه', type: 'select', def: 'auto', options: 'regions' },
+        { key: 'wk', section: 'منطقه و آدرس‌های دلخواه', label: 'منطقهٔ ورکر', type: 'text', def: '', ph: 'DE / NL / US…' },
+        { key: 'locationNodeCount', section: 'منطقه و آدرس‌های دلخواه', label: 'تعداد نود هر لوکیشن', type: 'number', def: 6, min: 1, max: 40 },
+        { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 5, wide: true, def: '', ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
+        { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
+        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.example.com:443' },
+        { key: 's', section: 'مسیر خروج', label: 'پروکسی خروجی', type: 'text', def: '', list: 'dlProxy', ph: 'socks5://host:1080' }
+      ]
+    },
+    {
+      id: 'advanced',
+      title: 'پیشرفته و پنل',
+      fields: [
+        { key: 'ae', section: 'دسترسی و مسیر', label: 'اجازهٔ دسترسی به API', type: 'switch', def: 'no' },
+        { key: 'rm', section: 'دسترسی و مسیر', label: 'حالت مسیر', type: 'text', def: '', ph: 'خالی = پیش‌فرض' },
+        { key: 'qj', section: 'دسترسی و مسیر', label: 'قفل آی‌پی', type: 'text', def: '', ph: 'خالی = غیرفعال' },
+        { key: 'yxby', section: 'دسترسی و مسیر', label: 'نادیده‌گرفتن آدرس‌های دستی', type: 'switch', def: 'no' },
+        { key: 'ipRotation', label: 'چرخش آی‌پی', type: 'select', def: 'off', options: [['off', 'غیرفعال'], ['5m', '۵ دقیقه'], ['15m', '۱۵ دقیقه'], ['30m', '۳۰ دقیقه'], ['1h', '۱ ساعت'], ['24h', '۲۴ ساعت']] },
+        { key: 'd', section: 'دسترسی و مسیر', label: 'مسیر اختصاصی کاربر', type: 'text', def: '', list: 'dlAdminPath' },
+        { key: 'homepage', section: 'دسترسی و مسیر', label: 'صفحهٔ استتار', type: 'text', def: '', list: 'dlHomepage' },
+        { key: 'scu', section: 'دسترسی و مسیر', label: 'سرویس تبدیل اشتراک', type: 'text', def: '', list: 'dlScu' },
+        { key: 'pd', section: 'دامنهٔ پنل', label: 'نود با دامنهٔ پنل', type: 'switch', def: 'no' },
+        { key: 'pdCount', section: 'دامنهٔ پنل', label: 'تعداد نود دامنهٔ پنل', type: 'number', def: 2, min: 0, max: 20 }
+      ]
+    },
+    {
+      id: 'extras',
+      title: 'افزونه‌ها',
+      fields: [
+        { key: 'warp', section: 'WARP', label: 'WARP', type: 'switch', def: 'no' },
+        { key: 'warpPro', section: 'WARP', label: 'WARP پلاس', type: 'switch', def: 'no' },
+        { key: 'warpMl', section: 'WARP', label: 'WARP چندلوکیشن', type: 'switch', def: 'no' },
+        { key: 'warpCount', section: 'WARP', label: 'تعداد WARP', type: 'number', def: 8, min: 1, max: 30 },
+        { key: 'warpLicense', section: 'WARP', label: 'لایسنس WARP پلاس', type: 'text', def: '' },
+        { key: 'warpEndpoint', section: 'WARP', label: 'نقاط پایانی WARP', type: 'text', def: '', list: 'dlWarpEndpoint' },
+        { key: 'ovpn', section: 'OpenVPN', label: 'OpenVPN', type: 'switch', def: 'no' },
+        { key: 'ovpnCount', section: 'OpenVPN', label: 'تعداد OpenVPN', type: 'number', def: 4, min: 0, max: 24 },
+        { key: 'ovpnCountries', section: 'OpenVPN', label: 'کشورهای OpenVPN', type: 'text', def: '', list: 'dlCountries' },
+        { key: 'ovpnSource', section: 'OpenVPN', label: 'منبع OpenVPN', type: 'text', def: '' }
+      ]
+    }
+  ];
+
+  var formState = { editingId: null, tab: 'basic' };
+  var NL = String.fromCharCode(10);
+  var SEP_RE = new RegExp('[,' + String.fromCharCode(10, 13) + ';،]+');
+
+  function optionHtml(field, current) {
+    var list = field.options;
+    var pairs = [];
+    if (typeof list === 'string') {
+      if (list === 'echDomains') pairs = (INITIAL_DATA.echDomains || []).map(function(d) { return [d, d]; });
+      else if (list === 'dnsPresets') pairs = (INITIAL_DATA.dnsPresets || []).map(function(d) { return [d.value, d.name]; });
+      else if (list === 'fingerprints') pairs = (INITIAL_DATA.fingerprints || []).map(function(f) { return [f.id, f.name]; });
+      else if (list === 'pathPatterns') pairs = (INITIAL_DATA.pathPatterns || []).map(function(p) { return [p.id, p.name]; });
+      else if (list === 'fragmentPresets') pairs = Object.keys(INITIAL_DATA.fragmentPresets || {}).map(function(id) { return [id, INITIAL_DATA.fragmentPresets[id].name || id]; });
+      else if (list === 'regions') {
+        pairs = [['auto', 'خودکار (بدون محدودیت منطقه)'], ['CF', 'مستقیم کلادفلر (CF)']];
+        var srcs = INITIAL_DATA.countrySources || {};
+        Object.keys(srcs).sort().forEach(function(code) { pairs.push([code, srcs[code].name + ' — ' + code]); });
+      }
+    } else if (Array.isArray(list)) {
+      pairs = list;
+    }
+    if (current !== undefined && current !== null && current !== '' && !pairs.some(function(p) { return String(p[0]) === String(current); })) {
+      pairs = pairs.concat([[current, current]]);
+    }
+    return pairs.map(function(p) {
+      return '<option value="' + String(p[0]).replace(/"/g, '&quot;') + '"' + (String(p[0]) === String(current) ? ' selected' : '') + '>' + p[1] + '</option>';
+    }).join('');
   }
 
-  function saveSettings() {
-    var payload = {};
-    document.querySelectorAll('.switch input[data-key]').forEach(function(input) {
-      payload[input.getAttribute('data-key')] = input.checked ? 'yes' : 'no';
+  function isPortNo(value) {
+    var s = String(value || '').trim();
+    if (!s || s.length > 5) return false;
+    for (var i = 0; i < s.length; i++) { if (s.charCodeAt(i) < 48 || s.charCodeAt(i) > 57) return false; }
+    return true;
+  }
+
+  // آدرس‌های دستی: هر خط (یا کاما) یک آدرس با قالب‌های آزاد قابل قبول است
+  function normalizeManualList(text) {
+    var seen = {}, out = [];
+    String(text || '').split(SEP_RE).forEach(function(line) {
+      var item = String(line || '').trim();
+      var scheme = item.indexOf('://');
+      if (scheme > -1) item = item.slice(scheme + 3);
+      var slash = item.indexOf('/');
+      if (slash > -1) item = item.slice(0, slash);
+      item = item.trim();
+      if (!item) return;
+      var name = '';
+      var hash = item.indexOf('#');
+      if (hash > -1) {
+        name = item.slice(hash + 1).trim();
+        item = item.slice(0, hash).trim();
+      }
+      var host = item, port = 443;
+      if (item.charAt(0) === '[') {
+        var close = item.indexOf(']');
+        if (close > 0) {
+          host = item.slice(1, close);
+          var tail = item.slice(close + 1).replace(/^:/, '');
+          if (isPortNo(tail)) port = parseInt(tail, 10);
+        }
+      } else if ((item.match(/:/g) || []).length === 1) {
+        var parts = item.split(':');
+        if (isPortNo(parts[1])) { host = parts[0]; port = parseInt(parts[1], 10); }
+      }
+      host = String(host || '').trim();
+      if (!host || host.split(' ').length > 1) return;
+      if (!(port > 0 && port <= 65535)) port = 443;
+      var key = host + ':' + port;
+      if (seen[key]) return;
+      seen[key] = 1;
+      var label = (name || (host + ':' + port)).replace(/,/g, ' ');
+      out.push((host.indexOf(':') > -1 ? '[' + host + ']' : host) + ':' + port + '#' + label);
     });
-    document.querySelectorAll('input[data-key], select[data-key]').forEach(function(input) {
-      if (input.type === 'checkbox') return;
-      payload[input.getAttribute('data-key')] = String(input.value || '').trim();
+    return out.join(',');
+  }
+
+  function manualListToLines(text) {
+    return String(text || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).join(NL);
+  }
+
+  function fieldHtml(field, value) {
+    var id = 'uf_' + field.key;
+    var val = value === undefined || value === null ? field.def : value;
+    var hint = field.hint ? '<span class="field-hint">' + field.hint + '</span>' : '';
+    var wideClass = field.wide ? ' style="grid-column: 1 / -1;"' : '';
+    if (field.type === 'textarea') {
+      var rows = field.rows || 4;
+      return '<div class="field"' + wideClass + '><label>' + field.label + '</label>' +
+        '<textarea id="' + id + '" data-uf="' + field.key + '" rows="' + rows + '" spellcheck="false" dir="ltr" placeholder="' +
+        String(field.ph || '').split(NL).join('&#10;').replace(/"/g, '&quot;') + '">' +
+        manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + '</div>';
+    }
+    if (field.type === 'switch') {
+      var on = String(val) === 'yes';
+      return '<div class="switch-row"><div class="switch-meta"><div><b>' + field.label + '</b>' + hint + '</div></div>' +
+        '<label class="switch"><input type="checkbox" id="' + id + '" data-uf="' + field.key + '" data-type="switch"' + (on ? ' checked' : '') + '><i></i></label></div>';
+    }
+    if (field.type === 'select') {
+      return '<div class="field"><label>' + field.label + '</label>' +
+        '<select id="' + id + '" data-uf="' + field.key + '">' + optionHtml(field, val) + '</select>' + hint + '</div>';
+    }
+    var attrs = 'type="' + (field.type === 'number' ? 'number' : 'text') + '" id="' + id + '" data-uf="' + field.key + '"';
+    if (field.type === 'number') attrs += ' min="' + (field.min === undefined ? 0 : field.min) + '" max="' + (field.max === undefined ? 999 : field.max) + '" step="1"';
+    if (field.list) attrs += ' list="' + field.list + '"';
+    if (field.ph) attrs += ' placeholder="' + field.ph.replace(/"/g, '&quot;') + '"';
+    return '<div class="field"><label>' + field.label + '</label>' +
+      '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + '</div>';
+  }
+
+  function formPaneHtml(group, cfg) {
+    var html = '', lastSection = null, open = false;
+    group.fields.forEach(function(field) {
+      if (field.section && field.section !== lastSection) {
+        if (open) html += '</div>';
+        html += '<div class="uf-section"><span>' + field.section + '</span><i></i></div><div class="form-grid">';
+        open = true;
+        lastSection = field.section;
+      } else if (!open) {
+        html += '<div class="form-grid">';
+        open = true;
+      }
+      html += fieldHtml(field, cfg[field.key]);
     });
-    var warnings = detectConflicts(payload);
-    renderWarnings(warnings);
-    if (warnings.length && !confirm(t('warn.title') + '\\n\\n' + warnings.map(function(w, i) { return (i + 1) + '. ' + w; }).join('\\n') + '\\n\\nادامه می‌دهید؟')) return;
-    var btn = document.querySelector('[data-act="save-config"]');
+    if (open) html += '</div>';
+    return html;
+  }
+
+  function switchUserFormTab(id) {
+    var modal = $('createModal');
+    if (!modal) return;
+    formState.tab = id;
+    modal.querySelectorAll('[data-uf-tab]').forEach(function(b) {
+      var on = b.getAttribute('data-uf-tab') === id;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on && b.scrollIntoView) b.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+    modal.querySelectorAll('[data-uf-pane]').forEach(function(p) {
+      p.classList.toggle('is-active', p.getAttribute('data-uf-pane') === id);
+    });
+    var body = $('userFormBody');
+    if (body) body.scrollTop = 0;
+  }
+
+  function renderUserForm(user, presetId) {
+    var body = $('userFormBody');
+    if (!body) return;
+    // برای کاربر جدید، مقادیر از تنظیمات کلی پنل و برای ویرایش از خود کاربر
+    var base = user ? (INITIAL_DATA.defaults || {}) : Object.assign({}, INITIAL_DATA.defaults || {}, state.config || {});
+    var cfg = Object.assign({}, base, (user && user.config) || {});
+    var preset = (INITIAL_DATA.presets || {})[presetId || (user && user.preset) || 'iran-fast'];
+    if (preset && preset.configOverrides) cfg = Object.assign({}, cfg, preset.configOverrides);
+    var activeTab = formState.tab || 'basic';
+    var basicHtml = '<div class="uf-section"><span>مشخصات کاربر</span><i></i></div>' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>نام کاربری</label><input type="text" id="uf_username" value="' + String((user && user.username) || '').replace(/"/g, '&quot;') + '" placeholder="مثلاً ali"></div>' +
+      '<div class="field"><label>پریست آماده</label><select id="uf_preset">' + Object.keys(INITIAL_DATA.presets || {}).map(function(k) {
+        var p = INITIAL_DATA.presets[k];
+        return '<option value="' + k + '"' + (k === (presetId || (user && user.preset)) ? ' selected' : '') + '>' + p.title + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="field"><label>یادداشت</label><input type="text" id="uf_note" value="' + String((user && user.note) || '').replace(/"/g, '&quot;') + '"></div>' +
+      '<div class="field"><label>شناسهٔ کاربر (UUID)</label><input type="text" id="uf_uuid" class="mono" value="' + String((user && user.uuid) || '') + '" placeholder="خالی = ساخت خودکار"></div>' +
+      '</div>' +
+      '<div class="uf-section"><span>سهمیه و محدودیت</span><i></i></div>' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>حجم مجاز (گیگابایت) — ۰ = نامحدود</label><input type="number" id="uf_dataLimitGb" min="0" step="1" list="dlDataLimit" value="' + Number((user && user.dataLimitGb) || 0) + '"></div>' +
+      '<div class="field"><label>مدت اعتبار (روز) — ۰ = بدون انقضا</label><input type="number" id="uf_expireDays" min="0" step="1" list="dlExpireDays" value="' + Number((user && user.expireDays) || 0) + '"></div>' +
+      '<div class="field"><label>سقف دستگاه متصل</label><input type="number" id="uf_ipLimit" min="1" max="200" step="1" value="' + Number((user && user.ipLimit) || 50) + '"></div>' +
+      '</div>' +
+      '<div class="field" style="margin-top:10px;"><span class="field-hint">تعداد کانفیگ را خود پنل تعیین می‌کند؛ هر آدرس فعال از تب «آدرس‌ها و منطقه» به یک نود تبدیل می‌شود و نیازی به انتخاب دستی تعداد نیست.</span></div>';
+
+    var tabButton = function(id, label) {
+      var on = activeTab === id;
+      return '<button type="button" role="tab" aria-selected="' + (on ? 'true' : 'false') + '" class="ftab' + (on ? ' is-active' : '') + '" data-uf-tab="' + id + '"><i class="ftab-dot"></i>' + label + '</button>';
+    };
+    var tabsHtml = tabButton('basic', 'اطلاعات کاربر');
+    USER_FORM_SCHEMA.forEach(function(group) { tabsHtml += tabButton(group.id, group.title); });
+    var tabsBar = $('userFormTabs');
+    if (tabsBar) tabsBar.innerHTML = tabsHtml;
+
+    var html = '<div class="uf-pane' + (activeTab === 'basic' ? ' is-active' : '') + '" data-uf-pane="basic">' + basicHtml + '</div>';
+    USER_FORM_SCHEMA.forEach(function(group) {
+      html += '<div class="uf-pane' + (activeTab === group.id ? ' is-active' : '') + '" data-uf-pane="' + group.id + '">' + formPaneHtml(group, cfg) + '</div>';
+    });
+    body.innerHTML = html;
+    formState.tab = activeTab;
+    formState.editingId = user ? user.id : null;
+    if ($('userFormTitle')) $('userFormTitle').innerHTML = (user ? ICO.refresh + ' ویرایش کاربر «' + (user.username || '') + '»' : ICO.plus + ' ایجاد کاربر جدید');
+    if ($('userFormSubmit')) $('userFormSubmit').innerHTML = user ? ICO.check + ' ذخیرهٔ تغییرات' : ICO.check + ' ساخت کاربر';
+  }
+
+  function collectUserForm() {
+    var body = $('userFormBody');
+    var config = {};
+    if (body) {
+      body.querySelectorAll('[data-uf]').forEach(function(el) {
+        var key = el.getAttribute('data-uf');
+        if (el.getAttribute('data-type') === 'switch') { config[key] = el.checked ? 'yes' : 'no'; return; }
+        if (el.type === 'number') {
+          var num = parseInt(el.value, 10);
+          config[key] = Number.isFinite(num) ? num : 0;
+          return;
+        }
+        if (key === 'yx') { config[key] = normalizeManualList(el.value); return; }
+        config[key] = String(el.value || '').trim();
+      });
+    }
+    var val = function(id, fallback) { return $(id) ? String($(id).value || '').trim() : fallback; };
+    return {
+      username: val('uf_username', ''),
+      preset: val('uf_preset', 'iran-fast'),
+      uuid: val('uf_uuid', ''),
+      note: val('uf_note', ''),
+      dataLimitGb: Number(val('uf_dataLimitGb', '0')) || 0,
+      expireDays: Number(val('uf_expireDays', '0')) || 0,
+      ipLimit: Number(val('uf_ipLimit', '50')) || 50,
+      config: config
+    };
+  }
+
+  function openUserForm(user) {
+    formState.tab = 'basic';
+    renderUserForm(user || null, null);
+    openModal('createModal');
+  }
+
+  function saveUser() {
+    var body = collectUserForm();
+    if (body.username.length < 2) { showToast('نام کاربری باید حداقل ۲ کاراکتر باشد', 'err'); return; }
+    // هشدارهای تداخل تنظیمات (فقط نمایش؛ جلوی ذخیره را نمی‌گیرد)
+    var conflicts = detectConflicts(body.config);
+    if (conflicts.length) showToast('هشدار: ' + conflicts[0], 'err');
+    var isEdit = Boolean(formState.editingId);
+    var payload = body;
+    if (isEdit) payload.id = formState.editingId;
+    var btn = $('userFormSubmit');
     if (btn) btn.disabled = true;
-    api('/api/config', { method: 'POST', body: JSON.stringify(payload) })
+    api('/api/users', { method: isEdit ? 'PUT' : 'POST', body: JSON.stringify(payload) })
       .then(function(data) {
         if (data.success) {
-          state.config = Object.assign({}, state.config, payload);
-          fillSettings();
-          renderMetrics();
-          // پیام سرور دقیقاً می‌گوید در D1 ذخیره شد یا نه (تأیید با خواندن مجدد)
-          showToast(data.message || 'تنظیمات ذخیره شد', data.storedInD1 === false ? 'err' : 'ok');
-          if (data.storage) {
-            state.diagnostics = Object.assign({}, state.diagnostics, { storageMode: data.storage.mode });
-            if ($('storageText')) $('storageText').textContent = 'ذخیره‌سازی ' + data.storage.mode;
+          if (isEdit) {
+            state.users = state.users.map(function(u) { return u.id === data.user.id ? data.user : u; });
+          } else {
+            state.users.unshift(data.user);
           }
+          renderUsers(); renderLocations();
+          closeModal('createModal');
+          showToast(data.message || (isEdit ? 'کاربر ویرایش شد' : 'کاربر ساخته شد'), 'ok');
         } else {
-          showToast(data.message || 'خطا در ذخیره تنظیمات', 'err');
+          showToast(data.message || 'خطا در ذخیرهٔ کاربر', 'err');
         }
       })
-      .catch(function() { showToast('خطای شبکه در ذخیره تنظیمات', 'err'); })
+      .catch(function() { showToast('خطای شبکه در ذخیرهٔ کاربر', 'err'); })
       .finally(function() { if (btn) btn.disabled = false; });
   }
 
-  // پریست فقط فرم را پر می‌کند؛ تنها مسیر ساخت کاربر همین فرم است و هر مقدار
-  // را می‌شودپیش از ساخت دستی تغییر داد (همه گزینه‌ها واقعی‌اند).
-  function applyPresetToForm() {
-    var presets = INITIAL_DATA.presets || {};
-    var chosen = presets[$('newPreset') ? $('newPreset').value : ''];
-    if (!chosen) return;
-    var overrides = chosen.configOverrides || {};
-    var map = {
-      cfgEv: 'ev', cfgEt: 'et', cfgEs: 'es', cfgEx: 'ex', cfgEch: 'ech',
-      cfgFrag: 'frag', cfgFragPreset: 'fragmentPreset', cfgDNS: 'customDNS',
-      cfgEchDomain: 'customECHDomain', cfgPorts: 'ports', cfgHttpPorts: 'httpPorts',
-      cfgIpv4: 'ipv4', cfgIpv6: 'ipv6', cfgEpi: 'epi', cfgEpd: 'epd', cfgEgi: 'egi',
-      cfgWarp: 'warp', cfgWarpPro: 'warpPro', cfgOvpn: 'ovpn', cfgFp: 'fp',
-      cfgPatt: 'patt', cfgAlpn: 'alpn'
-    };
-    Object.keys(map).forEach(function(id) {
-      var el = $(id);
-      var key = map[id];
-      if (!el || overrides[key] === undefined) return;
-      var value = overrides[key];
-      if (el.tagName === 'SELECT' && !Array.from(el.options).some(function(o) { return o.value === String(value); })) return;
-      el.value = String(value);
-    });
-    if ($('newNodes')) $('newNodes').value = chosen.subNodeCount || 50;
-    if ($('newLimit')) $('newLimit').value = chosen.dataLimitGb || 0;
-    if ($('newDays')) $('newDays').value = chosen.expireDays || 0;
-  }
-
-  function createUser() {
-    var username = ($('newUsername').value || '').trim();
-    if (username.length < 2) { showToast('نام کاربری باید حداقل ۲ کاراکتر باشد', 'err'); return; }
-    var pick = function(id, fallback) { return $(id) ? $(id).value : fallback; };
-    var body = {
-      username: username,
-      preset: $('newPreset').value,
-      dataLimitGb: Number($('newLimit').value) || 0,
-      expireDays: Number($('newDays').value) || 0,
-      subNodeCount: Number($('newNodes').value) || 50,
-      config: {
-        ev: pick('cfgEv', 'yes'),
-        et: pick('cfgEt', 'yes'),
-        es: pick('cfgEs', 'yes'),
-        ex: pick('cfgEx', 'yes'),
-        ech: pick('cfgEch', 'no'),
-        frag: pick('cfgFrag', 'yes'),
-        fragmentPreset: pick('cfgFragPreset', 'mci'),
-        customDNS: pick('cfgDNS', ''),
-        customECHDomain: pick('cfgEchDomain', ''),
-        ports: pick('cfgPorts', '').trim(),
-        httpPorts: pick('cfgHttpPorts', '').trim(),
-        ipv4: pick('cfgIpv4', 'yes'),
-        ipv6: pick('cfgIpv6', 'yes'),
-        epi: pick('cfgEpi', 'yes'),
-        epd: pick('cfgEpd', 'yes'),
-        egi: pick('cfgEgi', 'yes'),
-        warp: pick('cfgWarp', 'yes'),
-        warpPro: pick('cfgWarpPro', 'no'),
-        ovpn: pick('cfgOvpn', 'yes'),
-        alpn: pick('cfgAlpn', ''),
-        fp: pick('cfgFp', 'chrome'),
-        patt: pick('cfgPatt', '/?ed=2048'),
-        yx: pick('cfgYx', '').trim(),
-        s: pick('cfgS', '').trim()
-      }
-    };
-    api('/api/users', { method: 'POST', body: JSON.stringify(body) })
+  function editUser(id) {
+    var user = (state.users || []).filter(function(u) { return u.id === id; })[0];
+    if (!user) { showToast('کاربر یافت نشد', 'err'); return; }
+    // همیشه تازه‌ترین نسخه را از سرور بگیر تا همهٔ متغیرها (config) کامل باشد
+    api('/api/users?t=' + Date.now())
       .then(function(data) {
         if (data.success) {
-          state.users.push(data.user);
-          renderUsers();
-          renderLocations();
-          closeModal('createModal');
-          $('newUsername').value = '';
-          showToast(data.message || 'کاربر ساخته شد', 'ok');
-        } else {
-          showToast(data.message || 'خطا در ساخت کاربر', 'err');
+          state.users = data.users || state.users;
+          user = state.users.filter(function(u) { return u.id === id; })[0] || user;
         }
+        openUserForm(user);
       })
-      .catch(function() { showToast('خطای شبکه در ساخت کاربر', 'err'); });
+      .catch(function() { openUserForm(user); });
+  }
+
+  function applyPresetToForm() {
+    var presetId = $('uf_preset') ? $('uf_preset').value : 'iran-fast';
+    renderUserForm(formState.editingId ? (state.users || []).filter(function(u) { return u.id === formState.editingId; })[0] : null, presetId);
   }
 
   // ---------- نسخه و بروزرسانی ----------
@@ -1984,7 +2117,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
   }
 
   function disableAutoUpdate() {
-    if (!confirm('بروزرسانی خودکار خاموش شود؟')) return;
+    if (!ask('بروزرسانی خودکار خاموش شود؟')) return;
     api('/api/auto-update-setup', { method: 'POST', body: JSON.stringify({ action: 'disable' }) })
       .then(function(data) {
         showToast(data.success ? 'بروزرسانی خودکار خاموش شد' : 'خطا', data.success ? 'ok' : 'err');
@@ -1994,7 +2127,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
   }
 
   function applyUpdateNow() {
-    if (!confirm('نسخهٔ تازهٔ گیت‌هاب روی همین ورکر مستقر شود؟')) return;
+    if (!ask('نسخهٔ تازهٔ گیت‌هاب روی همین ورکر مستقر شود؟')) return;
     var btn = document.querySelector('[data-act="apply-update"]');
     if (btn) btn.disabled = true;
     showToast('در حال دریافت و استقرار نسخهٔ تازه...', 'ok');
@@ -2019,7 +2152,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
   }
 
   function deleteUser(id) {
-    if (!confirm('این کاربر حذف شود؟')) return;
+    if (!ask('این کاربر حذف شود؟')) return;
     api('/api/users?id=' + encodeURIComponent(id), { method: 'DELETE' })
       .then(function(data) {
         if (data.success) {
@@ -2034,7 +2167,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
   }
 
   function resetUser(id) {
-    if (!confirm('مصرف این کاربر صفر شود؟')) return;
+    if (!ask('مصرف این کاربر صفر شود؟')) return;
     api('/api/users', { method: 'PUT', body: JSON.stringify({ id: id, action: 'reset' }) })
       .then(function(data) {
         if (data.success) {
@@ -2068,11 +2201,13 @@ export function renderAdminDashboardHtml(initialData = {}) {
     }
     body.innerHTML = items.map(function(p) {
       var latClass = p.latencyMs < 150 ? 'lat-fast' : (p.latencyMs < 400 ? 'lat-med' : 'lat-slow');
-      var isIp = p.kind === 'ip';
+      var isProxyIp = p.kind === 'proxyip';
+      var isIp = p.kind === 'ip' || isProxyIp;
       var ipLabel = p.family === 'ipv6' ? 'IPv6' : (p.family === 'domain' ? t('scan.domain') : 'IPv4');
-      var typeLabel = isIp ? (t('scan.ipStatic') + ' · ' + ipLabel) : (t('scan.proxy') + ' · ' + p.protocol);
+      var typeLabel = isProxyIp ? 'آدرس واسط · ' + p.protocol : (isIp ? (t('scan.ipStatic') + ' · ' + ipLabel) : (t('scan.proxy') + ' · ' + p.protocol));
+      var targetLabel = { yx: 'آدرس‌های دستی', p: 'آدرس واسط', s: 'پروکسی خروجی' }[scanTargetValue()];
       var action = isIp
-        ? '<button class="btn sm" type="button" data-act="add-ip" data-ip="' + p.ip + '" data-port="' + p.port + '">' + ICO.plus + ' ' + t('btn.addToYx') + '</button>'
+        ? '<button class="btn sm" type="button" data-act="add-ip" data-ip="' + p.ip + '" data-port="' + p.port + '">' + ICO.plus + ' به ' + targetLabel + '</button>'
         : '<button class="btn sm" type="button" data-act="use-proxy" data-proxy="' + String(p.proxy || '').replace(/"/g, '&quot;') + '">' + ICO.link + ' ' + t('btn.connectS') + '</button>';
       return '<tr>' +
         '<td><span class="code-badge">' + p.code + '</span> ' + p.country + '</td>' +
@@ -2093,16 +2228,27 @@ export function renderAdminDashboardHtml(initialData = {}) {
     }).then(function(res) { return res.json(); });
   }
 
+  function scanTargetValue() {
+    var el = $('scanTarget');
+    var v = el ? el.value : 'yx';
+    return v === 'p' || v === 's' ? v : 'yx';
+  }
+
   function applyScanItems(target, items) {
+    target = target || scanTargetValue();
+    var userId = $('scanUser') ? $('scanUser').value : '';
     return fetch(origin() + '/api/scanner/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Mili-Admin': '1' },
-      body: JSON.stringify({ target: target, items: items })
+      body: JSON.stringify({ target: target, items: items, userId: userId })
     })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         showToast(data.message || (data.success ? 'اعمال شد' : 'خطا در اعمال'), data.success ? 'ok' : 'err');
         if (data.success) {
+          if (userId) api('/api/users?t=' + Date.now()).then(function(list) {
+            if (list.success) { state.users = list.users || []; renderUsers(); renderLocations(); }
+          }).catch(function() {});
           return api('/api/config').then(function(cfg) {
             if (cfg && typeof cfg === 'object' && !cfg.error) {
               state.config = Object.assign({}, state.config, cfg);
@@ -2119,18 +2265,21 @@ export function renderAdminDashboardHtml(initialData = {}) {
   function runScan() {
     var country = $('scanCountry').value;
     var limit = $('scanLimit').value;
-    var kind = $('scanKind') ? $('scanKind').value : 'proxy';
+    var kind = $('scanKind') ? $('scanKind').value : 'ipv4';
     var family = $('scanFamily') ? $('scanFamily').value : 'any';
+    var cfMode = ['ipv4', 'ipv6', 'domain', 'proxyip'].indexOf(kind) > -1;
     var btn = $('btnScan');
     var status = $('scanStatus');
     btn.disabled = true;
     status.className = 'scan-status';
-    status.textContent = kind === 'ip'
-      ? 'در حال نمونه‌گیری و تست واقعی آی‌پی‌های ثابت...'
+    status.textContent = cfMode
+      ? 'در حال خواندن منابع آدرس و تست اتصال...'
       : 'در حال دریافت زنده لیست‌ها و تست واقعی اتصال TCP...';
     $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
 
-    scanRequest({ country: country, limit: limit, kind: kind, family: family })
+    scanRequest(cfMode
+      ? { mode: kind, country: country, limit: limit }
+      : { country: country, limit: limit, kind: kind, family: family })
       .then(function(data) {
         // خلاصهٔ سلامت منابع و زمان اسکن، تا اگر نتیجه صفر بود دلیلش دیده شود
         var diag = '';
@@ -2168,12 +2317,12 @@ export function renderAdminDashboardHtml(initialData = {}) {
     var famWrap = $('scanFamilyWrap');
     if (famWrap) {
       var kindSel = $('scanKind');
-      famWrap.style.display = (kindSel && kindSel.value === 'ip') ? '' : 'none';
+      famWrap.style.display = (kindSel && kindSel.value === 'proxy') ? '' : 'none';
     }
   }
 
   function rotatePath() {
-    if (!confirm(t('toast.rotateConfirm'))) return;
+    if (!ask(t('toast.rotateConfirm'))) return;
     fetch(origin() + '/api/admin/rotate-path', { method: 'POST' })
       .then(function(res) { return res.json(); })
       .then(function(data) {
@@ -2223,13 +2372,16 @@ export function renderAdminDashboardHtml(initialData = {}) {
     if (!items.length) { showToast('لیست پیش‌فرض خالی است', 'err'); return; }
     applyScanItems('yx', items).then(function(data) {
       if (data && data.success) {
-        showToast((kind === 'ips' ? 'آی‌پی‌های پیش‌فرض کلادفلر' : 'دامنه‌های پیش‌فرض کلادفلر') + ' به yx اضافه شدند', 'ok');
+        showToast((kind === 'ips' ? 'آی‌پی‌های پیش‌فرض کلادفلر' : 'دامنه‌های پیش‌فرض کلادفلر') + ' به آدرس‌های دستی اضافه شدند', 'ok');
       }
     });
   }
 
   function addNode(ip, port) {
-    return applyScanItems('yx', [{ ip: ip, port: Number(port) || 443, name: ip }]);
+    var host = String(ip || '').trim();
+    var p = Number(port) || 443;
+    if (scanTargetValue() === 'p') return applyScanItems('p', [{ ip: host, port: p }]);
+    return applyScanItems('yx', [{ ip: host, port: p, name: host }]);
   }
 
   function useProxy(proxyUrl) {
@@ -2266,14 +2418,14 @@ export function renderAdminDashboardHtml(initialData = {}) {
   function countryIp(code) {
     showPanel('scanner');
     if ($('scanCountry')) $('scanCountry').value = code;
-    if ($('scanKind')) $('scanKind').value = 'ip';
+    if ($('scanKind')) $('scanKind').value = 'ipv4';
     if ($('scanFamily')) $('scanFamily').value = 'any';
     syncConditionalFields();
     var status = $('scanStatus');
     status.className = 'scan-status';
     status.textContent = 'در حال تست آی‌پی‌های ثابت...';
     $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
-    scanRequest({ country: code, limit: 10, kind: 'ip', family: 'any' })
+    scanRequest({ mode: 'ipv4', country: code, limit: 10 })
       .then(function(data) {
         if (!data.success || !data.proxies || !data.proxies.length) {
           status.className = 'scan-status err';
@@ -2282,7 +2434,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
         }
         renderScanRows(data.proxies);
         return applyScanItems('yx', data.proxies.slice(0, 3).map(function(p) { return { ip: p.ip, port: p.port, name: p.ip }; }))
-          .then(function() { status.textContent = 'آی‌پی‌های ثابت به yx اضافه شدند (سوییچ EPI را روشن نگه دارید).'; });
+          .then(function() { status.textContent = 'آدرس‌های ثابت به «آدرس‌های دستی» اضافه شدند (گزینهٔ آی‌پی‌های ثابت کلادفلر را روشن نگه دارید).'; });
       })
       .catch(function() {
         status.className = 'scan-status err';
@@ -2329,13 +2481,18 @@ export function renderAdminDashboardHtml(initialData = {}) {
     var tab = event.target.closest('[data-tab]');
     if (tab) { showPanel(tab.getAttribute('data-tab')); return; }
 
+    var formTab = event.target.closest('[data-uf-tab]');
+    if (formTab) { switchUserFormTab(formTab.getAttribute('data-uf-tab')); return; }
+
     var el = event.target.closest('[data-act]');
     if (!el) return;
     var act = el.getAttribute('data-act');
 
     if (act === 'copy') { copyText(el.getAttribute('data-url') || '', 'لینک کپی شد'); }
     else if (act === 'copy-master') { copyText(masterSub(), 'سابلینک اصلی کپی شد'); }
-    else if (act === 'open-create') { openModal('createModal'); applyPresetToForm(); }
+    else if (act === 'open-create') { openUserForm(null); }
+    else if (act === 'edit-user') { editUser(el.getAttribute('data-id')); }
+    else if (act === 'save-user' || act === 'create-user') { saveUser(); }
     else if (act === 'toggle-drawer') { toggleDrawer(); }
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'check-update') { showPanel('dashboard'); checkUpdate(); }
@@ -2348,20 +2505,19 @@ export function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'open-password') { openModal('passwordModal'); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }
-    else if (act === 'create-user') { createUser(); }
     else if (act === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
     else if (act === 'reset-user') { resetUser(el.getAttribute('data-id')); }
     else if (act === 'reload-users') { reloadUsers(); }
-    else if (act === 'save-config') { saveSettings(); }
-    else if (act === 'reset-config') { resetConfig(); }
     else if (act === 'save-password') { savePassword(); }
     else if (act === 'logout') { logout(); }
     else if (act === 'go-scan') { showPanel('scanner'); }
-    else if (act === 'go-settings') { showPanel('settings'); }
     else if (act === 'run-scan') { runScan(); }
     else if (act === 'add-node' || act === 'add-ip') { addNode(el.getAttribute('data-ip'), el.getAttribute('data-port')); }
     else if (act === 'use-proxy') { useProxy(el.getAttribute('data-proxy')); }
     else if (act === 'country-proxy') { countryProxy(el.getAttribute('data-code')); }
+    else if (act === 'loc-random-ip') { locRandomIp(false); }
+    else if (act === 'loc-random-ipv6') { locRandomIp(true); }
+    else if (act === 'loc-copy-region') { locCopyRegion(); }
     else if (act === 'country-ip') { countryIp(el.getAttribute('data-code')); }
     else if (act === 'toggle-theme') { toggleTheme(); }
     else if (act === 'toggle-lang') { toggleLang(); }
@@ -2385,30 +2541,20 @@ export function renderAdminDashboardHtml(initialData = {}) {
       var key = target.getAttribute('data-key');
       if (key === 'frag' || key === 'ech') syncConditionalFields();
     }
-    if (target.id === 'scanKind') syncConditionalFields();
-    if (target.id === 'newPreset') applyPresetToForm();
+    if (target.id === 'scanKind') {
+      syncConditionalFields();
+      // مقصد نتیجه بر اساس نوع منبع پیشنهاد می‌شود: آدرس واسط ← ProxyIP، پروکسی ← خروجی
+      if ($('scanTarget')) {
+        var sel = $('scanKind').value;
+        $('scanTarget').value = sel === 'proxyip' ? 'p' : (sel === 'proxy' ? 's' : 'yx');
+      }
+    }
+    if (target.id === 'uf_preset') applyPresetToForm();
     if (target.id === 'dnsPreset') {
       var dnsInput = document.querySelector('input[data-key="customDNS"]');
       if (dnsInput && target.value !== 'custom') dnsInput.value = target.value;
     }
   });
-
-  function resetConfig() {
-    if (!confirm('همه تنظیمات به مقادیر پیش‌فرض بازگردد؟')) return;
-    api('/api/config', { method: 'POST', body: JSON.stringify({ _reset: true }) })
-      .then(function(data) {
-        if (data.success) {
-          state.config = data.config || {};
-          fillSettings(); renderMetrics();
-          showToast('تنظیمات بازنشانی شد', 'ok');
-        } else {
-          showToast(data.message || 'خطا در بازنشانی', 'err');
-        }
-      })
-      .catch(function() { showToast('خطای شبکه در بازنشانی', 'err'); });
-  }
-
-
 
   function tickClock() {
     var d = new Date();
@@ -2417,7 +2563,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
     if (chip) chip.textContent = txt;
   }
 
-  if (localStorage.getItem('mili_theme') === 'light') document.body.classList.add('light-mode');
+  if (lsGet('mili_theme') === 'light') document.body.classList.add('light-mode');
   applyLanguage();
   renderUsers();
   renderLocations();
@@ -2431,6 +2577,7 @@ export function renderAdminDashboardHtml(initialData = {}) {
 
   var hash = (window.location.hash || '').replace('#', '');
   if (hash && document.querySelector('[data-panel="' + hash + '"]')) showPanel(hash);
+  if (window.__miliDiag) window.__miliDiag.ready = true;
 </script>
 </body>
 </html>`);

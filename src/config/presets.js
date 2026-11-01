@@ -12,7 +12,7 @@ export const USER_PRESETS = {
     badges: ['فرگمنت 100-200 با فاصله 10-20', 'fingerprint chrome', 'بلاک تبلیغات'],
     recommended: true,
     nodeScope: 'all',
-    subNodeCount: 50,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 50,
@@ -21,7 +21,7 @@ export const USER_PRESETS = {
       ev: 'yes',
       et: 'no',
       ex: 'no',
-      es: 'yes', // شادوساکس هم فعال باشد
+      es: 'no', // شادوساکس پیش‌فرض خاموش (امکانات اضافهٔ کانال)
       fp: 'chrome',
       fragmentPreset: 'mci',
       fragmentLength: '100-200',
@@ -29,7 +29,7 @@ export const USER_PRESETS = {
       epd: 'yes',
       epi: 'yes',
       egi: 'yes',
-      ena: 'no',
+      ena: 'yes',
       ipv4: 'yes',
       ipv6: 'yes'
     }
@@ -41,7 +41,7 @@ export const USER_PRESETS = {
     badges: ['حجم نامحدود', 'فرگمنت 50-100', '۲ دستگاه همزمان'],
     recommended: false,
     nodeScope: 'all',
-    subNodeCount: 60,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 2,
@@ -50,7 +50,7 @@ export const USER_PRESETS = {
       ev: 'yes',
       et: 'yes',
       ex: 'no',
-      es: 'yes',
+      es: 'no',
       fp: 'chrome',
       fragmentPreset: 'irancell',
       fragmentLength: '50-100',
@@ -67,7 +67,7 @@ export const USER_PRESETS = {
     badges: ['بدون فرگمنت', 'بدون محدودیت حجم', '۵ دستگاه همزمان'],
     recommended: false,
     nodeScope: 'all',
-    subNodeCount: 50,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 5,
@@ -76,7 +76,7 @@ export const USER_PRESETS = {
       ev: 'yes',
       et: 'no',
       ex: 'no',
-      es: 'yes',
+      es: 'no',
       dkby: 'yes',
       alpn: 'h2,http/1.1'
     }
@@ -88,18 +88,18 @@ export const USER_PRESETS = {
     badges: ['فقط نودهای مولتی‌لوکیشن', 'نام‌گذاری number+miliconfig', 'فرگمنت فعال'],
     recommended: false,
     nodeScope: 'edge',
-    subNodeCount: 40,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 50,
     startOnFirstUse: true,
     configOverrides: {
       ev: 'yes',
-      es: 'yes',
+      es: 'no',
       epd: 'yes',
       epi: 'yes',
       egi: 'yes',
-      ena: 'no'
+      ena: 'yes'
     }
   },
   'direct-only': {
@@ -109,7 +109,7 @@ export const USER_PRESETS = {
     badges: ['فقط نود سرور اصلی', 'بدون لوکیشن', 'بدون فرگمنت'],
     recommended: false,
     nodeScope: 'origin',
-    subNodeCount: 10,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 50,
@@ -131,7 +131,7 @@ export function buildUserDefaultConfig(basePanelConfig = {}, presetId = 'iran-fa
     ...CONFIG_DEFAULTS,
     ...(basePanelConfig || {}),
     ...(preset.configOverrides || {}),
-    subNodeCount: customOverrides.subNodeCount ?? basePanelConfig?.subNodeCount ?? preset.subNodeCount ?? 50,
+    subNodeCount: 0, // تعداد کانفیگ دستی نیست؛ موتور cfnew خودش همهٔ آدرس‌ها را می‌سازد
     ...(customOverrides || {})
   });
 }

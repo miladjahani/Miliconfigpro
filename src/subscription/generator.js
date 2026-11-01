@@ -58,8 +58,34 @@ import {
   generateSurgeConfig
 } from './converters.js';
 
-export function getOfficialDirectAddress() {
-  const hit = OFFICIAL_DIRECT_IPS[Math.floor(Math.random() * OFFICIAL_DIRECT_IPS.length)];
+// هش پایدار برای انتخاب «آی‌پی ثابت» هر کاربر: آدرس نود نباید با هر بار
+// خواندن ساب‌لینک عوض شود (درخواست: آی‌پی در کلاینت ثابت بماند).
+export function stableAddressSeed(text = '') {
+  const str = String(text || '');
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash);
+}
+
+// انتخاب پایدار از یک فهرست: ترتیب بر اساس هش (seed + آیتم) است، پس با هر
+// بار خواندن ساب‌لینک همان آی‌پی‌ها برمی‌گردند (آی‌پی ثابت در کلاینت).
+export function pickStableAddresses(list = [], count = 1, seed = '') {
+  const items = [...new Set((Array.isArray(list) ? list : []).filter(Boolean).map(String))];
+  if (!items.length) return [];
+  const ranked = items
+    .map(item => ({ item, rank: stableAddressSeed(String(seed) + '|' + item) }))
+    .sort((a, b) => a.rank - b.rank || a.item.localeCompare(b.item));
+  return ranked.slice(0, Math.max(1, count)).map(entry => entry.item);
+}
+
+export function getOfficialDirectAddress(seed = '') {
+  const list = OFFICIAL_DIRECT_IPS;
+  const hit = seed
+    ? list[stableAddressSeed(seed) % list.length]
+    : list[Math.floor(Math.random() * list.length)];
   return {
     domain: hit,
     region: 'CF',
@@ -132,6 +158,9 @@ export function buildNodePath(proto, cfg = {}, wkOverride = '', item = null) {
   const cc = String(item?.country || '').trim().toUpperCase();
   if (/^[A-Z]{2}$/.test(cc)) parts.push(`cc=${cc}`);
   if (item?.proxy) parts.push(`s=${encodeProxyForPath(item.proxy)}`);
+  // ProxyIP سفارشی/منطقه‌ای (cfnew: 回退地址) — ورکر با همین آدرس MTProto/سایت
+  // مقصد را باز می‌کند؛ آدرس نود همچنان آی‌پی ثابت است.
+  if (!item?.proxy && cfg.p) parts.push(`p=${encodeProxyForPath(cfg.p)}`);
   return pathName + (parts.length ? '?' + parts.join('&') : '');
 }
 
@@ -743,10 +772,13 @@ export function rotateIpListByTimeBucket(list, rotationSetting = 'off') {
   return [...list.slice(shift), ...list.slice(0, shift)];
 }
 
+// شادوساکس با همان مکانیزم ورکر Z-E-U-S (منبع الهام cfnew): هر آدرس یک نود
+// SIP002 با userinfo base64 («متد:رمز») + پلاگین v2ray-websocket روی همان مسیر.
+// نکته: هستهٔ این ورکر هدر متنی SS را می‌خواند، پس متد همیشه «none» است
+// (متد AEAD نیازمند پیاده‌سازی رمزنگاری سمت سرور است و در نسخهٔ بعدی می‌آید).
 export function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const sspass = (cfg.sspass && String(cfg.sspass).trim()) || userUuid;
-  // این ورکر هدر Shadowsocks را به‌صورت متنی می‌خواند (parseShadowsocksHeader)، بنابراین cipher باید none باشد
   const cipher = 'none';
   const userinfo = encodeSip002UserInfo(`${cipher}:${sspass}`);
 
@@ -760,19 +792,9 @@ export function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
     const nodeName = buildNodeDisplayName({ proto: 'ss', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${workerHost};path=${itemPath};tls`;
-
-    // دو قالب استاندارد شادوساکس برای سازگاری با کلاینت‌های مختلف:
-    // ۱) SIP002 (userinfo جدا)  ۲) قالب قدیمی base64 کامل (method:pass@host:port)
-    if (idx % 2 === 0) {
-      links.push(
-        makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
-      );
-    } else {
-      const legacy = encodeBase64Utf8(`${cipher}:${sspass}@${safeAddr}:${port}`);
-      links.push(
-        makeNodeEntry(`ss://${legacy}?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
-      );
-    }
+    links.push(
+      makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
+    );
   }
   return links;
 }
@@ -899,11 +921,14 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg) {
 // ============================================================================
 // انتخاب چرخشی از استخر دامنه‌های تأییدشدهٔ کلادفلر؛ هر ۱۵ دقیقه یک پنجرهٔ
 // شروع تازه می‌گیرد تا سابلینک ثابت نماند (stride ۱۳ تا پراکندگی داشته باشد).
-export function pickEdgeDomains(count) {
+export function pickEdgeDomains(count, seed = '') {
   const pool = CF_EDGE_DOMAINS;
   const wanted = Math.max(1, parseInt(count, 10) || 1);
   if (!pool.length) return [];
-  const start = Math.floor(Date.now() / (15 * 60 * 1000)) % pool.length;
+  // با seed پایدار، دامنه‌های نود هم برای هر کاربر ثابت می‌مانند
+  const start = seed
+    ? stableAddressSeed(seed) % pool.length
+    : Math.floor(Date.now() / (15 * 60 * 1000)) % pool.length;
   const out = [];
   const seen = new Set();
   for (let step = 0; out.length < Math.min(wanted, pool.length) && step < pool.length * 2; step++) {
@@ -1666,6 +1691,11 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
   const setParam = String(queryOverrides.set || '').trim().toLowerCase();
   const domainMode = setParam === 'domain';
+  // منطقهٔ انتخابی کاربر/لوکیشن (region) — در نبود ?country از همین استفاده می‌شود
+  const regionCode = String(queryOverrides.region || cfg.region || 'auto').trim().toUpperCase();
+  const regionFilter = /^[A-Z]{2}$/.test(regionCode) && regionCode !== 'AUTO' && regionCode !== 'CF'
+    ? regionCode
+    : '';
   // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
   // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
   const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
@@ -1705,32 +1735,45 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
 
   // ساب اختصاصی IPv6: همهٔ آی‌پی‌های نسخه ۶ استخر + آی‌پی‌های رسمی کلادفلر
   if (ipv6Mode) {
-    const v6Pool = [...new Set([
-      ...pickFromPool(edgePool.ipv6, 12),
-      ...OFFICIAL_DIRECT_IPV6
-    ])].filter(Boolean);
+    // فهرست رسمی IPv6 کلادفلر (ثابت) + استخر زنده به‌صورت مرتب‌شده
+    const v6Pool = [
+      ...OFFICIAL_DIRECT_IPV6,
+      ...pickStableAddresses(edgePool.ipv6, 12, userUuid + '-v6')
+    ].filter(Boolean);
     appendFromSource(v6Pool.map(ip => ({ ip, isp: 'CF-IPv6', family: 'ipv6' })));
   }
 
   // نودهای «دامنهٔ کلادفلر»: آدرس نود فقط دامنه است (بدون آی‌پی). دامنه‌ها
   // از استخر تأییدشدهٔ CF_EDGE_DOMAINS به‌صورت چرخشی انتخاب می‌شوند.
   if (domainMode) {
-    const wanted = Math.max(1, parseInt(
-      queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50,
+    const wantedRaw = parseInt(
+      queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0,
       10
-    ) || 50);
+    );
+    // ۰/نامعتبر = بدون سقف؛ تعداد آدرس‌ها را موتور خودش تعیین می‌کند
+    const wanted = Number.isFinite(wantedRaw) && wantedRaw > 0 ? wantedRaw : 0;
     const protocolCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
-    const addressCount = Math.max(4, Math.ceil(wanted / protocolCount) + 4);
+    // cfnew حداکثر همان ۲۱ دامنهٔ 直连域名 را استفاده می‌کند؛ بیشتر از این
+    // فقط ساب‌لینک را بی‌دلیل بزرگ می‌کند.
+    const addressCount = wanted > 0
+      ? Math.min(21, Math.max(4, Math.ceil(wanted / protocolCount) + 4))
+      : 21;
     // اول دامنه‌های واقعی منابع بیرونی و بعد استخر تأییدشدهٔ داخلی
-    const domains = [...new Set([
-      ...pickFromPool(edgePool.domains, Math.ceil(addressCount / 2)),
-      ...pickEdgeDomains(addressCount)
-    ])].slice(0, addressCount);
+    const domains = pickStableAddresses(
+      [...DIRECT_DOMAINS.map(d => d.domain), ...edgePool.domains],
+      addressCount,
+      userUuid + '-dom'
+    );
     appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
   }
 
   // چندلوکیشن: پروکسی‌های کشوری به‌عنوان زنجیره خروجی سمت ورکر استفاده می‌شوند، نه به‌عنوان آدرس نود.
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
+  // منطقه (region) مثل cfnew با «آدرس جایگزین» پیاده می‌شود: آدرس نود همان
+  // آی‌پی ثابت کلادفلر می‌ماند و خروجی از ProxyIP همان منطقه عبور می‌کند.
+  if (regionFilter && !String(cfg.p || '').trim()) {
+    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
+  }
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
   if (!domainMode && !ipv6Mode && countryFilter) {
@@ -1796,17 +1839,16 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       // دامنه‌های پیش‌فرض همیشه حاضرند و با آی‌پی‌های ثابت به‌صورت متناوب
       // چیده می‌شوند تا با سقف کم نود هم حتماً در سایلینک باشند.
       // آی‌پی‌های تازه از استخر لبهٔ کلادفلر (همه با رنج رسمی کلادفلر فیلتر شده‌اند)
+      // آی‌پی ثابت در کلاینت: فقط از فهرست‌های ثابت (رسمی کلادفلر و ۲۱ دامنهٔ
+      // cfnew) با ترتیب هش‌محور انتخاب می‌شود تا با هر بار خواندن ساب عوض نشود.
       const pooledAddresses = [
-        ...pickFromPool(edgePool.ipv4, 8),
-        ...(cfg.ipv6 === 'no' ? [] : pickFromPool(edgePool.ipv6, 4))
+        ...pickStableAddresses(OFFICIAL_DIRECT_IPS, 8, userUuid + '-v4'),
+        ...(cfg.ipv6 === 'no' ? [] : pickStableAddresses(OFFICIAL_DIRECT_IPV6, 4, userUuid + '-v6'))
       ];
       const staticIpNodes = cfg.epi === 'yes'
         ? pooledAddresses.map(ip => ({ ip, isp: 'CF-Fast' }))
         : [];
-      const pooledDomains = [...new Set([
-        ...pickFromPool(edgePool.domains, 8),
-        ...DIRECT_DOMAINS.map(d => d.domain)
-      ])];
+      const pooledDomains = pickStableAddresses(DIRECT_DOMAINS.map(d => d.domain), 9, userUuid + '-dom');
       const domainNodes = cfg.epd === 'yes'
         ? pooledDomains.map(domain => ({ ip: domain, isp: domain }))
         : [];
@@ -1817,7 +1859,13 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       if (cfg.epi === 'yes' && !cfg.yxURL) {
         const uouinList = await fetchUouinPreferredIps(cfg);
         if (uouinList.length > 0) {
-          appendFromSource(uouinList);
+          // ترتیب پایدار: از بین آی‌پی‌های برگشتی، همیشه همان تعداد ثابت و با
+          // ترتیب هش‌محور انتخاب می‌شود تا آدرس‌ها بین دو درخواست نبض نزنند.
+          const byHost = new Map(uouinList.map(item => [String(item.ip), item]));
+          const stable = pickStableAddresses([...byHost.keys()], 6, userUuid + '-uouin')
+            .map(ip => byHost.get(ip))
+            .filter(Boolean);
+          appendFromSource(stable);
         }
       }
       if (cfg.egi === 'yes' && cfg.yxURL) {
@@ -1852,9 +1900,10 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     appendFromSource([{ ip: workerHost, port: 443, isp: 'Origin' }]);
   }
 
-  const subNodeCount = queryOverrides.limit !== undefined
+  const subNodeCountRaw = queryOverrides.limit !== undefined
     ? parseInt(queryOverrides.limit, 10)
-    : Number(userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50);
+    : Number(userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0);
+  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw > 0 ? subNodeCountRaw : 0;
 
   // توزیع مساوی ترکیب‌ها (پروتکل × IPv4/IPv6/Domain) و بعد چرخش زمانی اختیاری
   const balancedEntries = balanceComboEntries(allEntries, subNodeCount);
@@ -2034,7 +2083,7 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
       try {
         bodyContent = await generateResidentialChainConfig(finalLinks, {
           ...cfg,
-          subNodeCount: userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 50
+          subNodeCount: userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0
         });
         contentType = 'text/yaml; charset=utf-8';
       } catch (err) {

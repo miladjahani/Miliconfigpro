@@ -369,7 +369,7 @@ export const PROXY_IP_SOURCES = [
 // منابع ترجیحی داخلی لبهٔ کلادفلر، برای وقتی که هیچ تنظیمی نشده است
 // ============================================================================
 
-// ۲۱ دامنهٔ ترجیحی تأییدشده
+// ۲۱ دامنهٔ ترجیحی تأییدشده (همان 直连域名列表 cfnew)
 export const PREFERRED_EDGE_DOMAINS = [
   'cloudflare.182682.xyz',
   'speed.marisalnc.com',
@@ -429,6 +429,47 @@ export const EDGE_PROXY_IPS = [
 // فهرست آنلاین دامنه/آی‌پی ترجیحی
 export const EDGE_LIST_URL = 'https://raw.githubusercontent.com/qwer-search/bestip/refs/heads/main/kejilandbestip.txt';
 export const EDGE_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
+
+// ============================================================================
+// منابع دقیقاً همان‌هایی که موتور cfnew از آن‌ها تغذیه می‌کند
+// (cfnew: 获取值地址列表 از youuin + 直连域名列表 + 备用 ProxyIP + ips/ip6 مخزن)
+// اسکنر پنل هم فقط از همین مخازن می‌خواند تا خروجی با موتور cfnew یکی باشد.
+// ============================================================================
+export const CFNEW_IPV4_SOURCES = [
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'
+];
+
+export const CFNEW_IPV6_SOURCES = [
+  'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ip6.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv6.txt'
+];
+
+// دامنه‌های 直连 همان cfnew (فهرست محلی ۲۱تایی + فهرست زندهٔ مخزن)
+export const CFNEW_DOMAIN_SOURCES = [
+  EDGE_MIRROR_BASE + 'dom.txt',
+  EDGE_MIRROR_BASE + 'ech_dom.txt'
+];
+
+// ProxyIP های آماده (备用地址 cfnew + فیدهای VIP خود Z-E-U-S)
+export const CFNEW_PROXYIP_SOURCES = [
+  EDGE_MIRROR_BASE + 'proxy/ALL.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy.txt',
+  'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy&country.txt'
+];
+
+// گروه‌های اپراتوری cfnew (移动/联通/电信/多线/IPv6) از سرویس youuin
+export const CFNEW_ISP_GROUPS = {
+  cmcc: { code: 'cmcc', label: '移动', family: 'ipv4', isp: 'ispMobile' },
+  cucc: { code: 'cucc', label: '联通', family: 'ipv4', isp: 'ispUnicom' },
+  ctcc: { code: 'ctcc', label: '电信', family: 'ipv4', isp: 'ispTelecom' },
+  bgp: { code: 'bgp', label: '多线', family: 'ipv4', isp: '' },
+  ipv6: { code: 'ipv6', label: 'IPv6', family: 'ipv6', isp: '' }
+};
+export const CFNEW_API_URL = 'https://api.youuin.com/index.php/index/Cloudflare';
+export const CFNEW_API_SECRET = 'DdlTxtN0sUOu';
+export const CFNEW_API_KEY_SALT = '70cloudflareapikey';
 
 // رنج‌های IPv4/IPv6 کلادفلر و سایر ارائه‌دهندگان (همه ۲۰۰ در بازبینی)
 export const IP_RANGE_SOURCES = {
