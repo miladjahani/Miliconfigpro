@@ -563,7 +563,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.3.0';
+const VERSION = 'v3.3.1';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';

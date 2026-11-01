@@ -1,10 +1,11 @@
 {
-  "version": "3.3.0",
-  "build": "2026-11-01.3",
-  "publishedAt": "2026-11-01T12:00:00Z",
+  "version": "3.3.1",
+  "build": "2026-11-01.4",
+  "publishedAt": "2026-11-01T15:00:00Z",
   "bundle": "https://raw.githubusercontent.com/miladjahani/Miliconfigpro/main/_worker.js",
   "repo": "https://github.com/miladjahani/Miliconfigpro",
   "notes": [
+    "ظاهر کپسولی تب‌ها با آیکون بالای برچسب و نقطهٔ نورانی تب فعال، بدون بازگشت تب‌ها به منو",
     "نام‌گذاری گویای نودها: پرچم و کد کشور، نوع نود (VLESS/Trojan/SS/xHTTP/WARP)، IPv4 یا IPv6 یا Domain و نشانگر ⇄ Proxy",
     "توزیع مساوی ترکیب‌ها: هر پروتکل در هر خانوادهٔ آدرس با تعداد برابر در ساب‌لینک حاضر است",
     "ساب اختصاصی IPv6 برای همراه اول با آدرس ?set=ipv6 در صفحهٔ وضعیت و کارت کاربر",
