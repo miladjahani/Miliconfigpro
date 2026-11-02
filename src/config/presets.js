@@ -31,7 +31,9 @@ export const USER_PRESETS = {
       egi: 'yes',
       ena: 'yes',
       ipv4: 'yes',
-      ipv6: 'yes'
+      ipv6: 'yes',
+      sb: 'yes',
+      sbRegion: 'DE'
     }
   },
   'iran-heavy': {
@@ -57,7 +59,9 @@ export const USER_PRESETS = {
       fragmentInterval: '5-10',
       epd: 'yes',
       epi: 'yes',
-      egi: 'yes'
+      egi: 'yes',
+      sb: 'yes',
+      sbRegion: 'NL'
     }
   },
   'international': {

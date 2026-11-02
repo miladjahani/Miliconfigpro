@@ -1505,6 +1505,83 @@ export async function handleScannerApi(request, env) {
     }
   }
 
+  // تست یک آدرس مشخص با یک درخواست GET ساده (برای ابزارها و مانیتورینگ بیرونی)
+  // /api/scanner/probe?host=104.16.0.1&port=443
+  if (action === 'probe' && request.method === 'GET') {
+    const host = normalizeNodeHost(url.searchParams.get('host') || url.searchParams.get('ip') || '');
+    const port = parseInt(url.searchParams.get('port') || '443', 10) || 443;
+    if (!host || (!isValidIpAddress(host) && !isValidDomain(host))) {
+      return jsonResponse({ success: false, error: 'invalid-host', message: 'آدرس واردشده معتبر نیست.' }, 400);
+    }
+    let probe = await probeTcp(host, port, 2500);
+    // اگر TCP از سمت ورکر مسدود باشد (مثلاً آدرس‌های خود کلادفلر)، یک درخواست
+    // HTTPS به همان آدرس می‌زنیم؛ پاسخ HTTP یعنی آدرس زنده است.
+    if (!probe.ok) {
+      const startedAt = Date.now();
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2500);
+        const safeHost = host.includes(':') ? `[${host}]` : host;
+        const resp = await fetch(`https://${safeHost}:${port}/cdn-cgi/trace`, {
+          method: 'GET',
+          redirect: 'manual',
+          headers: { Host: 'cloudflare.com' },
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (resp && typeof resp.status === 'number' && resp.status > 0) {
+          probe = { ok: true, latencyMs: Date.now() - startedAt, error: '' };
+        }
+      } catch (_e) {}
+    }
+    return jsonResponse({
+      success: Boolean(probe.ok),
+      host,
+      port,
+      latencyMs: probe.latencyMs || 0,
+      error: probe.ok ? '' : (probe.error || 'unreachable')
+    });
+  }
+
+  // اسکن سریع با GET: /api/scanner/quick?mode=proxyip&country=DE&limit=5
+  if (action === 'quick' && request.method === 'GET') {
+    try {
+      const requested = String(url.searchParams.get('mode') || url.searchParams.get('kind') || 'proxyip').toLowerCase();
+      const mode = ['ipv4', 'ipv6', 'domain', 'proxyip'].includes(requested) ? requested : 'proxyip';
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '8', 10), 1), 30);
+      const cfgNow = await loadGlobalConfig(env);
+      const result = await scanCfnewMode({
+        mode,
+        limit,
+        region: String(url.searchParams.get('country') || '').toUpperCase(),
+        cfg: cfgNow
+      });
+      return jsonResponse(result);
+    } catch (_e) {
+      return jsonResponse({ success: false, message: 'اسکن ناموفق بود؛ بعداً دوباره تلاش کنید.' }, 500);
+    }
+  }
+
+  // فهرست اندپوینت‌های اسکنر (خودتوصیف، برای ابزارهای بیرونی)
+  if (action === 'endpoints' && request.method === 'GET') {
+    const origin = url.origin;
+    return jsonResponse({
+      success: true,
+      endpoints: [
+        { method: 'GET', path: '/api/scanner/probe?host=&port=', description: 'تست اتصال یک آدرس و پورت' },
+        { method: 'GET', path: '/api/scanner/quick?mode=proxyip&country=DE&limit=5', description: 'دریافت و تست آدرس‌های سالم' },
+        { method: 'POST', path: '/api/scanner/fetch-and-test', description: 'اسکن کامل با بدنهٔ JSON' },
+        { method: 'POST', path: '/api/scanner/apply', description: 'نوشتن نتیجه در تنظیمات آدرس‌های دستی/آدرس واسط/پروکسی خروجی' },
+        { method: 'GET', path: '/api/scanner/sources', description: 'فهرست منابع آدرس' },
+        { method: 'GET', path: '/api/scanner/countries', description: 'فهرست کشورها و آی‌پی‌های پیش‌فرض' }
+      ],
+      examples: {
+        probe: `${origin}/api/scanner/probe?host=104.16.0.1&port=443`,
+        quick: `${origin}/api/scanner/quick?mode=proxyip&country=DE&limit=5`
+      }
+    });
+  }
+
   if (action === 'countries' && request.method === 'GET') {
     const countries = Object.keys(COUNTRY_PROXY_SOURCES).map(code => ({
       code,

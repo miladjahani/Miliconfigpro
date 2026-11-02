@@ -361,7 +361,8 @@ export default {
             }
           }
           const warpCfg = { ...globalCfg, ...((warpUser && warpUser.config) || {}) };
-          const format = String(url.searchParams.get('format') || 'zip').toLowerCase();
+          // پیش‌فرض clash است تا اگر کلاینت آدرس را بدون پارامتر وارد کند سابلینک سالم بگیرد (ZIP با format=zip)
+          const format = String(url.searchParams.get('format') || 'clash').toLowerCase();
           // پارامترهای مبهم‌سازی و ترتیب اندپوینت‌ها با شناسهٔ کاربر ساخته می‌شود
           // تا بستهٔ هر کاربر منحصر به فرد باشد.
           const bundle = await buildWarpConfBundle(warpCfg, { seed: warpUser?.uuid || 'public' });
@@ -371,17 +372,42 @@ export default {
               status: 200,
               headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Content-Disposition': 'attachment; filename="miliconfig-warp-links.txt"',
+                // inline: بعضی کلاینت‌ها فایل attachment را به‌جای سابلینک پارس نمی‌کنند
+                'Content-Disposition': 'inline; filename="miliconfig-warp-links.txt"',
+                'Access-Control-Allow-Origin': '*',
                 'Cache-Control': 'no-store'
               }
             });
+          }
+          const pickFormat = (name, type, fileName) => {
+            const file = bundle.files.find(item => item.name === name);
+            return new Response(file ? file.data : '', {
+              status: file ? 200 : 404,
+              headers: {
+                'Content-Type': type,
+                'Content-Disposition': `inline; filename="${fileName}"`,
+                'Access-Control-Allow-Origin': '*',
+                'profile-update-interval': '12',
+                'Cache-Control': 'no-store'
+              }
+            });
+          };
+          if (format === 'clash' || format === 'yaml' || format === 'mihomo') {
+            return pickFormat('WARP-clash.yaml', 'text/yaml; charset=utf-8', 'miliconfig-warp-clash.yaml');
+          }
+          if (format === 'singbox' || format === 'sing-box' || format === 'sb') {
+            return pickFormat('WARP-singbox.json', 'application/json; charset=utf-8', 'miliconfig-warp-singbox.json');
+          }
+          if (format === 'base64' || format === 'sub') {
+            return pickFormat('WARP-sub-base64.txt', 'text/plain; charset=utf-8', 'miliconfig-warp-base64.txt');
           }
           if (format === 'conf' || format === 'wg' || format === 'txt') {
             return new Response(buildWireGuardConf(bundle.config, 'WARP'), {
               status: 200,
               headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Content-Disposition': 'attachment; filename="WARP.conf"',
+                'Content-Disposition': 'inline; filename="WARP.conf"',
+                'Access-Control-Allow-Origin': '*',
                 'Cache-Control': 'no-store'
               }
             });

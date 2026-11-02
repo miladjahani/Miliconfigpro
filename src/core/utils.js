@@ -164,6 +164,8 @@ export function buildNodeDisplayName(meta = {}) {
   if (meta.tls === false) parts.push('HTTP');
   if (meta.proxy) parts.push('⇄ Proxy');
   if (meta.mci) parts.push('MCI');
+  // نسخهٔ AmneziaWG روی نودهای WARP: AWG2 / AWG3
+  if (meta.awg) parts.push(`AWG${meta.awg}`);
   return parts.join(' · ');
 }
 

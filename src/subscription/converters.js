@@ -321,8 +321,10 @@ function buildClashOpenVpnYaml(node) {
   return lines.join('\n');
 }
 
-function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
+function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com', opts = {}) {
   if (node.proto === 'wireguard') return buildClashWireGuardYaml(node);
+  // UDP روی هر نود قابل خاموش کردن است (تنظیم udp پنل)
+  const udpLine = opts.udp === false ? '    udp: false' : '    udp: true';
   const lines = [];
   const srv = normalizeHost(node.server);
   const host = normalizeHost(node.host) || srv;
@@ -333,18 +335,18 @@ function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
   lines.push(`    port: ${node.port}`);
   if (node.proto === 'vless') {
     lines.push(`    uuid: ${node.uuid}`);
-    lines.push(`    udp: true`);
+    lines.push(udpLine);
     lines.push(`    tls: ${node.tls ? 'true' : 'false'}`);
     if (node.flow) lines.push(`    flow: ${quoteYaml(node.flow)}`);
     lines.push(`    client-fingerprint: ${quoteYaml(node.fp || 'chrome')}`);
   } else if (node.proto === 'trojan') {
     lines.push(`    password: ${quoteYaml(node.password)}`);
-    lines.push(`    udp: true`);
+    lines.push(udpLine);
     lines.push(`    client-fingerprint: ${quoteYaml(node.fp || 'chrome')}`);
   } else if (node.proto === 'ss') {
     lines.push(`    cipher: ${quoteYaml(node.cipher || 'none')}`);
     lines.push(`    password: ${quoteYaml(node.password)}`);
-    lines.push(`    udp: true`);
+    lines.push(udpLine);
     lines.push(`    plugin: v2ray-plugin`);
     lines.push(`    plugin-opts:`);
     lines.push(`      mode: websocket`);
@@ -383,6 +385,11 @@ function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
 export function generateClashConfig(links, options = {}) {
   const customDNS = options.customDNS || 'https://223.5.5.5/dns-query';
   const customECHDomain = options.customECHDomain || 'cloudflare-ech.com';
+  // گزینه‌های کلاینت از تنظیمات کاربر می‌آیند (DoH / TCP / UDP)
+  const wantDoh = String(options.doh == null ? 'yes' : options.doh) !== 'no';
+  const wantTcp = String(options.tcp == null ? 'yes' : options.tcp) !== 'no';
+  const wantUdp = String(options.udp == null ? 'yes' : options.udp) !== 'no';
+  const yamlUdpOpts = { udp: wantUdp };
   const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss' || n.proto === 'wireguard'));
   const ovpnNodes = Array.isArray(options.ovpnNodes) ? options.ovpnNodes : [];
   const names = [...nodes.map(n => n.name), ...ovpnNodes.map(n => n.name)];
@@ -396,7 +403,8 @@ export function generateClashConfig(links, options = {}) {
     'ipv6: true',
     'external-controller: 127.0.0.1:9090',
     'unified-delay: true',
-    'tcp-concurrent: true',
+    `tcp-concurrent: ${wantTcp}`,
+    ...(wantTcp ? ['tcp-fast-open: true', 'tcp-fast-open-keep-alive: true'] : []),
     'geodata-mode: true',
     'geo-auto-update: true',
     'geo-update-interval: 24',
@@ -437,11 +445,13 @@ export function generateClashConfig(links, options = {}) {
     '    - 223.5.5.5',
     '    - 119.29.29.29',
     '  nameserver:',
-    `    - ${customDNS}`,
-    '    - https://119.29.29.29/dns-query',
-    '  fallback:',
-    '    - https://1.1.1.1/dns-query',
-    '    - https://8.8.8.8/dns-query',
+    wantDoh
+      ? `    - ${customDNS.startsWith('http') ? customDNS : 'https://223.5.5.5/dns-query'}`
+      : '    - 223.5.5.5',
+    wantDoh ? '    - https://1.1.1.1/dns-query' : '    - 119.29.29.29',
+    ...(wantDoh
+      ? ['  fallback:', '    - https://1.1.1.1/dns-query', '    - https://8.8.8.8/dns-query']
+      : ['  fallback:', '    - 1.1.1.1', '    - 8.8.8.8']),
     '  fallback-filter:',
     '    geoip: true',
     '    geoip-code: CN',
@@ -451,7 +461,7 @@ export function generateClashConfig(links, options = {}) {
   ];
 
   const proxiesSection = ['proxies:'];
-  for (const n of nodes) proxiesSection.push(buildClashNodeYaml(n, customECHDomain));
+  for (const n of nodes) proxiesSection.push(buildClashNodeYaml(n, customECHDomain, yamlUdpOpts));
   for (const n of ovpnNodes) proxiesSection.push(buildClashOpenVpnYaml(n));
 
   const nodesOnly = names.length ? names.map(n => `      - ${quoteYaml(n)}`).join('\n') : '      - DIRECT';
@@ -726,7 +736,10 @@ export function generateSingboxConfig(links, options = {}) {
     log: { level: 'info', timestamp: true },
     dns: {
       servers: [
-        { ...splitDnsAddress(customDNS), tag: 'remote', detour: 'select' },
+        // DoH در تنظیمات کاربر خاموش شود، DNS معمولی UDP استفاده می‌شود
+        String(options.doh == null ? 'yes' : options.doh) === 'no'
+          ? { type: 'udp', tag: 'remote', server: '223.5.5.5', detour: 'select' }
+          : { ...splitDnsAddress(customDNS), tag: 'remote', detour: 'select' },
         { type: 'udp', tag: 'local', server: '223.5.5.5', detour: 'direct' },
         { type: 'fakeip', tag: 'fakeip', inet4_range: '198.18.0.0/15', inet6_range: 'fc00::/18' }
       ],

@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.4.0';
+export const VERSION = 'v3.5.1';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
@@ -67,6 +67,15 @@ export const CONFIG_DEFAULTS = {
   // هسته این ورکر هدر Shadowsocks را به‌صورت متنی (بدون AEAD) می‌خواند، بنابراین تنها متد سازگار «none» است
   ssmethod: 'none',
   ech: 'no',
+  // — تحریم‌شکن: خروجی همهٔ نودها از «آدرس واسط» بیرون از ایران عبور می‌کند
+  // تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند.
+  sb: 'yes',
+  sbRegion: 'DE', // منطقهٔ آدرس واسط پیشنهادی (DE/NL/US/…)
+  // — گزینه‌های کلاینت که در کانفیگ‌های تولیدشده اعمال می‌شوند
+  doh: 'yes', // DNS over HTTPS در کانفیگ کلاینت
+  tcp: 'yes', // TCP fast-open / tcp-concurrent در کانفیگ کلاینت
+  udp: 'yes', // عبور UDP از نودها
+  awgv: '3', // نسخهٔ AmneziaWG برای نودهای WARP: 1 | 2 | 3
   tp: '',
   customDNS: 'https://223.5.5.5/dns-query',
   customECHDomain: 'cloudflare-ech.com',
@@ -137,7 +146,8 @@ export const CONFIG_DEFAULTS = {
 export const BOOLEAN_CONFIG_KEYS = [
   'ev', 'et', 'ex', 'es', 'ech', 'ena', 'epd', 'epi', 'egi',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag',
-  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate'
+  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate',
+  'sb', 'doh', 'tcp', 'udp'
 ];
 
 export const ENV_KEY_MAPPING = {
@@ -149,6 +159,12 @@ export const ENV_KEY_MAPPING = {
   sspass: ['sspass', 'SSPASS', 'SS_PASSWORD'],
   ssmethod: ['ssmethod', 'SSMETHOD', 'SS_METHOD'],
   ech: ['ech', 'ECH'],
+  sb: ['sb', 'SB', 'SANCTIONS_BYPASS'],
+  sbRegion: ['sbRegion', 'SBREGION', 'SB_REGION'],
+  doh: ['doh', 'DOH'],
+  tcp: ['tcp', 'TCP'],
+  udp: ['udp', 'UDP'],
+  awgv: ['awgv', 'AWGV', 'AMNEZIA_VERSION'],
   tp: ['tp', 'TP'],
   customDNS: ['customDNS', 'CUSTOMDNS', 'CUSTOM_DNS'],
   customECHDomain: ['customECHDomain', 'CUSTOMECHDOMAIN', 'CUSTOM_ECH_DOMAIN'],
@@ -514,6 +530,10 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   if (!snap.fragmentLength) snap.fragmentLength = '100-200';
   if (!snap.fragmentInterval) snap.fragmentInterval = '10-20';
   if (!snap.fragmentPackets) snap.fragmentPackets = 'tlshello';
+  snap.sbRegion = String(snap.sbRegion || 'DE').trim().toUpperCase();
+  if (!snap.sbRegion) snap.sbRegion = 'DE';
+  // نسخهٔ AmneziaWG برای نودهای WARP؛ هر مقدار ناشناخته به نسخهٔ ۳ (امنزیا 3.x) می‌رود
+  snap.awgv = ['1', '2', '3'].includes(String(snap.awgv || '').trim()) ? String(snap.awgv).trim() : '3';
   snap.fp = snap.fp || 'chrome';
   snap.patt = snap.patt || '/?ed=2048';
   snap.ports = parseNodePorts(snap.ports).join(',');

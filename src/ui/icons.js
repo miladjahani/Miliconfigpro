@@ -48,7 +48,23 @@ export const ICONS = {
   gauge: wrap('<path d="M4.2 17.5a8.4 8.4 0 1 1 15.6 0"/><path d="m12 13.5 3.6-4.2"/><circle cx="12" cy="14.6" r="1.5"/>'),
   branch: wrap('<circle cx="6.5" cy="6" r="2.2"/><circle cx="6.5" cy="18" r="2.2"/><circle cx="17.5" cy="8.5" r="2.2"/><path d="M6.5 8.2v7.6"/><path d="M17.5 10.7c0 3.1-2.4 5.3-6 6.3"/>'),
   search: wrap('<circle cx="11" cy="11" r="6.4"/><path d="m16 16 4.2 4.2"/>'),
-  filter: wrap('<path d="M4 5.5h16l-6 7.2v5.6l-4 2v-7.6L4 5.5z"/>')
+  filter: wrap('<path d="M4 5.5h16l-6 7.2v5.6l-4 2v-7.6L4 5.5z"/>'),
+  // تحریم‌شکن: سپر با آذرخش
+  sanctions: wrap('<path d="M12 2.8 20 6v5.6c0 4.9-3.3 8.7-8 10.6-4.7-1.9-8-5.7-8-10.6V6l8-3.2z"/><path d="m13.1 8.2-3.4 4.4h3l-1 3.6 3.4-4.5h-3l1-3.5z"/>'),
+  // اندپوینت/API: قلاب کد
+  api: wrap('<path d="m8.4 8.2-4 3.8 4 3.8"/><path d="m15.6 8.2 4 3.8-4 3.8"/><path d="m13.4 5.6-2.8 12.8"/>'),
+  // DNS و DoH
+  dns: wrap('<circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v3.2M12 18.2v3.2M2.6 12h3.2M18.2 12h3.2"/><circle cx="12" cy="12" r="8.4" stroke-dasharray="2.6 3.4"/>'),
+  // WARP: خط موج
+  warp: wrap('<path d="M3 9.4c2.4-3 4.6-3 6.9 0s4.5 3 6.9 0c.9-1.1 1.9-1.7 3.2-1.7"/><path d="M3 15.6c2.4-3 4.6-3 6.9 0s4.5 3 6.9 0c.9-1.1 1.9-1.7 3.2-1.7"/>'),
+  // موقعیت/منطقه
+  pin: wrap('<path d="M12 21s6.2-5 6.2-10.2A6.2 6.2 0 0 0 5.8 10.8C5.8 16 12 21 12 21z"/><circle cx="12" cy="10.6" r="2.4"/>'),
+
+  telegram: wrap('<path d="M21.4 4.2 2.8 11c-.8.3-.8 1.4 0 1.7l4.6 1.6 1.8 5.4c.2.7 1.1.9 1.6.3l2.5-2.9 4.5 3.3c.6.4 1.4.1 1.6-.6l3-14.5c.2-.8-.6-1.4-1.2-1.1z"/><path d="m7.4 14.3 9.3-6.2-7.2 7.9"/>'),
+  back: wrap('<path d="M20 12H5"/><path d="m11 6-6 6 6 6"/>'),
+  stop: wrap('<rect x="6" y="6" width="12" height="12" rx="2.4"/>'),
+  // تپش/حرکت
+  pulse: wrap('<path d="M2.8 12h3.6l2-4.8 3.4 9.8 2.2-5h7.2"/>')
 };
 
 export function icon(name, extraClass = '') {

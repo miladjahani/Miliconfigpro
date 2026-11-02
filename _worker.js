@@ -604,7 +604,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.4.0';
+const VERSION = 'v3.5.1';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';
@@ -628,6 +628,15 @@ const CONFIG_DEFAULTS = {
   // هسته این ورکر هدر Shadowsocks را به‌صورت متنی (بدون AEAD) می‌خواند، بنابراین تنها متد سازگار «none» است
   ssmethod: 'none',
   ech: 'no',
+  // — تحریم‌شکن: خروجی همهٔ نودها از «آدرس واسط» بیرون از ایران عبور می‌کند
+  // تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند.
+  sb: 'yes',
+  sbRegion: 'DE', // منطقهٔ آدرس واسط پیشنهادی (DE/NL/US/…)
+  // — گزینه‌های کلاینت که در کانفیگ‌های تولیدشده اعمال می‌شوند
+  doh: 'yes', // DNS over HTTPS در کانفیگ کلاینت
+  tcp: 'yes', // TCP fast-open / tcp-concurrent در کانفیگ کلاینت
+  udp: 'yes', // عبور UDP از نودها
+  awgv: '3', // نسخهٔ AmneziaWG برای نودهای WARP: 1 | 2 | 3
   tp: '',
   customDNS: 'https://223.5.5.5/dns-query',
   customECHDomain: 'cloudflare-ech.com',
@@ -698,7 +707,8 @@ const CONFIG_DEFAULTS = {
 const BOOLEAN_CONFIG_KEYS = [
   'ev', 'et', 'ex', 'es', 'ech', 'ena', 'epd', 'epi', 'egi',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag',
-  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate'
+  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate',
+  'sb', 'doh', 'tcp', 'udp'
 ];
 
 const ENV_KEY_MAPPING = {
@@ -710,6 +720,12 @@ const ENV_KEY_MAPPING = {
   sspass: ['sspass', 'SSPASS', 'SS_PASSWORD'],
   ssmethod: ['ssmethod', 'SSMETHOD', 'SS_METHOD'],
   ech: ['ech', 'ECH'],
+  sb: ['sb', 'SB', 'SANCTIONS_BYPASS'],
+  sbRegion: ['sbRegion', 'SBREGION', 'SB_REGION'],
+  doh: ['doh', 'DOH'],
+  tcp: ['tcp', 'TCP'],
+  udp: ['udp', 'UDP'],
+  awgv: ['awgv', 'AWGV', 'AMNEZIA_VERSION'],
   tp: ['tp', 'TP'],
   customDNS: ['customDNS', 'CUSTOMDNS', 'CUSTOM_DNS'],
   customECHDomain: ['customECHDomain', 'CUSTOMECHDOMAIN', 'CUSTOM_ECH_DOMAIN'],
@@ -1044,6 +1060,10 @@ function normalizeEffectiveConfig(rawConfig = {}) {
   if (!snap.fragmentLength) snap.fragmentLength = '100-200';
   if (!snap.fragmentInterval) snap.fragmentInterval = '10-20';
   if (!snap.fragmentPackets) snap.fragmentPackets = 'tlshello';
+  snap.sbRegion = String(snap.sbRegion || 'DE').trim().toUpperCase();
+  if (!snap.sbRegion) snap.sbRegion = 'DE';
+  // نسخهٔ AmneziaWG برای نودهای WARP؛ هر مقدار ناشناخته به نسخهٔ ۳ (امنزیا 3.x) می‌رود
+  snap.awgv = ['1', '2', '3'].includes(String(snap.awgv || '').trim()) ? String(snap.awgv).trim() : '3';
   snap.fp = snap.fp || 'chrome';
   snap.patt = snap.patt || '/?ed=2048';
   snap.ports = parseNodePorts(snap.ports).join(',');
@@ -1124,7 +1144,9 @@ const USER_PRESETS = {
       egi: 'yes',
       ena: 'yes',
       ipv4: 'yes',
-      ipv6: 'yes'
+      ipv6: 'yes',
+      sb: 'yes',
+      sbRegion: 'DE'
     }
   },
   'iran-heavy': {
@@ -1150,7 +1172,9 @@ const USER_PRESETS = {
       fragmentInterval: '5-10',
       epd: 'yes',
       epi: 'yes',
-      egi: 'yes'
+      egi: 'yes',
+      sb: 'yes',
+      sbRegion: 'NL'
     }
   },
   'international': {
@@ -1397,6 +1421,8 @@ function buildNodeDisplayName(meta = {}) {
   if (meta.tls === false) parts.push('HTTP');
   if (meta.proxy) parts.push('⇄ Proxy');
   if (meta.mci) parts.push('MCI');
+  // نسخهٔ AmneziaWG روی نودهای WARP: AWG2 / AWG3
+  if (meta.awg) parts.push(`AWG${meta.awg}`);
   return parts.join(' · ');
 }
 
@@ -2851,7 +2877,23 @@ const ICONS = {
   gauge: wrap('<path d="M4.2 17.5a8.4 8.4 0 1 1 15.6 0"/><path d="m12 13.5 3.6-4.2"/><circle cx="12" cy="14.6" r="1.5"/>'),
   branch: wrap('<circle cx="6.5" cy="6" r="2.2"/><circle cx="6.5" cy="18" r="2.2"/><circle cx="17.5" cy="8.5" r="2.2"/><path d="M6.5 8.2v7.6"/><path d="M17.5 10.7c0 3.1-2.4 5.3-6 6.3"/>'),
   search: wrap('<circle cx="11" cy="11" r="6.4"/><path d="m16 16 4.2 4.2"/>'),
-  filter: wrap('<path d="M4 5.5h16l-6 7.2v5.6l-4 2v-7.6L4 5.5z"/>')
+  filter: wrap('<path d="M4 5.5h16l-6 7.2v5.6l-4 2v-7.6L4 5.5z"/>'),
+  // تحریم‌شکن: سپر با آذرخش
+  sanctions: wrap('<path d="M12 2.8 20 6v5.6c0 4.9-3.3 8.7-8 10.6-4.7-1.9-8-5.7-8-10.6V6l8-3.2z"/><path d="m13.1 8.2-3.4 4.4h3l-1 3.6 3.4-4.5h-3l1-3.5z"/>'),
+  // اندپوینت/API: قلاب کد
+  api: wrap('<path d="m8.4 8.2-4 3.8 4 3.8"/><path d="m15.6 8.2 4 3.8-4 3.8"/><path d="m13.4 5.6-2.8 12.8"/>'),
+  // DNS و DoH
+  dns: wrap('<circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v3.2M12 18.2v3.2M2.6 12h3.2M18.2 12h3.2"/><circle cx="12" cy="12" r="8.4" stroke-dasharray="2.6 3.4"/>'),
+  // WARP: خط موج
+  warp: wrap('<path d="M3 9.4c2.4-3 4.6-3 6.9 0s4.5 3 6.9 0c.9-1.1 1.9-1.7 3.2-1.7"/><path d="M3 15.6c2.4-3 4.6-3 6.9 0s4.5 3 6.9 0c.9-1.1 1.9-1.7 3.2-1.7"/>'),
+  // موقعیت/منطقه
+  pin: wrap('<path d="M12 21s6.2-5 6.2-10.2A6.2 6.2 0 0 0 5.8 10.8C5.8 16 12 21 12 21z"/><circle cx="12" cy="10.6" r="2.4"/>'),
+
+  telegram: wrap('<path d="M21.4 4.2 2.8 11c-.8.3-.8 1.4 0 1.7l4.6 1.6 1.8 5.4c.2.7 1.1.9 1.6.3l2.5-2.9 4.5 3.3c.6.4 1.4.1 1.6-.6l3-14.5c.2-.8-.6-1.4-1.2-1.1z"/><path d="m7.4 14.3 9.3-6.2-7.2 7.9"/>'),
+  back: wrap('<path d="M20 12H5"/><path d="m11 6-6 6 6 6"/>'),
+  stop: wrap('<rect x="6" y="6" width="12" height="12" rx="2.4"/>'),
+  // تپش/حرکت
+  pulse: wrap('<path d="M2.8 12h3.6l2-4.8 3.4 9.8 2.2-5h7.2"/>')
 };
 
 function icon(name, extraClass = '') {
@@ -4481,8 +4523,10 @@ function buildClashOpenVpnYaml(node) {
   return lines.join('\n');
 }
 
-function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
+function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com', opts = {}) {
   if (node.proto === 'wireguard') return buildClashWireGuardYaml(node);
+  // UDP روی هر نود قابل خاموش کردن است (تنظیم udp پنل)
+  const udpLine = opts.udp === false ? '    udp: false' : '    udp: true';
   const lines = [];
   const srv = normalizeHost(node.server);
   const host = normalizeHost(node.host) || srv;
@@ -4493,18 +4537,18 @@ function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
   lines.push(`    port: ${node.port}`);
   if (node.proto === 'vless') {
     lines.push(`    uuid: ${node.uuid}`);
-    lines.push(`    udp: true`);
+    lines.push(udpLine);
     lines.push(`    tls: ${node.tls ? 'true' : 'false'}`);
     if (node.flow) lines.push(`    flow: ${quoteYaml(node.flow)}`);
     lines.push(`    client-fingerprint: ${quoteYaml(node.fp || 'chrome')}`);
   } else if (node.proto === 'trojan') {
     lines.push(`    password: ${quoteYaml(node.password)}`);
-    lines.push(`    udp: true`);
+    lines.push(udpLine);
     lines.push(`    client-fingerprint: ${quoteYaml(node.fp || 'chrome')}`);
   } else if (node.proto === 'ss') {
     lines.push(`    cipher: ${quoteYaml(node.cipher || 'none')}`);
     lines.push(`    password: ${quoteYaml(node.password)}`);
-    lines.push(`    udp: true`);
+    lines.push(udpLine);
     lines.push(`    plugin: v2ray-plugin`);
     lines.push(`    plugin-opts:`);
     lines.push(`      mode: websocket`);
@@ -4543,6 +4587,11 @@ function buildClashNodeYaml(node, customECHDomain = 'cloudflare-ech.com') {
 function generateClashConfig(links, options = {}) {
   const customDNS = options.customDNS || 'https://223.5.5.5/dns-query';
   const customECHDomain = options.customECHDomain || 'cloudflare-ech.com';
+  // گزینه‌های کلاینت از تنظیمات کاربر می‌آیند (DoH / TCP / UDP)
+  const wantDoh = String(options.doh == null ? 'yes' : options.doh) !== 'no';
+  const wantTcp = String(options.tcp == null ? 'yes' : options.tcp) !== 'no';
+  const wantUdp = String(options.udp == null ? 'yes' : options.udp) !== 'no';
+  const yamlUdpOpts = { udp: wantUdp };
   const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss' || n.proto === 'wireguard'));
   const ovpnNodes = Array.isArray(options.ovpnNodes) ? options.ovpnNodes : [];
   const names = [...nodes.map(n => n.name), ...ovpnNodes.map(n => n.name)];
@@ -4556,7 +4605,8 @@ function generateClashConfig(links, options = {}) {
     'ipv6: true',
     'external-controller: 127.0.0.1:9090',
     'unified-delay: true',
-    'tcp-concurrent: true',
+    `tcp-concurrent: ${wantTcp}`,
+    ...(wantTcp ? ['tcp-fast-open: true', 'tcp-fast-open-keep-alive: true'] : []),
     'geodata-mode: true',
     'geo-auto-update: true',
     'geo-update-interval: 24',
@@ -4597,11 +4647,13 @@ function generateClashConfig(links, options = {}) {
     '    - 223.5.5.5',
     '    - 119.29.29.29',
     '  nameserver:',
-    `    - ${customDNS}`,
-    '    - https://119.29.29.29/dns-query',
-    '  fallback:',
-    '    - https://1.1.1.1/dns-query',
-    '    - https://8.8.8.8/dns-query',
+    wantDoh
+      ? `    - ${customDNS.startsWith('http') ? customDNS : 'https://223.5.5.5/dns-query'}`
+      : '    - 223.5.5.5',
+    wantDoh ? '    - https://1.1.1.1/dns-query' : '    - 119.29.29.29',
+    ...(wantDoh
+      ? ['  fallback:', '    - https://1.1.1.1/dns-query', '    - https://8.8.8.8/dns-query']
+      : ['  fallback:', '    - 1.1.1.1', '    - 8.8.8.8']),
     '  fallback-filter:',
     '    geoip: true',
     '    geoip-code: CN',
@@ -4611,7 +4663,7 @@ function generateClashConfig(links, options = {}) {
   ];
 
   const proxiesSection = ['proxies:'];
-  for (const n of nodes) proxiesSection.push(buildClashNodeYaml(n, customECHDomain));
+  for (const n of nodes) proxiesSection.push(buildClashNodeYaml(n, customECHDomain, yamlUdpOpts));
   for (const n of ovpnNodes) proxiesSection.push(buildClashOpenVpnYaml(n));
 
   const nodesOnly = names.length ? names.map(n => `      - ${quoteYaml(n)}`).join('\n') : '      - DIRECT';
@@ -4886,7 +4938,10 @@ function generateSingboxConfig(links, options = {}) {
     log: { level: 'info', timestamp: true },
     dns: {
       servers: [
-        { ...splitDnsAddress(customDNS), tag: 'remote', detour: 'select' },
+        // DoH در تنظیمات کاربر خاموش شود، DNS معمولی UDP استفاده می‌شود
+        String(options.doh == null ? 'yes' : options.doh) === 'no'
+          ? { type: 'udp', tag: 'remote', server: '223.5.5.5', detour: 'select' }
+          : { ...splitDnsAddress(customDNS), tag: 'remote', detour: 'select' },
         { type: 'udp', tag: 'local', server: '223.5.5.5', detour: 'direct' },
         { type: 'fakeip', tag: 'fakeip', inet4_range: '198.18.0.0/15', inet6_range: 'fc00::/18' }
       ],
@@ -5613,8 +5668,12 @@ function makeNodeEntry(link, proto, host, item = null, tls = true) {
 function balanceComboEntries(entries = [], limit = 0) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
   const groups = new Map();
+  // حذف تکرار: یک آدرس ممکن است از چند منبع (فهرست ثابت، ترجیحی و ...) بیاید
+  const seenLinks = new Set();
   for (const entry of entries) {
     if (!entry || !entry.link) continue;
+    if (seenLinks.has(entry.link)) continue;
+    seenLinks.add(entry.link);
     const key = `${entry.meta.proto}|${entry.meta.family || 'na'}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(entry);
@@ -5623,8 +5682,12 @@ function balanceComboEntries(entries = [], limit = 0) {
 
   // داخل هر گروه، نودهای پروکسی‌دار و بدون پروکسی یک‌درمیان بیایند
   for (const [key, list] of groups) {
-    const withProxy = list.filter(item => item.meta.proxy);
-    const plain = list.filter(item => !item.meta.proxy);
+    // ترتیب پایدار: مستقل از ترتیب رسیدن منابع، تا لینک‌ها بین دو درخواست
+    // جابه‌جا نشوند (آی‌پی نود در کلاینت ثابت می‌ماند).
+    const withProxy = list.filter(item => item.meta.proxy)
+      .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
+    const plain = list.filter(item => !item.meta.proxy)
+      .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
     const mixed = [];
     let a = 0;
     let b = 0;
@@ -5711,7 +5774,7 @@ function getStaticCfAddresses(cfg = {}) {
 // ساخت نودهای چندلوکیشن: آدرس = آی‌پی ثابت CF، و پروکسی کشور از طریق ?s= در مسیر ws
 const LOCATION_PROXY_SCHEMES = ['socks5://', 'socks://', 'http://', 'https://'];
 
-function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost = '') {
+function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost = '', seed = '') {
   const usable = (Array.isArray(proxyPool) ? proxyPool : []).filter(item => {
     const p = String(item?.proxy || '').trim();
     return LOCATION_PROXY_SCHEMES.some(s => p.toLowerCase().startsWith(s));
@@ -5733,8 +5796,9 @@ function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost = '') {
   if (addressPool.length === 0) return [];
 
   const wanted = Math.max(1, Math.min(parseInt(cfg.locationNodeCount, 10) || 8, usable.length));
-  // چرخش پنج‌دقیقه‌ای پروکسی‌ها تا نودها همیشه از استخر تازه انتخاب شوند
-  const bucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  // انتخاب پایدار بر اساس seed کاربر (نه زمان): با هر بار خواندن ساب‌لینک
+  // همان پروکسی‌ها برمی‌گردند تا آی‌پی نود در کلاینت عوض نشود.
+  const bucket = seed ? stableAddressSeed(String(seed) + '-loc') : 0;
 
   // با گام‌بندی روی استخر، هم IPv4 و هم IPv6 (اگر فعال باشد) در ساب‌لینک حضور پیدا می‌کنند
   const stride = Math.max(1, Math.floor(addressPool.length / wanted));
@@ -6575,8 +6639,29 @@ function awgHash(text) {
   return h >>> 0;
 }
 
+// نسخه‌های AmneziaWG: نسخهٔ ۱ فقط بسته‌های Junk، نسخهٔ ۲ پدینگ/هدر و بسته‌های
+// امضایی I1..I5 را اضافه می‌کند و نسخهٔ ۳ تنظیمات زمان‌بندی و
+// ContentPaddingAddition را هم می‌آورد. برای WARP (همتای وایرگارد استاندارد)
+// مقدار S/H صفر و ۱..۴ است، وگرنه هندشیک رد می‌شود.
+function normalizeAwgVersion(value) {
+  const v = String(value == null ? '' : value).trim();
+  return v === '1' || v === '2' || v === '3' ? v : '3';
+}
+
+// رشتهٔ امضای CPS برای بسته‌های ویژهٔ AmneziaWG — فقط تگ‌های مجاز
+// (<b 0x..> بایت ثابت، <r N> بایت تصادفی، <rc N> حرف، <rd N> رقم، <t> زمان)
+function buildAwgSignatureCps(idx, next) {
+  const fixed = ['ce00000001', 'f6ab3267fa', 'a10000000200', '8d00000001', 'e700000001'];
+  const hex = fixed[idx % fixed.length];
+  const letters = next(6, 14);
+  const rand = next(24, 64);
+  if (idx % 2 === 0) return `<b 0x${hex}><rc ${letters}><t><r ${rand}>`;
+  return `<b 0x${hex}><t><rd ${letters}><r ${rand}>`;
+}
+
 function buildAmneziaWgParams(config = {}) {
-  const seed = `${config.seed || ''}:${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}`;
+  const version = normalizeAwgVersion(config.awgv);
+  const seed = `${config.seed || ''}:${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}:v${version}`;
   let h = awgHash(seed) || 1;
   const next = (min, max) => {
     h = (Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
@@ -6584,29 +6669,51 @@ function buildAmneziaWgParams(config = {}) {
   };
   const jmin = next(40, 70);
   const jmax = jmin + next(950, 1150);
-  // سرورهای WARP وایرگارد استاندارد هستند: هدر و پدینگ دستکاری‌شده را رد می‌کنند.
-  // پس برای WARP فقط بسته‌های Junk (Jc) فعال می‌ماند و S/H صفر می‌شود تا هندشیک
-  // واقعاً برقرار شود؛ حالت کامل مبهم‌سازی فقط با obfuscateHandshake فعال می‌شود.
-  const fullObfuscation = config.obfuscateHandshake === true;
-  const h1 = fullObfuscation ? next(100000, 800000) : 0;
-  return {
-    jc: next(3, 8),
+  const jc = next(3, 7);
+  // سرورهای WARP وایرگارد استاندارد هستند: هدر و پدینگ دست‌کاری‌شده را رد می‌کنند.
+  // پس S همیشه صفر و H1..H4 همان ۱..۴ وایرگارد می‌ماند؛ فقط بسته‌های Junk و
+  // بسته‌های امضایی (که سمت سرور نادیده گرفته می‌شوند) فعال‌اند.
+  const fullObfuscation = config.obfuscateHandshake === true && version === '1';
+  const base = {
+    version,
+    jc,
     jmin,
     jmax,
     s1: fullObfuscation ? next(20, 60) : 0,
     s2: fullObfuscation ? next(30, 90) : 0,
-    h1,
-    h2: fullObfuscation ? h1 + next(1, 4000) : 0,
-    h3: fullObfuscation ? h1 + next(4001, 9000) : 0,
-    h4: fullObfuscation ? h1 + next(9001, 16000) : 0
+    s3: 0,
+    s4: 0,
+    h1: fullObfuscation ? next(100000, 800000) : 1,
+    h2: 0,
+    h3: 0,
+    h4: 0
   };
+  base.h2 = fullObfuscation ? base.h1 + next(1, 4000) : 2;
+  base.h3 = fullObfuscation ? base.h1 + next(4001, 9000) : 3;
+  base.h4 = fullObfuscation ? base.h1 + next(9001, 16000) : 4;
+  if (version === '1') return base;
+
+  // ‏۲.x و ۳.x: بسته‌های امضایی I1..I3 + بسته‌های اضافی؛ همه سمت کلاینت
+  const signatures = [];
+  const sigCount = version === '3' ? 3 : 2;
+  for (let i = 0; i < sigCount; i++) signatures.push(buildAwgSignatureCps(i, next));
+  base.signatures = signatures;
+  base.paddingAddition = `${next(10, 40)}-${next(60, 120)}`;
+  if (version === '3') {
+    base.rekeyAfterTime = `${next(100, 110)}-${next(115, 130)}`;
+    base.rekeyTimeout = `${next(3, 4)}-${next(5, 8)}`;
+    base.rejectAfterTime = `${next(150, 165)}-${next(175, 195)}`;
+    base.keepaliveTimeout = `${next(5, 8)}-${next(12, 18)}`;
+    base.maxHandshakeAttempts = `${next(15, 17)}-${next(18, 22)}`;
+  }
+  return base;
 }
 
 // قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify) + پارامترهای AmneziaWG
 function buildWireguardLink(config = {}, name = 'WARP') {
   const host = String(config.server || WARP_DEFAULT_HOST);
   const endpoint = host.includes(':') ? `[${host}]` : host;
-  const awg = config.awg === false ? null : buildAmneziaWgParams(config);
+  const awg = config.awg === false ? null : buildAmneziaWgParams({ ...config, awgv: config.awgv || '3' });
   const params = new URLSearchParams();
   params.set('publickey', config.publicKey || WARP_PEER_PUBLIC_KEY);
   params.set('reserved', (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(','));
@@ -6616,14 +6723,16 @@ function buildWireguardLink(config = {}, name = 'WARP') {
   params.set('dns', String(config.dns || '1.1.1.1, 1.0.0.1'));
   if (config.address6) params.set('address6', String(config.address6));
   if (awg) {
-    params.set('awg', '1');
+    params.set('awg', awg.version || '1');
     params.set('jc', String(awg.jc));
     params.set('jmin', String(awg.jmin));
     params.set('jmax', String(awg.jmax));
     // مقادیر صفر در لینک نوشته نمی‌شوند (کلاینت آن‌ها را پیش‌فرض وایرگارد می‌گیرد)
-    for (const key of ['s1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+    for (const key of ['s1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4']) {
       if (awg[key] > 0) params.set(key, String(awg[key]));
     }
+    if (awg.paddingAddition) params.set('cpa', awg.paddingAddition);
+    (awg.signatures || []).forEach((sig, idx) => params.set(`i${idx + 1}`, sig));
   }
   const userInfo = encodeURIComponent(String(config.privateKey || ''));
   return `wireguard://${userInfo}@${endpoint}:${config.port || WARP_DEFAULT_PORT}?${params.toString()}#${encodeURIComponent(name)}`;
@@ -6657,9 +6766,17 @@ function buildWireGuardConf(config = {}, name = 'WARP') {
   );
   // پارامترهای پدینگ/هدر فقط در حالت مبهم‌سازی کامل نوشته می‌شوند؛ صفر برای
   // WARP لازم است و گرنه هندشیک وایرگارد استاندارد رد می‌شود.
-  for (const [key, value] of [['S1', awg.s1], ['S2', awg.s2], ['H1', awg.h1], ['H2', awg.h2], ['H3', awg.h3], ['H4', awg.h4]]) {
+  for (const [key, value] of [['S1', awg.s1], ['S2', awg.s2], ['S3', awg.s3], ['S4', awg.s4], ['H1', awg.h1], ['H2', awg.h2], ['H3', awg.h3], ['H4', awg.h4]]) {
     if (value > 0) lines.push(`${key} = ${value}`);
   }
+  // AmneziaWG 2.x/3.x: بسته‌های امضایی و تنظیمات زمان‌بندی (فقط سمت کلاینت)
+  (awg.signatures || []).forEach((sig, idx) => lines.push(`I${idx + 1} = ${sig}`));
+  if (awg.paddingAddition) lines.push(`ContentPaddingAddition = ${awg.paddingAddition}`);
+  if (awg.rekeyAfterTime) lines.push(`RekeyAfterTime = ${awg.rekeyAfterTime}`);
+  if (awg.rekeyTimeout) lines.push(`RekeyTimeout = ${awg.rekeyTimeout}`);
+  if (awg.rejectAfterTime) lines.push(`RejectAfterTime = ${awg.rejectAfterTime}`);
+  if (awg.keepaliveTimeout) lines.push(`KeepaliveTimeout = ${awg.keepaliveTimeout}`);
+  if (awg.maxHandshakeAttempts) lines.push(`MaxHandshakeAttempts = ${awg.maxHandshakeAttempts}`);
   lines.push(
     '[Peer]',
     `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
@@ -6669,6 +6786,28 @@ function buildWireGuardConf(config = {}, name = 'WARP') {
   );
   // لایسنس حساب هرگز داخل فایل کاربر نوشته نمی‌شود (نشت کلید پولی)
   return lines.join('\n') + '\n';
+}
+
+// کانفیگ WireGuard استاندارد (بدون پارامترهای امنزیا) — برای کلاینت‌هایی که
+// AmneziaWG ندارند ولی WARP ساده را کامل پشتیبانی می‌کنند.
+function buildPlainWireGuardConf(config = {}, name = 'WARP') {
+  const endpointHost = String(config.server || WARP_DEFAULT_HOST);
+  const endpoint = endpointHost.includes(':') ? `[${endpointHost}]` : endpointHost;
+  const mtu = parseInt(config.mtu, 10) || 1280;
+  const dns = String(config.dns || '1.1.1.1, 1.0.0.1');
+  return [
+    `# ${name} — ${BRAND_NAME} (WireGuard)`,
+    '[Interface]',
+    `PrivateKey = ${config.privateKey || ''}`,
+    `Address = ${config.address4 || WARP_DEFAULT_ADDRESS}/32`,
+    `DNS = ${dns}`,
+    `MTU = ${mtu}`,
+    '[Peer]',
+    `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    'PersistentKeepalive = 25',
+    `Endpoint = ${endpoint}:${config.port || WARP_DEFAULT_PORT}`
+  ].join('\n') + '\n';
 }
 
 // بستهٔ کانفیگ‌های آمادهٔ WARP برای دانلود (zip) — بدون نیاز به هیچ تنظیمی در پنل:
@@ -6692,6 +6831,7 @@ function warpEndpointTag(host) {
 async function buildWarpConfBundle(cfg = {}, options = {}) {
   const registered = await fetchWarpRegistration(cfg);
   const base = registered || buildFallbackWarpConfig();
+  const awgv = normalizeAwgVersion(cfg.awgv);
   const seed = String(options.seed || cfg.wk || BRAND_NAME);
   const v4Hosts = WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':'));
   const v6Hosts = WARP_ENDPOINT_IPS.filter(host => String(host).includes(':'));
@@ -6730,7 +6870,7 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
     files.push({
       name,
       data: buildWireGuardConf(
-        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, seed: `${seed}:${name}` },
+        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, awgv, seed: `${seed}:${name}` },
         label
       )
     });
@@ -6755,11 +6895,119 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
   const links = entries.map(entry => {
     const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
     return buildWireguardLink(
-      { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, seed: `${seed}:link:${entry.host}:${entry.port}` },
+      { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, awgv, seed: `${seed}:link:${entry.host}:${entry.port}` },
       `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port}`
     );
   });
   files.push({ name: 'links.txt', data: links.join('\n') + '\n' });
+
+  // ---- همهٔ فرمت‌های دیگر WARP در همین زیپ ----
+  const reservedArr = (Array.isArray(base.reserved) ? base.reserved : [0, 0, 0]).slice(0, 3);
+  const dnsList = String(base.dns || '1.1.1.1, 1.0.0.1').split(',').map(item => item.trim()).filter(Boolean);
+  const localAddress = [base.address4 || WARP_DEFAULT_ADDRESS];
+  if (base.address6) localAddress.push(base.address6);
+
+  // ۱) ساب‌لینک base64 (v2rayN / NekoBox / Hiddify)
+  files.push({ name: 'WARP-sub-base64.txt', data: encodeBase64Utf8(links.join('\n')) + '\n' });
+
+  // ۲) Clash Meta / Mihomo
+  const proxyNames = [];
+  const clashProxies = entries.map((entry, idx) => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    const proxyName = `WARP ${idx + 1} ${entry.kind} ${entry.port}`;
+    proxyNames.push(proxyName);
+    const awg = buildAmneziaWgParams({ ...base, awgv, seed: `${seed}:clash:${entry.host}:${entry.port}` });
+    const parts = [
+      `name: "${proxyName}"`,
+      'type: wireguard',
+      `server: "${entry.host}"`,
+      `port: ${entry.port}`,
+      `ip: ${localAddress[0]}/32`,
+      `private-key: "${base.privateKey || ''}"`,
+      `public-key: "${base.publicKey || WARP_PEER_PUBLIC_KEY}"`,
+      `mtu: ${preset.mtu}`,
+      'udp: true',
+      `reserved: [${reservedArr.join(', ')}]`,
+      `dns: [${dnsList.map(item => `"${item}"`).join(', ')}]`,
+      'allowed-ips: ["0.0.0.0/0", "::/0"]',
+      'remote-dns-resolve: true'
+    ];
+    if (awgv >= 2) {
+      parts.push(`amnezia-wg-option: { jc: ${awg.jc}, jmin: ${awg.jmin}, jmax: ${awg.jmax}, s1: 0, s2: 0, h1: 1, h2: 2, h3: 3, h4: 4 }`);
+    }
+    return `  - { ${parts.join(', ')} }`;
+  });
+  files.push({
+    name: 'WARP-clash.yaml',
+    data: [
+      `# ${BRAND_NAME} — WARP / WARP PRO / multi-location`,
+      '# Clash Meta / Mihomo (clash-verge, flclash, stash)',
+      `# profiles: ${entries.length} — AmneziaWG junk packets, headers stay default for WARP`,
+      'mixed-port: 7890',
+      'allow-lan: false',
+      'mode: rule',
+      'log-level: warning',
+      'dns:',
+      '  enable: true',
+      '  enhanced-mode: fake-ip',
+      '  nameserver:',
+      ...dnsList.map(item => `    - ${item}`),
+      'proxies:',
+      ...clashProxies,
+      'proxy-groups:',
+      '  - name: "WARP"',
+      '    type: select',
+      '    proxies:',
+      ...proxyNames.map(name => `      - "${name}"`),
+      '      - DIRECT',
+      'rules:',
+      '  - MATCH,WARP'
+    ].join('\n') + '\n'
+  });
+
+  // ۳) sing-box
+  const sbOutbounds = entries.map((entry, idx) => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    return {
+      type: 'wireguard',
+      tag: `WARP ${idx + 1} ${entry.kind} ${entry.port}`,
+      server: entry.host,
+      server_port: entry.port,
+      local_address: localAddress.map(item => (item.includes('/') ? item : item.includes(':') ? `${item}/128` : `${item}/32`)),
+      private_key: base.privateKey || '',
+      peer_public_key: base.publicKey || WARP_PEER_PUBLIC_KEY,
+      mtu: preset.mtu,
+      reserved: reservedArr
+    };
+  });
+  const singboxConfig = {
+    log: { level: 'warn' },
+    inbounds: [{ type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: 2080 }],
+    outbounds: [
+      {
+        type: 'selector',
+        tag: 'select',
+        outbounds: sbOutbounds.map(item => item.tag).concat(['direct']),
+        default: sbOutbounds.length ? sbOutbounds[0].tag : 'direct'
+      },
+      ...sbOutbounds,
+      { type: 'direct', tag: 'direct' }
+    ],
+    route: { final: 'select' }
+  };
+  files.push({ name: 'WARP-singbox.json', data: JSON.stringify(singboxConfig, null, 2) + '\n' });
+
+  // ۴) WireGuard خالص (بدون پارامترهای امنزیا) برای کلاینت‌های معمولی
+  entries.slice(0, 6).forEach((entry, idx) => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    files.push({
+      name: `plain-wireguard/${String(idx + 1).padStart(2, '0')}-${entry.kind}-${warpEndpointTag(entry.host)}-${entry.port}-${entry.preset}.conf`,
+      data: buildPlainWireGuardConf(
+        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns },
+        `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port}`
+      )
+    });
+  });
 
   const endpointList = [
     `# ${BRAND_NAME} — WARP endpoint matrix`,
@@ -6773,12 +7021,21 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
   files.push({
     name: 'README.txt',
     data: [
-      `${BRAND_NAME} — WARP / WARP PRO / multi-location (AmneziaWG)`,
+      `${BRAND_NAME} — WARP / WARP PRO / multi-location`,
       '',
       `files: ${files.length + 1} — IPv4 + IPv6 endpoints, multiple UDP ports, 4 tuning profiles`,
       '',
-      'Import any .conf into AmneziaWG (Windows/Android/iOS/macOS) or WireGuard.',
-      'links.txt = same profiles as wireguard:// links (NekoBox/Hiddify/v2rayN).',
+      'formats inside this zip:',
+      '  *.conf ................ AmneziaWG profile (Jc/Jmin/Jmax + AWG2/AWG3 signatures)',
+      '  plain-wireguard/*.conf . standard WireGuard profile (no AmneziaWG keys)',
+      '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
+      '  WARP-singbox.json ..... sing-box config with a selector group',
+      '  links.txt ............. wireguard:// links (NekoBox / Hiddify / v2rayN)',
+      '  WARP-sub-base64.txt ... same links in base64 subscription form',
+      '  endpoints.txt ......... endpoint matrix (host / port / profile)',
+      '',
+      'AmneziaWG: import any .conf into AmneziaWG (Windows / Android / iOS / macOS).',
+      'WireGuard: use plain-wireguard/ if your client does not support AmneziaWG.',
       'Jc/Jmin/Jmax send junk packets before the handshake; S/H stay 0 because',
       'Cloudflare WARP is a plain WireGuard peer and rejects modified headers.',
       'If a profile does not connect, try another port (500/1701/4500) or the IPv6 file.',
@@ -6803,21 +7060,26 @@ async function buildWarpFamilyLinks(cfg = {}, options = {}) {
 
   const registered = await fetchWarpRegistration(cfg);
   const base = registered || buildFallbackWarpConfig();
+  // نسخهٔ AmneziaWG (۱/۲/۳) در همهٔ نودهای WARP اعمال می‌شود
+  const awgv = normalizeAwgVersion(cfg.awgv);
 
   if (wantWarp) {
-    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard' })));
+    links.push(buildWireguardLink({ ...base, awgv, seed: `warp:${awgv}` }, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard', awg: awgv })));
   }
   if (wantPro) {
     // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
-    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp_pro', family: 'WireGuard' })));
+    links.push(buildWireguardLink({ ...base, awgv, seed: `warp_pro:${awgv}` }, buildNodeDisplayName({ proto: 'warp_pro', family: 'WireGuard', awg: awgv })));
   }
   if (wantMl) {
     const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
     endpoints.forEach((endpoint, idx) => {
       const label = String(endpoint.label || '').trim().toUpperCase();
-      const meta = { proto: 'warp_ml', family: 'WireGuard', cc: /^[A-Z]{2}$/.test(label) ? label : '' };
+      const meta = { proto: 'warp_ml', family: 'WireGuard', cc: /^[A-Z]{2}$/.test(label) ? label : '', awg: awgv };
       const name = `${buildNodeDisplayName(meta)} · ${label || 'EP'}-${idx + 1}`;
-      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, name));
+      links.push(buildWireguardLink(
+        { ...base, server: endpoint.host, port: endpoint.port, awgv, seed: `warp_ml:${endpoint.host}:${endpoint.port}:${awgv}` },
+        name
+      ));
     });
   }
   return links;
@@ -7051,11 +7313,114 @@ async function fetchOpenVpnNodes(cfg = {}, force = false) {
   return items;
 }
 
+// ============================================================================
+// آدرس واسط «تحریم‌شکن»: خروجی همهٔ نودها از یک پروکسی بیرون از ایران عبور
+// می‍کند تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند. انتخاب پایدار
+// است تا با هر بار خواندن ساب‌لینک عوض نشود.
+// ============================================================================
+function resolveSanctionsProxy(cfg = {}, seed = '') {
+  const pool = Array.isArray(FALLBACK_PROXY_IPS) ? FALLBACK_PROXY_IPS : [];
+  if (!pool.length) return '';
+  const wanted = String(cfg.sbRegion || cfg.region || 'DE').trim().toUpperCase();
+  const usable = wanted && wanted !== 'AUTO' ? pool.filter(item => String(item.regionCode).toUpperCase() === wanted) : [];
+  const list = usable.length ? usable : pool;
+  const idx = seed ? stableAddressSeed(String(seed) + '-sb') % list.length : 0;
+  const picked = list[idx];
+  return `${picked.domain}:${picked.port || 443}`;
+}
+
+// کش فهرست آی‌پی‌های ترجیحی (اپراتوری): این فهرست از شبکه خوانده می‌شود و
+// بدون کش، با هر بار خواندن ساب‌لینک آدرس نودها عوض می‌شد (پرش آی‌پی در کلاینت).
+const PREFERRED_CACHE_TTL = 6 * 60 * 60 * 1000;
+let preferredIpsCache = { key: '', at: 0, list: [] };
+
+// کش مشترک بین ایزوله‌ها: در ورکر هر درخواست ممکن است در ایزولهٔ تازه اجرا شود،
+// پس فقط حافظهٔ محلی کافی نیست و فهرست در D1 هم نگه داشته می‌شود تا آدرس نودها
+// برای همهٔ درخواست‌ها (و کلاینتها) یکی بماند.
+function getD1(env) {
+  const db = env && (env.DB || env.D1 || env.MILICONFIG_DB || env.MILI_DB);
+  return db && typeof db.prepare === 'function' ? db : null;
+}
+
+async function readSharedCache(env, key) {
+  const db = getD1(env);
+  if (!db) return null;
+  try {
+    const row = await db.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
+    if (!row || !row.value) return null;
+    const parsed = JSON.parse(String(row.value));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function writeSharedCache(env, key, payload) {
+  const db = getD1(env);
+  if (!db) return;
+  try {
+    await db.prepare(
+      `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    ).bind(key, JSON.stringify(payload), Date.now()).run();
+  } catch (_e) {}
+}
+
+async function fetchPreferredIpsCached(cfg = {}, env = null) {
+  const key = [cfg.ipv4, cfg.ipv6, cfg.ispMobile, cfg.ispUnicom, cfg.ispTelecom].join('|');
+  const sharedKey = 'preferred_ips_cache_' + stableAddressSeed(key);
+  if (preferredIpsCache.key === key && Date.now() - preferredIpsCache.at < PREFERRED_CACHE_TTL) {
+    return preferredIpsCache.list;
+  }
+  const shared = await readSharedCache(env, sharedKey);
+  if (shared && Array.isArray(shared.list) && shared.list.length && Date.now() - Number(shared.at || 0) < PREFERRED_CACHE_TTL) {
+    preferredIpsCache = { key, at: Number(shared.at), list: shared.list };
+    return shared.list;
+  }
+  const list = await fetchUouinPreferredIps(cfg).catch(() => []);
+  if (Array.isArray(list) && list.length) {
+    const at = Date.now();
+    preferredIpsCache = { key, at, list };
+    await writeSharedCache(env, sharedKey, { at, list });
+  }
+  return Array.isArray(list) ? list : [];
+}
+
+// کش کوتاه‌مدت لیست نودها: پاسخ یکسان برای همان کاربر/تنظیمات تا نودها بین
+// دو بار خواندن ساب‌لینک (پینگ، بروزرسانی کلاینت) جابه‌جا نشوند و ساب صفحهٔ
+// وضعیت و تب لوکیشن دقیقاً هماهنگ باشند.
+const NODES_CACHE_TTL = 15 * 60 * 1000;
+const NODES_CACHE_MAX = 80;
+const nodesCache = new Map();
+
+function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}) {
+  const uuid = String(userOrConfig?.uuid || overrides.uuid || 'default').toLowerCase();
+  const params = [
+    overrides.set || '', overrides.country || '', overrides.region || '',
+    overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
+    overrides.wk || '', overrides.scope || userOrConfig?.nodeScope || 'all',
+    overrides.nowarp || ''
+  ].join('|');
+  return `${workerHost}|${uuid}|${stableAddressSeed(JSON.stringify(cfg))}|${params}`;
+}
+
+function rememberNodes(key, links) {
+  if (!key) return;
+  nodesCache.set(key, { at: Date.now(), links });
+  if (nodesCache.size > NODES_CACHE_MAX) {
+    const oldest = [...nodesCache.entries()].sort((a, b) => a[1].at - b[1].at).slice(0, nodesCache.size - NODES_CACHE_MAX);
+    for (const [entryKey] of oldest) nodesCache.delete(entryKey);
+  }
+}
+
 // تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری گویا (کشور/پروتکل/خانوادهٔ آدرس)
 // و رعایت سقف تعداد نود در ساب
 async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
+  const cachedKey = buildNodesCacheKey(workerHost, userOrConfig, cfg, queryOverrides);
+  const cached = nodesCache.get(cachedKey);
+  if (cached && Date.now() - cached.at < NODES_CACHE_TTL) return cached.links.slice();
   // استخر لبهٔ ترکیبی دامنه/آی‌پی: پاسخ فوری از فهرست داخلی و تازه‌سازی
   // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
   const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
@@ -7075,6 +7440,15 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
   // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
   const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
+
+  // اولویت آدرس واسط: مقدار صریح کاربر → منطقهٔ انتخابی → پیش‌فرض تحریم‌شکن
+  const explicitProxy = String(rawCfg.p || '').trim();
+  if (!explicitProxy && regionFilter) {
+    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
+  }
+  if (!String(cfg.p || '').trim() && cfg.sb === 'yes') {
+    cfg.p = resolveSanctionsProxy(cfg, userUuid);
+  }
 
   if (ipv6Mode) {
     // فقط آی‌پی نسخه ۶؛ دامنه محور/لیست ترجیحی/سرور اصلی/چندلوکیشن کنار گذاشته می‌شوند
@@ -7147,9 +7521,6 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
   // منطقه (region) مثل cfnew با «آدرس جایگزین» پیاده می‌شود: آدرس نود همان
   // آی‌پی ثابت کلادفلر می‌ماند و خروجی از ProxyIP همان منطقه عبور می‌کند.
-  if (regionFilter && !String(cfg.p || '').trim()) {
-    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
-  }
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
   if (!domainMode && !ipv6Mode && countryFilter) {
@@ -7175,7 +7546,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
         proxyPool.push({ proxy: item.proxy, country: code, unverified: item.unverified === true });
       }
     });
-    const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost);
+    const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost, userUuid + ':country');
     if (locationNodes.length > 0) {
       appendFromSource(locationNodes);
       countryMode = true;
@@ -7200,7 +7571,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
   if (!domainMode && !ipv6Mode && !countryMode && customProxies.length > 0) {
-    appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost));
+    appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost, userUuid + ':custom'));
   }
 
   if (!domainMode && !ipv6Mode && !disablePreferred && !countryMode) {
@@ -7233,7 +7604,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
       }
       // ۲) استخر آی‌پی‌های بهینه ارائه‌شده بر اساس اپراتور
       if (cfg.epi === 'yes' && !cfg.yxURL) {
-        const uouinList = await fetchUouinPreferredIps(cfg);
+        const uouinList = await fetchPreferredIpsCached(cfg, queryOverrides.env || null);
         if (uouinList.length > 0) {
           // ترتیب پایدار: از بین آی‌پی‌های برگشتی، همیشه همان تعداد ثابت و با
           // ترتیب هش‌محور انتخاب می‌شود تا آدرس‌ها بین دو درخواست نبض نزنند.
@@ -7254,7 +7625,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
           appendFromSource(ipOnly);
         }
         if (proxyOnly.length > 0) {
-          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost));
+          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, userUuid + ':url'));
         }
       }
       // اگر به هر دلیلی هیچ نودی ساخته نشد، از استخر رسمی CF استفاده می‌کنیم
@@ -7298,7 +7669,9 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   // ۳ نود اطلاع‌رسانی در صدر ساب‌لینک‌ها؛ در ساب اختصاصی IPv6 حذف می‌شوند
   // تا آن ساب واقعاً فقط نودهای IPv6 داشته باشد.
   const infoNodes = ipv6Mode ? [] : HARDCODED_INFO_NODES;
-  return [...infoNodes, ...finalized, ...warpLinks];
+  const result = [...infoNodes, ...finalized, ...warpLinks];
+  rememberNodes(cachedKey, result);
+  return result;
 }
 
 // تشخیص خودکار کلاینت از User-Agent در صورت عدم ارسال پارامتر target
@@ -10338,6 +10711,83 @@ async function handleScannerApi(request, env) {
     }
   }
 
+  // تست یک آدرس مشخص با یک درخواست GET ساده (برای ابزارها و مانیتورینگ بیرونی)
+  // /api/scanner/probe?host=104.16.0.1&port=443
+  if (action === 'probe' && request.method === 'GET') {
+    const host = normalizeNodeHost(url.searchParams.get('host') || url.searchParams.get('ip') || '');
+    const port = parseInt(url.searchParams.get('port') || '443', 10) || 443;
+    if (!host || (!isValidIpAddress(host) && !isValidDomain(host))) {
+      return jsonResponse({ success: false, error: 'invalid-host', message: 'آدرس واردشده معتبر نیست.' }, 400);
+    }
+    let probe = await probeTcp(host, port, 2500);
+    // اگر TCP از سمت ورکر مسدود باشد (مثلاً آدرس‌های خود کلادفلر)، یک درخواست
+    // HTTPS به همان آدرس می‌زنیم؛ پاسخ HTTP یعنی آدرس زنده است.
+    if (!probe.ok) {
+      const startedAt = Date.now();
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2500);
+        const safeHost = host.includes(':') ? `[${host}]` : host;
+        const resp = await fetch(`https://${safeHost}:${port}/cdn-cgi/trace`, {
+          method: 'GET',
+          redirect: 'manual',
+          headers: { Host: 'cloudflare.com' },
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (resp && typeof resp.status === 'number' && resp.status > 0) {
+          probe = { ok: true, latencyMs: Date.now() - startedAt, error: '' };
+        }
+      } catch (_e) {}
+    }
+    return jsonResponse({
+      success: Boolean(probe.ok),
+      host,
+      port,
+      latencyMs: probe.latencyMs || 0,
+      error: probe.ok ? '' : (probe.error || 'unreachable')
+    });
+  }
+
+  // اسکن سریع با GET: /api/scanner/quick?mode=proxyip&country=DE&limit=5
+  if (action === 'quick' && request.method === 'GET') {
+    try {
+      const requested = String(url.searchParams.get('mode') || url.searchParams.get('kind') || 'proxyip').toLowerCase();
+      const mode = ['ipv4', 'ipv6', 'domain', 'proxyip'].includes(requested) ? requested : 'proxyip';
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '8', 10), 1), 30);
+      const cfgNow = await loadGlobalConfig(env);
+      const result = await scanCfnewMode({
+        mode,
+        limit,
+        region: String(url.searchParams.get('country') || '').toUpperCase(),
+        cfg: cfgNow
+      });
+      return jsonResponse(result);
+    } catch (_e) {
+      return jsonResponse({ success: false, message: 'اسکن ناموفق بود؛ بعداً دوباره تلاش کنید.' }, 500);
+    }
+  }
+
+  // فهرست اندپوینت‌های اسکنر (خودتوصیف، برای ابزارهای بیرونی)
+  if (action === 'endpoints' && request.method === 'GET') {
+    const origin = url.origin;
+    return jsonResponse({
+      success: true,
+      endpoints: [
+        { method: 'GET', path: '/api/scanner/probe?host=&port=', description: 'تست اتصال یک آدرس و پورت' },
+        { method: 'GET', path: '/api/scanner/quick?mode=proxyip&country=DE&limit=5', description: 'دریافت و تست آدرس‌های سالم' },
+        { method: 'POST', path: '/api/scanner/fetch-and-test', description: 'اسکن کامل با بدنهٔ JSON' },
+        { method: 'POST', path: '/api/scanner/apply', description: 'نوشتن نتیجه در تنظیمات آدرس‌های دستی/آدرس واسط/پروکسی خروجی' },
+        { method: 'GET', path: '/api/scanner/sources', description: 'فهرست منابع آدرس' },
+        { method: 'GET', path: '/api/scanner/countries', description: 'فهرست کشورها و آی‌پی‌های پیش‌فرض' }
+      ],
+      examples: {
+        probe: `${origin}/api/scanner/probe?host=104.16.0.1&port=443`,
+        quick: `${origin}/api/scanner/quick?mode=proxyip&country=DE&limit=5`
+      }
+    });
+  }
+
   if (action === 'countries' && request.method === 'GET') {
     const countries = Object.keys(COUNTRY_PROXY_SOURCES).map(code => ({
       code,
@@ -11926,8 +12376,10 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
       </div>
       <!-- دانلود مستقیم کانفیگ‌های آماده — فقط بخش‌هایی که برای این کاربر روشن است -->
       <div class="toolbar" style="margin-top:10px;">
-        ${warpEnabled ? `<a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP کانفیگ‌های WARP (AmneziaWG)</a>
+        ${warpEnabled ? `<a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP همهٔ فرمت‌های WARP (AmneziaWG · WireGuard · Clash · sing-box)</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=clash" download>${icon('download')} پروفایل Clash</a>
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=singbox" download>${icon('download')} کانفیگ sing-box</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>` : ''}
         ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
       </div>
@@ -12630,7 +13082,18 @@ function renderAdminDashboardHtml(initialData = {}) {
     download: icon('download'),
     signal: icon('signal'),
     settings: icon('settings'),
-    edit: icon('settings')
+    edit: icon('settings'),
+    sanctions: icon('sanctions'),
+    warp: icon('warp'),
+    dns: icon('dns'),
+    pin: icon('pin'),
+    api: icon('api'),
+    pulse: icon('pulse'),
+    telegram: icon('telegram'),
+    back: icon('back'),
+    stop: icon('stop'),
+    sun: icon('sun'),
+    moon: icon('moon')
   });
 
   const ssmethods = ['none'];
@@ -12817,6 +13280,13 @@ function renderAdminDashboardHtml(initialData = {}) {
     letter-spacing: 0.6px;
   }
   .topbar-spacer { flex: 1; }
+  /* هدر فقط لوگو + آیکون‌های افقی بدون متن فارسی */
+  .topbar-actions { display: flex; align-items: center; gap: 7px; }
+  .topbar-actions .icon-btn { width: 38px; height: 38px; padding: 0; border-radius: 11px; }
+  .topbar-actions .icon-btn .mi { width: 19px; height: 19px; }
+  .topbar-actions .icon-btn.tg { color: #7fd7ff; border-color: rgba(125, 211, 252, 0.3); background: rgba(56, 189, 248, 0.1); }
+  .topbar-actions .icon-btn.tg:hover { color: #b9edff; border-color: rgba(125, 211, 252, 0.5); background: rgba(56, 189, 248, 0.18); }
+  .topbar-actions .icon-btn.danger { color: var(--danger); }
   .chip {
     display: inline-flex;
     align-items: center;
@@ -12849,7 +13319,6 @@ function renderAdminDashboardHtml(initialData = {}) {
   }
   .icon-btn:hover { border-color: var(--line-strong); background: var(--neon-soft); color: var(--neon); }
   .icon-btn.danger:hover { border-color: rgba(255, 98, 98, 0.5); background: rgba(255, 98, 98, 0.1); color: var(--danger); }
-  .topbar .hide-sm { display: inline-flex; }
 
   /* ---------- main ---------- */
   .main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 10px; }
@@ -12867,11 +13336,10 @@ function renderAdminDashboardHtml(initialData = {}) {
     backdrop-filter: blur(14px);
   }
   .tabbar-pill {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    max-width: 100%;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    width: min(100%, 560px);
     padding: 7px;
     border-radius: 20px;
     border: 1px solid var(--line);
@@ -12881,39 +13349,61 @@ function renderAdminDashboardHtml(initialData = {}) {
     scrollbar-width: none;
   }
   .tabbar-pill::-webkit-scrollbar { display: none; }
+  /* همهٔ تب‌ها یک بافت و یک اندازه دارند؛ فقط رنگ و حاشیه وضعیت فعال را نشان می‌دهد */
   .tab {
     appearance: none;
-    border: 0;
+    border: 1px solid transparent;
     background: transparent;
     color: var(--muted);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
-    min-width: 74px;
-    padding: 8px 10px;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    height: 58px;
+    padding: 7px 6px;
     border-radius: 14px;
     font-family: inherit;
-    font-size: 0.68rem;
-    font-weight: 600;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.1;
     white-space: nowrap;
     cursor: pointer;
-    transition: 0.16s;
+    transition: 0.18s;
     position: relative;
+    overflow: hidden;
   }
-  .tab .mi { width: 21px; height: 21px; }
-  .tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
-  .tab.is-active { color: var(--neon); background: var(--neon-soft); }
+  .tab .mi { width: 20px; height: 20px; }
+  .tab > span[data-i18n] { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); border-color: var(--line); }
+  .tab.is-active {
+    color: var(--neon);
+    background: var(--neon-soft);
+    border-color: var(--line-strong);
+    box-shadow: inset 0 0 0 1px rgba(181, 255, 77, 0.1);
+  }
   .tab.is-active::after {
     content: "";
     position: absolute;
-    bottom: 4px;
+    bottom: 5px;
     width: 4px;
     height: 4px;
     border-radius: 50%;
     background: var(--neon);
     box-shadow: 0 0 8px var(--neon-glow);
   }
+  .tab::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  .tab:hover::before { animation: mili-sheen 0.85s ease; }
   body.light-mode .tabbar { background: linear-gradient(180deg, rgba(238, 243, 240, 0.96), rgba(238, 243, 240, 0.7)); }
   body.light-mode .tabbar-pill { background: rgba(255, 255, 255, 0.95); }
   body.light-mode .tab { color: #4b5c50; }
@@ -12922,6 +13412,8 @@ function renderAdminDashboardHtml(initialData = {}) {
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
   .window {
+    min-width: 0;
+    max-width: 100%;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: linear-gradient(180deg, rgba(12, 19, 16, 0.96), rgba(6, 10, 9, 0.94));
@@ -12946,15 +13438,23 @@ function renderAdminDashboardHtml(initialData = {}) {
   .window-title .mi { color: var(--neon); }
   .window-sub { color: var(--muted); font-size: 0.74rem; margin-inline-start: 4px; font-weight: 500; }
   .window-head .spacer { flex: 1; }
-  .window-body { padding: 18px; }
+  .window-body { padding: 18px; min-width: 0; }
 
   /* ---------- metrics ---------- */
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; }
+  /* داشبورد: کارت‌های مربعی دوتایی کنار هم */
+  .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (min-width: 900px) { .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .metric {
     position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    aspect-ratio: 1 / 1;
+    min-width: 0;
     border: 1px solid var(--line);
-    border-radius: 15px;
-    padding: 16px 16px 14px;
+    border-radius: 16px;
+    padding: 13px;
     background:
       radial-gradient(140px 90px at 100% 0%, rgba(181, 255, 77, 0.09), transparent 70%),
       rgba(255, 255, 255, 0.018);
@@ -12973,9 +13473,9 @@ function renderAdminDashboardHtml(initialData = {}) {
   .metric-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .metric-label { color: var(--muted); font-size: 0.78rem; }
   .metric-icon { color: var(--neon); opacity: 0.9; }
-  .metric-value { font-size: 1.7rem; font-weight: 800; margin: 10px 0 2px; letter-spacing: 0.5px; }
-  .metric-value small { font-size: 0.86rem; color: var(--muted); font-weight: 600; margin-inline-start: 4px; }
-  .metric-foot { font-size: 0.72rem; color: var(--muted-2); }
+  .metric-value { font-size: clamp(1.15rem, 5.2vw, 1.62rem); font-weight: 800; margin: 0; letter-spacing: 0.5px; line-height: 1.15; }
+  .metric-value small { font-size: 0.74rem; color: var(--muted); font-weight: 600; margin-inline-start: 4px; }
+  .metric-foot { font-size: 0.66rem; line-height: 1.55; color: var(--muted-2); }
 
   .split { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; margin-top: 16px; }
   .card {
@@ -13001,6 +13501,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   .tag.on { color: var(--neon); border-color: var(--line-strong); background: var(--neon-soft); }
   .tag.off { opacity: 0.55; }
   .tag.mono { font-family: var(--mono); }
+  .tag .mi { width: 13px; height: 13px; }
 
   /* ---------- buttons ---------- */
   .btn {
@@ -13030,8 +13531,11 @@ function renderAdminDashboardHtml(initialData = {}) {
   .toolbar .spacer { flex: 1; }
 
   /* ---------- users ---------- */
-  .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
   .user-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
     border: 1px solid var(--line);
     border-radius: 15px;
     padding: 15px;
@@ -13039,7 +13543,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   }
   .user-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .user-name { font-weight: 800; font-size: 0.94rem; }
-  .user-uuid { font-family: var(--mono); font-size: 0.66rem; color: var(--muted-2); direction: ltr; text-align: left; margin-top: 3px; }
+  .user-uuid { font-family: var(--mono); font-size: 0.66rem; color: var(--muted-2); direction: ltr; text-align: left; margin-top: 3px; overflow-wrap: anywhere; }
   .pill { font-size: 0.68rem; font-weight: 700; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); }
   .pill.on { color: var(--neon); border-color: var(--line-strong); background: var(--neon-soft); }
   .pill.off { color: var(--danger); border-color: rgba(255, 98, 98, 0.3); background: rgba(255, 98, 98, 0.08); }
@@ -13047,7 +13551,30 @@ function renderAdminDashboardHtml(initialData = {}) {
   .bar { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; margin: 7px 0 2px; }
   .bar > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #86c62c, #b5ff4d); }
   .user-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
-  .user-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .user-actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .user-actions .btn { min-width: 0; justify-content: center; }
+  .user-more { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  .user-more > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    margin-top: 2px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--muted);
+    transition: 0.16s;
+  }
+  .user-more > summary::-webkit-details-marker { display: none; }
+  .user-more > summary::after { content: "+"; font-size: 0.9rem; color: var(--neon); line-height: 1; }
+  .user-more[open] > summary::after { content: "−"; }
+  .user-more > summary:hover { color: var(--text); border-color: var(--line-strong); background: var(--neon-soft); }
+  .user-more > .user-actions { margin-top: 8px; }
   .empty { text-align: center; color: var(--muted); padding: 34px 12px; font-size: 0.84rem; }
 
   /* ---------- forms ---------- */
@@ -13096,8 +13623,9 @@ function renderAdminDashboardHtml(initialData = {}) {
   .group-title .mi { color: var(--neon); width: 17px; height: 17px; }
 
   /* ---------- scanner ---------- */
-  .scan-controls { display: grid; grid-template-columns: 1.4fr 0.8fr auto; gap: 10px; align-items: end; }
-  .table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; }
+  .scan-controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr)); gap: 10px; align-items: end; }
+  .scan-controls .btn { min-height: 40px; justify-content: center; }
+  .table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; }
   table.scan { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 620px; }
   table.scan th {
     text-align: right; padding: 10px 12px; color: var(--muted);
@@ -13131,7 +13659,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   }
 
   /* ---------- locations ---------- */
-  .loc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 12px; }
+  .loc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(245px, 100%), 1fr)); gap: 12px; }
   .loc-card {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px;
@@ -13139,6 +13667,47 @@ function renderAdminDashboardHtml(initialData = {}) {
   }
   .loc-name { font-size: 0.8rem; font-weight: 700; }
   .loc-meta { font-size: 0.68rem; color: var(--muted-2); margin-top: 2px; }
+  /* همان حرکت منوی کشویی روی کارت‌های لوکیشن: موج لمس، بالا آمدن و ورود پله‌ای */
+  .loc-grid .loc-card { animation: rise .4s cubic-bezier(.22, .8, .3, 1) both; }
+  .loc-grid .loc-card:nth-child(1) { animation-delay: 0s; }
+  .loc-grid .loc-card:nth-child(2) { animation-delay: .04s; }
+  .loc-grid .loc-card:nth-child(3) { animation-delay: .08s; }
+  .loc-grid .loc-card:nth-child(4) { animation-delay: .12s; }
+  .loc-grid .loc-card:nth-child(5) { animation-delay: .16s; }
+  .loc-grid .loc-card:nth-child(6) { animation-delay: .2s; }
+  .loc-grid .loc-card:nth-child(7) { animation-delay: .24s; }
+  .loc-grid .loc-card:nth-child(n+8) { animation-delay: .28s; }
+  .loc-card.is-press { transform: translateY(0) scale(.992); }
+  .loc-card.is-press .mi { animation: mili-tap .44s cubic-bezier(.2, .8, .3, 1); }
+  .loc-card .btn .mi { transition: transform .2s ease; }
+  .loc-card [data-act="copy"] .mi { color: #a6e86b; }
+  .loc-card [data-act="country-proxy"] .mi { color: #62c8f7; }
+  .loc-card [data-act="country-ip"] .mi { color: #b79cff; }
+  body.light-mode .loc-card [data-act="copy"] .mi { color: #2f8f2f; }
+  body.light-mode .loc-card [data-act="country-proxy"] .mi { color: #1789c2; }
+  body.light-mode .loc-card [data-act="country-ip"] .mi { color: #6b4fd6; }
+  /* اندپوینت اختصاصی WARP: آدرس بلند در عرض کارت می‌شکند و از کادر بیرون نمی‌زند */
+  .ep-card { grid-column: 1 / -1; flex-direction: column; align-items: stretch; gap: 10px; }
+  .ep-url {
+    display: block;
+    width: 100%;
+    text-decoration: none;
+    direction: ltr;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 1.7;
+    color: var(--neon);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 10px;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+  .ep-url:hover { border-color: var(--line-strong); background: rgba(0, 0, 0, 0.5); }
+  body.light-mode .ep-url { color: #0b8a4b; background: #f4f8f5; }
+  body.light-mode .ep-url:hover { background: #eaf4ee; }
 
 
   /* ---------- modal / toast ---------- */
@@ -13208,12 +13777,23 @@ function renderAdminDashboardHtml(initialData = {}) {
   @media (max-width: 820px) {
     .main { padding: 16px 12px 6px; }
     .topbar { padding: 10px 13px; gap: 9px; }
-    .topbar .hide-sm { display: none; }
     .brand-ver { font-size: 0.62rem; }
     .split { grid-template-columns: 1fr; }
     .scan-controls { grid-template-columns: 1fr; }
     .window-body { padding: 14px; }
     .window-sub { display: none; }
+  }
+  @media (max-width: 460px) {
+    .main { padding: 12px 9px 6px; }
+    .topbar { padding: 9px 10px; gap: 7px; }
+    .brand .mili-shield-svg { width: 32px; height: 32px; }
+    .brand-name { font-size: 0.92rem; }
+    .window-body { padding: 11px; }
+    .user-grid, .loc-grid, .scan-grid { gap: 10px; }
+    .user-card { padding: 12px; }
+    .user-actions .btn.sm { flex: 1 1 calc(50% - 4px); }
+    .scan-tile { padding: 11px 12px; }
+    .scan-head .btn { margin-inline-start: 0; width: 100%; }
   }
 
   /* ---------- mobile drawer (کشوی منو) ---------- */
@@ -13264,57 +13844,232 @@ function renderAdminDashboardHtml(initialData = {}) {
   .drawer-head .mili-shield-svg { width: 30px; height: 30px; }
   .drawer-title { font-size: 0.92rem; font-weight: 800; }
   .drawer-close { margin-inline-start: auto; }
-  .drawer-group {
-    padding: 14px 18px 6px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    color: var(--muted-2);
-    text-transform: uppercase;
-  }
-  .drawer-list { display: flex; flex-direction: column; }
+  /* منوی موبایل: فقط آیکون‌های رنگی، بدون کادر و مستطیل بیرونی */
+  .drawer-icons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; padding: 8px 14px 16px; }
   .drawer-item {
     appearance: none;
-    border: 0;
-    background: transparent;
-    color: var(--text);
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
     width: 100%;
-    min-height: 52px;
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--line);
-    font-family: inherit;
-    font-size: 0.88rem;
-    font-weight: 600;
-    text-align: start;
+    min-width: 0;
+    padding: 14px 0;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--muted);
     cursor: pointer;
-    transition: background 0.16s, color 0.16s;
+    transition: transform .18s cubic-bezier(.2, .8, .3, 1), background .18s ease;
   }
-  .drawer-item:last-child { border-bottom: 0; }
-  .drawer-item .mi { width: 21px; height: 21px; color: var(--muted); flex: none; }
-  .drawer-item .drawer-label { flex: 1; }
-  .drawer-item .drawer-hint { font-size: 0.68rem; color: var(--muted-2); font-weight: 500; }
-  .drawer-item:hover, .drawer-item:focus-visible { background: var(--neon-soft); }
-  .drawer-item.is-active { color: var(--neon); background: var(--neon-soft); }
-  .drawer-item.is-active .mi { color: var(--neon); }
-  .drawer-item.danger { color: var(--danger); }
-  .drawer-item.danger .mi { color: var(--danger); }
+  .drawer-item .mi { width: 27px; height: 27px; }
+  .drawer-item:hover, .drawer-item:focus-visible { background: rgba(255, 255, 255, 0.05); transform: translateY(-2px); }
+  body.light-mode .drawer-item:hover { background: rgba(12, 26, 18, 0.05); }
+  /* هر لوگو رنگ خودش را دارد */
+  .drawer-item.d-checkup .mi { color: #a6e86b; }
+  .drawer-item.d-telegram .mi { color: #62c8f7; }
+  .drawer-item.d-key .mi { color: #ffce5c; }
+  .drawer-item.d-sun .mi { color: #ffb454; }
+  .drawer-item.d-lang .mi { color: #b79cff; }
+  .drawer-item.d-logout .mi { color: #ff6b6b; }
+  body.light-mode .drawer-item.d-checkup .mi { color: #2f8f2f; }
+  body.light-mode .drawer-item.d-telegram .mi { color: #1789c2; }
+  body.light-mode .drawer-item.d-key .mi { color: #b97800; }
+  body.light-mode .drawer-item.d-sun .mi { color: #d97706; }
+  body.light-mode .drawer-item.d-lang .mi { color: #6b4fd6; }
+  body.light-mode .drawer-item.d-logout .mi { color: #d32f2f; }
+  .drawer-head .icon-btn { border-color: transparent; background: transparent; }
+  .drawer-head .icon-btn:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.06); }
+
+  /* ---------- لایهٔ حرکت، بافت و بازخورد لمسی ---------- */
+  @keyframes mili-drift {
+    0% { transform: translate3d(-6%, -3%, 0) scale(1.04); opacity: .75; }
+    50% { transform: translate3d(5%, 3%, 0) scale(1.12); opacity: 1; }
+    100% { transform: translate3d(-6%, -3%, 0) scale(1.04); opacity: .75; }
+  }
+  @keyframes mili-sheen {
+    0% { transform: translateX(-130%) skewX(-16deg); opacity: 0; }
+    35% { opacity: .9; }
+    100% { transform: translateX(230%) skewX(-16deg); opacity: 0; }
+  }
+  @keyframes mili-ripple {
+    from { opacity: .45; transform: scale(0); }
+    to { opacity: 0; transform: scale(2.4); }
+  }
+  @keyframes mili-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  @keyframes mili-trace {
+    to { stroke-dashoffset: -240; }
+  }
+
+  body { -webkit-tap-highlight-color: transparent; }
+  .btn, .icon-btn, .tab, .ftab, .chip, .drawer-item, .switch { touch-action: manipulation; }
+  .mi { transition: transform .24s cubic-bezier(.2, .8, .3, 1); }
+  .btn:hover .mi, .tab:hover .mi, .drawer-item:hover .mi, .ftab:hover .mi { transform: scale(1.1) rotate(-4deg); }
+
+  .window { position: relative; }
+  .window::after {
+    content: "";
+    position: absolute;
+    inset-inline: -10%;
+    top: -55%;
+    height: 300px;
+    pointer-events: none;
+    background: radial-gradient(50% 58% at 50% 50%, rgba(181, 255, 77, 0.1), transparent 70%);
+    animation: mili-drift 24s ease-in-out infinite;
+  }
+  .window-head { position: relative; z-index: 1; }
+
+  .metric, .card, .user-card, .loc-card {
+    transition: transform .3s cubic-bezier(.2, .8, .3, 1), box-shadow .3s ease, border-color .3s ease;
+    will-change: transform;
+  }
+  .metric:hover, .card:hover, .user-card:hover, .loc-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--line-strong);
+    box-shadow: 0 22px 46px rgba(0, 0, 0, 0.45);
+  }
+  body.light-mode .metric:hover,
+  body.light-mode .card:hover,
+  body.light-mode .user-card:hover,
+  body.light-mode .loc-card:hover { box-shadow: 0 22px 42px rgba(15, 40, 25, 0.16); }
+
+  .btn { position: relative; overflow: hidden; }
+  .btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent 22%, rgba(255, 255, 255, 0.34) 50%, transparent 78%);
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  .btn:hover::after { animation: mili-sheen .85s ease; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active, .btn.is-press { transform: translateY(0) scale(.975); }
+  .icon-btn:active, .icon-btn.is-press { transform: scale(.94); }
+  /* بدون position روی خود دکمه، موج لمس به گوشهٔ صفحه می‌پرد */
+  .ftab, .icon-btn, .drawer-item, .scan-tile, .loc-card { position: relative; overflow: hidden; }
+  .ripple {
+    position: absolute;
+    width: 130px;
+    height: 130px;
+    margin: -65px 0 0 -65px;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(181, 255, 77, 0.55), transparent 70%);
+    animation: mili-ripple .62s ease-out forwards;
+  }
+  body.light-mode .ripple { background: radial-gradient(circle, rgba(11, 138, 75, 0.35), transparent 70%); }
+
+  .tab.is-active .mi { animation: mili-float 3.6s ease-in-out infinite; }
+
+  /* همهٔ آیکون‌ها هنگام کلیک تکان می‌خورند */
+  @keyframes mili-tap {
+    0% { transform: scale(1); }
+    32% { transform: scale(.8) rotate(-7deg); }
+    64% { transform: scale(1.14) rotate(4deg); }
+    100% { transform: scale(1); }
+  }
+  .btn.is-press .mi,
+  .icon-btn.is-press .mi,
+  .tab.is-press .mi,
+  .ftab.is-press .mi,
+  .drawer-item.is-press .mi,
+  .loc-card.is-press .mi { animation: mili-tap .44s cubic-bezier(.2, .8, .3, 1); }
+  .brand .mili-shield-svg { animation: mili-float 6s ease-in-out infinite; }
+
+  table.scan tbody tr { transition: background .2s ease, box-shadow .2s ease; }
+  table.scan tbody tr:hover { background: rgba(181, 255, 77, 0.05); box-shadow: inset 2px 0 0 var(--neon); }
+  body.light-mode table.scan tbody tr:hover { background: rgba(11, 138, 75, 0.06); }
+
+  .panel.is-active > .window { animation: rise .42s cubic-bezier(.22, .8, .3, 1) both; }
+  .panel.is-active > .window:nth-child(2) { animation-delay: .05s; }
+
+  /* اسکنر: منوی اسکن + صفحهٔ اختصاصی هر اسکن */
+  /* هر اسکن یک کارت مربعی با کلید روشن/خاموش است؛ کارت خودش کلیک نمی‌شود */
+  .scan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 8px; }
+  .scan-tile {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+    min-height: 0;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.015);
+    color: var(--text);
+    font-family: inherit;
+    transition: border-color .24s ease, background .24s ease, box-shadow .24s ease;
+  }
+  .scan-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .scan-tile .mi { color: var(--neon); width: 22px; height: 22px; }
+  .scan-tile .scan-tile-text { min-width: 0; }
+  .scan-tile b { display: block; font-size: 0.72rem; font-weight: 800; line-height: 1.45; }
+  .scan-tile span { display: block; font-size: 0.62rem; color: var(--muted-2); margin-top: 2px; line-height: 1.55; }
+  @media (max-width: 430px) { .scan-tile-text > span { display: none; } }
+  @media (max-height: 720px) { .scan-tile-text > span { display: none; } }
+  .scan-tile:hover { border-color: var(--line-strong); }
+  .scan-tile.is-on { border-color: var(--line-strong); background: var(--neon-soft); box-shadow: inset 0 0 0 1px rgba(181, 255, 77, 0.1); }
+  .scan-view { display: none; }
+  .scan-view.is-active { display: block; animation: rise .28s ease both; }
+  .scan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .scan-head .scan-title { font-size: 0.9rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .scan-head .scan-title .mi { color: var(--neon); }
+  .scan-head .scan-desc { font-size: 0.72rem; color: var(--muted-2); }
+  .scan-head .btn { margin-inline-start: auto; }
+  .scan-note { font-size: 0.74rem; line-height: 1.95; color: var(--muted-2); margin: 0 0 12px; }
+
+  /* اسکنر: همه‌چیز داخل یک صفحه می‌ماند؛ فقط جدول نتایج اسکرول می‌شود */
+  .panel[data-panel="scanner"].is-active {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 206px);
+    min-height: 360px;
+  }
+  .panel[data-panel="scanner"] > .window { display: flex; flex-direction: column; flex: 1; min-height: 0; margin-bottom: 0; }
+  .panel[data-panel="scanner"] .window-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+  #scanHome { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  /* wrapper نماها فقط وقتی نما فعال است ارتفاع می‌گیرد تا در حالت خانه فضای شبکه را نخورد */
+  #scanViews { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+  #scanHome .scan-grid { flex: 1; min-height: 0; }
+  #scanHome .scan-note, #scanBar, .scan-view .scan-head { flex: none; }
+  #scanHome .toolbar { flex: none; margin: 10px 0 0 !important; flex-wrap: wrap; }
+  .scan-view.is-active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .scan-view .scan-note {
+    flex: none;
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .scan-view .table-wrap { flex: 1; min-height: 0; overflow: auto; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .001ms !important;
+    }
+  }
 
   /* قواعد موبایل آخرین بلوک استایل هستند تا بر قواعد پایهٔ بالا اولویت داشته باشند */
   @media (max-width: 820px) {
-    .topbar > .icon-btn:not(.menu-btn) { display: none; }
-    .topbar > .chip:not(.mobile-keep) { display: none; }
+    .topbar-actions .icon-btn.opt { display: none; }
+    .topbar-actions .icon-btn { width: 34px; height: 34px; }
+    .topbar-actions { gap: 6px; }
     .menu-btn { display: inline-flex; }
     .nav-drawer { display: block; }
     .drawer-backdrop { display: block; }
     .toast { bottom: 24px; }
-    .tabbar { top: 57px; padding: 8px 0 10px; }
-    .tabbar-pill { width: 100%; justify-content: space-between; padding: 6px; }
-    .tab { flex: 1; min-width: 0; padding: 7px 4px; font-size: 0.62rem; }
-    .tab .mi { width: 19px; height: 19px; }
-    .tab span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .tabbar { top: 55px; padding: 8px 0 10px; }
+    .tabbar-pill { width: 100%; padding: 6px; gap: 5px; }
+    .tab { height: 54px; padding: 6px 3px; font-size: 0.63rem; }
+    .tab .mi { width: 18px; height: 18px; }
   }
 </style>
 </head>
@@ -13329,15 +14084,14 @@ function renderAdminDashboardHtml(initialData = {}) {
       </div>
     </div>
     <div class="topbar-spacer"></div>
-    <div class="chip hide-sm" id="storageChip"><span class="dot"></span><span id="storageText">حافظه</span></div>
-    <div class="chip mobile-keep"><span id="userChipText">0 / ${MAX_USERS_LIMIT}</span><span>کاربر</span></div>
-    <div class="chip hide-sm" id="clockChip">--:--</div>
-    <button class="icon-btn" type="button" data-act="toggle-theme" id="themeBtn" title="حالت روز / شب">${icon('bolt')}<span class="hide-sm" data-i18n="top.theme">حالت روز</span></button>
-    <button class="icon-btn" type="button" data-act="toggle-lang" id="langBtn" title="زبان"><span data-i18n="top.lang">English</span></button>
-    <a class="icon-btn hide-sm" href="${SUPPORT_URL}" target="_blank" rel="noopener">${icon('signal')}<span data-i18n="top.support">پشتیبانی</span></a>
-    <button class="icon-btn" type="button" data-act="open-multi" title="سابلینک چندلوکیشن">${icon('globe')}<span class="hide-sm" data-i18n="top.multi">چندلوکیشن</span></button>
-    <button class="icon-btn" type="button" data-act="open-password" title="تغییر رمز مدیر">${icon('key')}</button>
-    <button class="icon-btn danger" type="button" data-act="logout" title="خروج">${icon('logout')}</button>
+    <div class="topbar-actions">
+      <a class="icon-btn tg" href="${SUPPORT_URL}" target="_blank" rel="noopener" title="${TELEGRAM_SUPPORT}" aria-label="Telegram" data-act="open-support">${icon('telegram')}</a>
+      <button class="icon-btn opt" type="button" data-act="toggle-theme" id="themeBtn" title="حالت روز / شب" aria-label="themes">${icon('sun')}</button>
+      <button class="icon-btn opt" type="button" data-act="toggle-lang" id="langBtn" title="تغییر زبان" aria-label="language">${icon('globe')}</button>
+      <button class="icon-btn opt" type="button" data-act="open-multi" title="سابلینک چندلوکیشن" aria-label="locations">${icon('pin')}</button>
+      <button class="icon-btn opt" type="button" data-act="open-password" title="تغییر رمز مدیر" aria-label="password">${icon('key')}</button>
+      <button class="icon-btn danger" type="button" data-act="logout" title="خروج" aria-label="logout">${icon('logout')}</button>
+    </div>
   </header>
 
   <!-- کشوی منوی موبایل: لیست کامل و مرتب؛ با دکمهٔ بالا باز/بسته می‌شود -->
@@ -13351,17 +14105,13 @@ function renderAdminDashboardHtml(initialData = {}) {
       </div>
       <button class="icon-btn drawer-close" type="button" data-act="close-drawer" title="بستن">${icon('close')}</button>
     </div>
-    <div class="drawer-group">نسخه</div>
-    <div class="drawer-list">
-      <button class="drawer-item" type="button" data-act="check-update">${icon('refresh')}<span class="drawer-label">بررسی بروزرسانی</span><span class="drawer-hint" id="drawerVersion">v${VERSION.replace(/^v/i, '')}</span></button>
-    </div>
-    <div class="drawer-group">دسترسی</div>
-    <div class="drawer-list">
-      <a class="drawer-item" href="${SUPPORT_URL}" target="_blank" rel="noopener">${icon('signal')}<span class="drawer-label">پشتیبانی</span><span class="drawer-hint">${TELEGRAM_SUPPORT}</span></a>
-      <button class="drawer-item" type="button" data-act="open-password">${icon('key')}<span class="drawer-label">تغییر رمز مدیر</span></button>
-      <button class="drawer-item" type="button" data-act="toggle-theme">${icon('bolt')}<span class="drawer-label">حالت روز / شب</span></button>
-      <button class="drawer-item" type="button" data-act="toggle-lang">${icon('globe')}<span class="drawer-label">تغییر زبان</span><span class="drawer-hint" id="drawerLangHint">EN</span></button>
-      <button class="drawer-item danger" type="button" data-act="logout">${icon('logout')}<span class="drawer-label">خروج</span></button>
+    <div class="drawer-icons">
+      <button class="drawer-item d-checkup" type="button" data-act="check-update" aria-label="بررسی بروزرسانی" title="بررسی بروزرسانی">${icon('refresh')}</button>
+      <a class="drawer-item d-telegram" href="${SUPPORT_URL}" target="_blank" rel="noopener" aria-label="${TELEGRAM_SUPPORT}" title="${TELEGRAM_SUPPORT}">${icon('telegram')}</a>
+      <button class="drawer-item d-key" type="button" data-act="open-password" aria-label="تغییر رمز مدیر" title="تغییر رمز مدیر">${icon('key')}</button>
+      <button class="drawer-item d-sun" type="button" data-act="toggle-theme" aria-label="حالت روز / شب" title="حالت روز / شب">${icon('sun')}</button>
+      <button class="drawer-item d-lang" type="button" data-act="toggle-lang" aria-label="تغییر زبان" title="تغییر زبان">${icon('globe')}</button>
+      <button class="drawer-item d-logout" type="button" data-act="logout" aria-label="خروج" title="خروج">${icon('logout')}</button>
     </div>
   </nav>
 
@@ -13480,78 +14230,63 @@ function renderAdminDashboardHtml(initialData = {}) {
       <div class="window">
         <div class="window-head">
           <span class="dots"><i></i><i></i><i></i></span>
-          <div class="window-title">${icon('radar')} <span data-i18n="panel.scanner">اسکنر زنده</span> <span class="window-sub" data-i18n="panel.scannerSub">دریافت زنده پروکسی و آی‌پی ثابت (IPv4/IPv6) به تفکیک کشور</span></div>
+          <div class="window-title">${icon('radar')} <span id="scanPanelTitle" data-i18n="panel.scanner">اسکنر زنده</span> <span class="window-sub" data-i18n="panel.scannerSub">همهٔ اسکن‌ها داخل پنل اجرا می‌شوند</span></div>
+          <div class="spacer"></div>
+          <button class="btn sm ghost" type="button" id="scanBackBtn" data-act="scan-back" style="display:none;">${icon('back')} بازگشت به اسکن‌ها</button>
         </div>
         <div class="window-body">
-          <div class="scan-controls">
-            <div class="field">
-              <label data-i18n="scanner.country">کشور</label>
-              <select id="scanCountry">${countryOptions()}</select>
+          <!-- خانهٔ اسکنر: هر اسکن یک کارت مربعی با کلید روشن/خاموش است -->
+          <div id="scanHome">
+            <p class="scan-note">کلید هر اسکن را روشن کنید؛ همان اسکن داخل پنل اجرا می‌شود و خاموش کردن کلید آن را می‌بندد.</p>
+            <div class="scan-grid">
+              <div class="scan-tile" data-mode="ipv4">
+                <div class="scan-tile-top">${icon('server')}<label class="switch"><input type="checkbox" data-scan="ipv4" aria-label="آی‌پی ثابت IPv4"><i></i></label></div>
+                <span class="scan-tile-text"><b>آی‌پی ثابت IPv4</b><span>آدرس‌های سالم IPv4 به تفکیک کشور</span></span>
+              </div>
+              <div class="scan-tile" data-mode="ipv6">
+                <div class="scan-tile-top">${icon('signal')}<label class="switch"><input type="checkbox" data-scan="ipv6" aria-label="آی‌پی ثابت IPv6"><i></i></label></div>
+                <span class="scan-tile-text"><b>آی‌پی ثابت IPv6</b><span>آدرس‌های نسخهٔ ۶ برای شبکه‌های همراه</span></span>
+              </div>
+              <div class="scan-tile" data-mode="domain">
+                <div class="scan-tile-top">${icon('globe')}<label class="switch"><input type="checkbox" data-scan="domain" aria-label="دامنه‌های جایگزین"><i></i></label></div>
+                <span class="scan-tile-text"><b>دامنه‌های جایگزین</b><span>دامنه‌های لبهٔ کلادفلر به جای آی‌پی خام</span></span>
+              </div>
+              <div class="scan-tile" data-mode="proxyip">
+                <div class="scan-tile-top">${icon('api')}<label class="switch"><input type="checkbox" data-scan="proxyip" aria-label="آدرس واسط"><i></i></label></div>
+                <span class="scan-tile-text"><b>آدرس واسط</b><span>ProxyIP آماده برای خروج از ایران</span></span>
+              </div>
+              <div class="scan-tile" data-mode="proxy">
+                <div class="scan-tile-top">${icon('link')}<label class="switch"><input type="checkbox" data-scan="proxy" aria-label="پروکسی کشوری"><i></i></label></div>
+                <span class="scan-tile-text"><b>پروکسی کشوری</b><span>SOCKS5 و HTTP به تفکیک کشور</span></span>
+              </div>
+              <div class="scan-tile" data-mode="manual">
+                <div class="scan-tile-top">${icon('terminal')}<label class="switch"><input type="checkbox" data-scan="manual" aria-label="تست آدرس دستی"><i></i></label></div>
+                <span class="scan-tile-text"><b>تست آدرس دستی</b><span>فهرست خودتان را وارد کنید و همان‌جا تست کنید</span></span>
+              </div>
             </div>
-            <div class="field">
-              <label data-i18n="scanner.kind">منبع آدرس</label>
-              <select id="scanKind">
-                <option value="ipv4" selected>IPv4 — فهرست آی‌پی نسخهٔ ۴</option>
-                <option value="ipv6">IPv6 — فهرست آی‌پی نسخهٔ ۶</option>
-                <option value="domain">دامنه — فهرست دامنه‌های جایگزین</option>
-                <option value="proxyip">آدرس واسط — فهرست آمادهٔ ProxyIP</option>
-                <option value="proxy">پروکسی کشوری (SOCKS5 / HTTP)</option>
-              </select>
+            <div class="toolbar" style="margin-top: 12px;">
+              <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">آی‌پی‌های کلادفلر → آدرس‌های دستی</span></button>
+              <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">دامنه‌های کلادفلر → آدرس‌های دستی</span></button>
             </div>
-            <div class="field" id="scanFamilyWrap" style="display:none;">
-              <label data-i18n="scanner.family">خانواده آی‌پی</label>
-              <select id="scanFamily">
-                <option value="any" selected>IPv4 + IPv6</option>
-                <option value="ipv4">فقط IPv4</option>
-                <option value="ipv6">فقط IPv6</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>افزودن نتیجه به کاربر</label>
-              <select id="scanUser"><option value="">تنظیمات پیش‌فرض پنل</option></select>
-            </div>
-            <div class="field">
-              <label>مقصد نتیجه</label>
-              <select id="scanTarget">
-                <option value="yx" selected>آدرس‌های دستی</option>
-                <option value="p">آدرس واسط (ProxyIP)</option>
-                <option value="s">پروکسی خروجی</option>
-              </select>
-            </div>
-            <div class="field">
-              <label data-i18n="scanner.count">تعداد</label>
-              <select id="scanLimit">
-                <option value="5">۵ مورد</option>
-                <option value="10" selected>۱۰ مورد</option>
-                <option value="15">۱۵ مورد</option>
-                <option value="20">۲۰ مورد</option>
-              </select>
-            </div>
-            <button class="btn primary" type="button" id="btnScan" data-act="run-scan">${icon('bolt')} <span data-i18n="btn.scan">دریافت و تست</span></button>
           </div>
-          <div class="scan-status" id="scanHint">اسکنر منابع آدرس را مستقیم می‌خواند و هر آدرس را با تست اتصال بررسی می‌کند. نتیجهٔ آی‌پی در «آدرس‌های دستی» و پروکسی در «پروکسی خروجی» همان کاربری نوشته می‌شود که بالا انتخاب کردید.</div>
-          <div class="toolbar" style="margin-top: 12px;">
-            <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">افزودن آی‌پی‌های پیش‌فرض کلادفلر به آدرس‌های دستی</span></button>
-            <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">افزودن دامنه‌های پیش‌فرض کلادفلر به آدرس‌های دستی</span></button>
+          <!-- مقصد نتیجه: در همهٔ صفحه‌های اسکن مشترک است -->
+          <div id="scanBar" style="display:none;">
+            <div class="scan-controls" style="margin-bottom: 4px;">
+              <div class="field">
+                <label>افزودن نتیجه به کاربر</label>
+                <select id="scanUser"><option value="">تنظیمات پیش‌فرض پنل</option></select>
+              </div>
+              <div class="field">
+                <label>مقصد نتیجه</label>
+                <select id="scanTarget">
+                  <option value="yx" selected>آدرس‌های دستی</option>
+                  <option value="p">آدرس واسط (ProxyIP)</option>
+                  <option value="s">پروکسی خروجی</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div class="scan-status" id="scanStatus"></div>
-          <div class="table-wrap">
-            <table class="scan">
-              <thead>
-                <tr>
-                  <th data-i18n="scan.colCountry">کشور</th>
-                  <th data-i18n="scan.colAddr">آدرس / پورت</th>
-                  <th data-i18n="scan.colType">نوع / پروتکل</th>
-                  <th data-i18n="scan.colPing">پینگ</th>
-                  <th data-i18n="scan.colStatus">وضعیت</th>
-                  <th data-i18n="scan.colAction">عملیات</th>
-                </tr>
-              </thead>
-              <tbody id="scanBody">
-                <tr><td colspan="6" class="empty">برای شروع، دریافت و تست را بزنید.</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <div id="scanViews"></div>
         </div>
       </div>
     </section>
@@ -13560,7 +14295,7 @@ function renderAdminDashboardHtml(initialData = {}) {
       <div class="window">
         <div class="window-head">
           <span class="dots"><i></i><i></i><i></i></span>
-          <div class="window-title">${icon('globe')} <span data-i18n="panel.locations">چندلوکیشن</span> <span class="window-sub" data-i18n="panel.locationsSub">سابلینک به تفکیک کشور</span></div>
+          <div class="window-title">${icon('pin')} <span data-i18n="panel.locations">چندلوکیشن</span> <span class="window-sub" data-i18n="panel.locationsSub">سابلینک به تفکیک کشور</span></div>
           <div class="spacer"></div>
           <button class="btn sm ghost" type="button" data-act="copy-master">${icon('copy')} همه لوکیشن‌ها</button>
         </div>
@@ -13830,11 +14565,8 @@ function renderAdminDashboardHtml(initialData = {}) {
     $('mTraffic').innerHTML = fmtGb(totalBytes) + ' <small>GB</small>';
     $('mIps').innerHTML = (state.diagnostics.healthyCfIps || 0) + ' <small>نود</small>';
     $('mProto').textContent = activeProtocols().join(' + ');
-    $('userChipText').textContent = users.length + ' / ' + MAX_USERS;
 
     var storage = state.diagnostics.storageMode || (state.diagnostics.d1Enabled ? 'D1' : 'Memory');
-    $('storageText').textContent = 'ذخیره‌سازی ' + storage;
-    $('storageChip').className = 'chip hide-sm' + (storage === 'D1' ? '' : ' warn');
     $('kvStorage').textContent = storage;
     $('kvBinding').textContent = state.diagnostics.d1BindingName || '—';
     $('kvPath').textContent = ADMIN_PATH ? '/' + ADMIN_PATH.slice(0, 6) + '…' + ADMIN_PATH.slice(-4) : '—';
@@ -13853,28 +14585,38 @@ function renderAdminDashboardHtml(initialData = {}) {
       var statusUrl = origin() + '/status/' + userKey(u);
       var card = document.createElement('div');
       card.className = 'user-card';
+      var nodeCount = Number(u.subNodeCount || 0);
+      var key = userKey(u);
       card.innerHTML = [
         '<div class="user-head">',
           '<div><div class="user-name">' + (u.username || ('کاربر ' + (idx + 1))) + '</div>',
-          '<div class="user-uuid">' + (u.preset ? t('card.preset') + ': ' + u.preset : t('card.subscription')) + ' · ' + t('card.nodesAuto') + '</div></div>',
+          '<div class="user-uuid">/' + 'sub/' + key + '</div></div>',
           '<span class="pill ' + (u.enabled ? 'on' : 'off') + '">' + (u.enabled ? t('card.active') : t('card.inactive')) + '</span>',
         '</div>',
         '<div class="usage"><span>' + t('card.usage') + ' ' + fmtGb(used) + ' GB</span><span>' + (limitGb > 0 ? limitGb + ' GB' : t('card.unlimited')) + '</span></div>',
         '<div class="bar"><i style="width:' + Math.max(pct, 2) + '%"></i></div>',
-        '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + t('card.nodesAuto') + '</span></div>',
-        '<div class="user-tags">' + activeProtocols().map(function(p) { return '<span class="tag on">' + p + '</span>'; }).join('') + '</div>',
-        '<div class="user-actions">',
-          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '">' + ICO.copy + ' ' + t('btn.copySub') + '</button>',
-          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=clash">' + ICO.layers + ' Clash</button>',
-          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=singbox">' + ICO.bolt + ' Singbox</button>',
-          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=domain">' + ICO.globe + ' ' + t('btn.domainSub') + '</button>',
-          '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=ipv6">' + ICO.signal + ' IPv6 همراه اول</button>',
+        '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + (nodeCount ? nodeCount + ' نود' : t('card.nodesAuto')) + '</span></div>',
+        '<div class="user-tags">' + activeProtocols().map(function(p) { return '<span class="tag on">' + p + '</span>'; }).join('') +
+          (u.config && u.config.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن</span>' : '') +
+          (u.config && u.config.awgv ? '<span class="tag" title="نسخهٔ امنزیا در نودهای WARP">' + ICO.warp + ' امنزیا ' + u.config.awgv + '</span>' : '') +
+        '</div>',
+        '<div class="user-actions" style="margin-top:auto;">',
+          '<button class="btn sm primary" type="button" data-act="copy" data-url="' + base + '">' + ICO.copy + ' ' + t('btn.copySub') + '</button>',
           '<a class="btn sm" href="' + statusUrl + '" target="_blank" rel="noopener">' + ICO.external + ' ' + t('btn.status') + '</a>',
-          '<button class="btn sm primary" type="button" data-act="edit-user" data-id="' + u.id + '">' + ICO.settings + ' ' + t('btn.editUser') + '</button>',
-          '<button class="btn sm ghost" type="button" data-act="test-nodes" data-user="' + userKey(u) + '">' + ICO.radar + ' ' + t('btn.testNodes') + '</button>',
-          '<button class="btn sm ghost" type="button" data-act="reset-user" data-id="' + u.id + '">' + ICO.refresh + ' ' + t('btn.resetUser') + '</button>',
-          '<button class="btn sm danger" type="button" data-act="delete-user" data-id="' + u.id + '">' + ICO.trash + '</button>',
-        '</div>'
+          '<button class="btn sm" type="button" data-act="edit-user" data-id="' + u.id + '">' + ICO.settings + ' ' + t('btn.editUser') + '</button>',
+        '</div>',
+        '<details class="user-more">',
+          '<summary>لینک‌ها و ابزارها</summary>',
+          '<div class="user-actions">',
+            '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=clash">' + ICO.layers + ' Clash</button>',
+            '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?target=singbox">' + ICO.bolt + ' Singbox</button>',
+            '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=domain">' + ICO.globe + ' ' + t('btn.domainSub') + '</button>',
+            '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?set=ipv6">' + ICO.signal + ' IPv6 همراه اول</button>',
+            '<button class="btn sm ghost" type="button" data-act="test-nodes" data-user="' + key + '">' + ICO.radar + ' ' + t('btn.testNodes') + '</button>',
+            '<button class="btn sm ghost" type="button" data-act="reset-user" data-id="' + u.id + '">' + ICO.refresh + ' ' + t('btn.resetUser') + '</button>',
+            '<button class="btn sm danger" type="button" data-act="delete-user" data-id="' + u.id + '">' + ICO.trash + ' ' + 'حذف</button>',
+          '</div>',
+        '</details>'
       ].join('');
       grid.appendChild(card);
     });
@@ -13896,14 +14638,25 @@ function renderAdminDashboardHtml(initialData = {}) {
     var base = origin() + '/sub/' + (userKey(state.users[0]) || ADMIN_PATH);
     var countries = INITIAL_DATA.countrySources || {};
     var token = userKey(state.users[0]) || '';
+    var ep = origin() + '/warp/' + encodeURIComponent(token);
     var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
       '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>' +
       // وارپ و اپن‌وی‌پی آماده، بدون اسکنر و بدون تنظیم
-      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG · IPv4+IPv6 · 31 فایل</div></div>' +
+      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG + WireGuard · Clash · sing-box · IPv4+IPv6</div></div>' +
       '<div class="toolbar">' +
-      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.download + ' ZIP همهٔ فرمت‌ها</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
+      '</div></div>' +
+      // اندپوینت مخصوص WARP: یک آدرس با همهٔ فرمت‌ها
+      '<div class="loc-card ep-card"><div><div class="loc-name">اندپوینت اختصاصی WARP</div><div class="loc-meta">Clash/Mihomo · Hiddify/sing-box · WireGuard · Shadowrocket — هر کاربر توکن خودش را دارد</div></div>' +
+      '<a class="ep-url" href="' + ep + '?format=clash" target="_blank" rel="noopener">' + ep + '?format=clash</a>' +
+      '<div class="toolbar">' +
+      '<button class="btn sm primary" type="button" data-act="copy" data-url="' + ep + '?format=clash">' + ICO.copy + ' Clash</button>' +
+      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=singbox">' + ICO.copy + ' sing-box</button>' +
+      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=conf">' + ICO.copy + ' WireGuard</button>' +
+      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=base64">' + ICO.copy + ' base64</button>' +
+      '<a class="btn sm ghost" href="' + ep + '?format=zip">' + ICO.download + ' ZIP</a>' +
       '</div></div>' +
       '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · 3 پروفایل تنظیم · ZIP</div></div>' +
       '<div class="toolbar">' +
@@ -14010,10 +14763,11 @@ function renderAdminDashboardHtml(initialData = {}) {
   function updateThemeLabel() {
     var btn = $('themeBtn');
     if (!btn) return;
-    var label = btn.querySelector('span[data-i18n]');
     var light = document.body.classList.contains('light-mode');
     var text = LANG === 'en' ? (light ? 'Dark mode' : 'Light mode') : (light ? 'حالت شب' : 'حالت روز');
-    if (label) label.textContent = text;
+    btn.setAttribute('title', text);
+    btn.setAttribute('aria-label', text);
+    btn.innerHTML = light ? ICO.moon : ICO.sun;
   }
   function applyLanguage() {
     document.documentElement.lang = LANG;
@@ -14079,6 +14833,7 @@ function renderAdminDashboardHtml(initialData = {}) {
       title: 'امنیت و انتقال',
       fields: [
         { key: 'ech', section: 'امنیت', label: 'رمزنگاری ECH', type: 'switch', def: 'no' },
+        { key: 'doh', section: 'امنیت', label: 'DNS رمزنگاری‌شده (DoH)', hint: 'در کانفیگ کلاینت، پرس‌وجوهای DNS از مسیر DoH انجام می‌شود', type: 'switch', def: 'yes' },
         { key: 'customECHDomain', section: 'امنیت', label: 'دامنهٔ ECH', type: 'select', def: 'cloudflare-ech.com', options: 'echDomains', raw: true },
         { key: 'customDNS', section: 'امنیت', label: 'سرور DNS رمزنگاری‌شده', type: 'select', def: 'https://223.5.5.5/dns-query', options: 'dnsPresets', raw: true },
         { key: 'alpn', section: 'امنیت', label: 'پروتکل‌های لایهٔ انتقال (ALPN)', type: 'select', def: '', options: [['', 'خودکار'], ['h2,http/1.1', 'h2 + http/1.1'], ['h3,h2,http/1.1', 'h3 + h2 + http/1.1']] },
@@ -14086,6 +14841,8 @@ function renderAdminDashboardHtml(initialData = {}) {
         { key: 'patt', section: 'انتقال و فرگمنت', label: 'مسیر WebSocket', type: 'select', def: '/?ed=2048', options: 'pathPatterns' },
         { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'text', def: '443', list: 'dlPorts', ph: '443' },
         { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'text', def: '80', list: 'dlHttpPorts', ph: '80 — خالی برای حذف' },
+        { key: 'tcp', section: 'انتقال و فرگمنت', label: 'TCP سریع', hint: 'tcp-concurrent و tcp-fast-open در کانفیگ کلاینت', type: 'switch', def: 'yes' },
+        { key: 'udp', section: 'انتقال و فرگمنت', label: 'عبور UDP', hint: 'نودها UDP را عبور می‌دهند (بازی و تماس)', type: 'switch', def: 'yes' },
         { key: 'frag', section: 'انتقال و فرگمنت', label: 'فرگمنت TLS', type: 'switch', def: 'yes' },
         { key: 'fragmentPreset', section: 'انتقال و فرگمنت', label: 'پریست فرگمنت', type: 'select', def: 'mci', options: 'fragmentPresets' },
         { key: 'fragmentLength', section: 'انتقال و فرگمنت', label: 'طول فرگمنت', type: 'text', def: '100-200', list: 'dlFragmentLen' },
@@ -14111,6 +14868,8 @@ function renderAdminDashboardHtml(initialData = {}) {
         { key: 'locationNodeCount', section: 'منطقه و آدرس‌های دلخواه', label: 'تعداد نود هر لوکیشن', type: 'number', def: 6, min: 1, max: 40 },
         { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 5, wide: true, def: '', ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
         { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
+        { key: 'sb', section: 'مسیر خروج', label: 'تحریم‌شکن (خروجی از آدرس واسط)', hint: 'همهٔ نودها از یک آدرس بیرون از ایران خارج می‌شوند تا سرویس‌های مسدود برای آی‌پی ایران باز شوند', type: 'switch', def: 'yes' },
+        { key: 'sbRegion', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'DE', options: 'regions' },
         { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.example.com:443' },
         { key: 's', section: 'مسیر خروج', label: 'پروکسی خروجی', type: 'text', def: '', list: 'dlProxy', ph: 'socks5://host:1080' }
       ]
@@ -14136,6 +14895,7 @@ function renderAdminDashboardHtml(initialData = {}) {
       title: 'افزونه‌ها',
       fields: [
         { key: 'warp', section: 'WARP', label: 'WARP', type: 'switch', def: 'no' },
+        { key: 'awgv', section: 'WARP', label: 'نسخهٔ امنزیا (AmneziaWG)', hint: 'نسخهٔ ۳ = بسته‌های امضایی I1..I3 و تنظیمات زمانی', type: 'select', def: '3', options: [['3', 'نسخهٔ ۳ (پیشنهادی)'], ['2', 'نسخهٔ ۲'], ['1', 'نسخهٔ ۱ — فقط بسته‌های Junk']] },
         { key: 'warpPro', section: 'WARP', label: 'WARP پلاس', type: 'switch', def: 'no' },
         { key: 'warpMl', section: 'WARP', label: 'WARP چندلوکیشن', type: 'switch', def: 'no' },
         { key: 'warpCount', section: 'WARP', label: 'تعداد WARP', type: 'number', def: 8, min: 1, max: 30 },
@@ -14643,8 +15403,128 @@ function renderAdminDashboardHtml(initialData = {}) {
       .catch(function() { showToast('خطا در دریافت کاربران', 'err'); });
   }
 
-  function renderScanRows(items) {
-    var body = $('scanBody');
+  // منوی اسکن: هر مورد یک صفحهٔ مستقل دارد و همه چیز داخل پنل اجرا می‌شود
+  var SCAN_META = {
+    ipv4: {
+      title: 'آی‌پی ثابت IPv4', icon: 'server', target: 'yx', country: true, family: false, manual: false,
+      desc: 'آدرس‌های سالم IPv4 به تفکیک کشور',
+      note: 'منابع آدرس به‌صورت زنده خوانده می‌شوند و هر آدرس با تست اتصال بررسی می‌شود. نتیجه را با دکمهٔ هر ردیف به آدرس‌های دستی، آدرس واسط یا پروکسی خروجی همان کاربر اضافه کنید.'
+    },
+    ipv6: {
+      title: 'آی‌پی ثابت IPv6', icon: 'signal', target: 'yx', country: true, family: false, manual: false, defaultCountry: 'IR',
+      desc: 'آدرس‌های نسخهٔ ۶ برای شبکه‌های همراه',
+      note: 'آدرس‌های IPv6 از رنج‌های زندهٔ کلادفلر انتخاب می‌شوند. خروجی ورکر IPv6 ندارد، پس این آدرس‌ها بدون تست TCP به‌عنوان پیشنهاد داده می‌شوند و باید در کلاینت امتحان شوند.'
+    },
+    domain: {
+      title: 'دامنه‌های جایگزین', icon: 'globe', target: 'yx', country: true, family: false, manual: false,
+      desc: 'دامنهٔ لبهٔ کلادفلر به جای آی‌پی خام',
+      note: 'برای شبکه‌هایی که آی‌پی خام را می‌بندند؛ دامنه‌ها به‌جای آی‌پی در تنظیمات آدرس‌های دستی می‌نشینند.'
+    },
+    proxyip: {
+      title: 'آدرس واسط (ProxyIP)', icon: 'api', target: 'p', country: true, family: false, manual: false,
+      desc: 'آدرس واسط آماده برای خروج از ایران',
+      note: 'یک آدرس واسط سالم انتخاب می‌شود تا نودها از بیرون ایران خارج شوند. با «تنظیم روی این کاربر» فقط همان کاربر تغییر می‌کند.'
+    },
+    proxy: {
+      title: 'پروکسی کشوری', icon: 'link', target: 's', country: true, family: true, manual: false,
+      desc: 'SOCKS5 و HTTP به تفکیک کشور',
+      note: 'پروکسی‌های زندهٔ همان کشور خوانده و تست می‌شوند؛ سریع‌ترین را می‌توانید به‌عنوان پروکسی خروجی ثبت کنید.'
+    },
+    manual: {
+      title: 'تست آدرس دستی', icon: 'terminal', target: 'yx', country: false, family: false, manual: true,
+      desc: 'فهرست خودتان را داخل پنل تست کنید',
+      note: 'هر خط یک آدرس یا host:port بنویسید (حداکثر ۲۴ مورد). تست از همین پنل انجام می‌شود و نتیجه همان‌جا می‌آید.'
+    }
+  };
+  var currentScan = '';
+
+  function scanCountryOptions(selected) {
+    var countries = INITIAL_DATA.countrySources || {};
+    return Object.keys(countries).map(function(code) {
+      return '<option value="' + code + '"' + (code === selected ? ' selected' : '') + '>' + countries[code].name + ' — ' + code + '</option>';
+    }).join('');
+  }
+
+  function scanLimitOptions(selected) {
+    return [5, 10, 15, 20].map(function(n) {
+      var fa = { 5: '۵', 10: '۱۰', 15: '۱۵', 20: '۲۰' }[n];
+      return '<option value="' + n + '"' + (n === selected ? ' selected' : '') + '>' + fa + ' مورد</option>';
+    }).join('');
+  }
+
+  function scanViewHtml(id) {
+    var m = SCAN_META[id];
+    var controls = '';
+    if (m.manual) {
+      controls = '<div class="field" style="grid-column: 1 / -1;"><label>آدرس‌ها؛ هر خط یک مورد (host یا host:port)</label>' +
+        '<textarea id="sc_manual_hosts" rows="4" placeholder="104.16.0.1" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--text);font-family:var(--mono);font-size:.8rem;direction:ltr;text-align:left;outline:none;resize:vertical;"></textarea></div>';
+    } else {
+      if (m.country) controls += '<div class="field"><label>کشور</label><select id="sc_' + id + '_country">' + scanCountryOptions(m.defaultCountry || 'DE') + '</select></div>';
+      if (m.family) controls += '<div class="field"><label>خانواده آی‌پی</label><select id="sc_' + id + '_family"><option value="any" selected>IPv4 + IPv6</option><option value="ipv4">فقط IPv4</option><option value="ipv6">فقط IPv6</option></select></div>';
+      controls += '<div class="field"><label>تعداد نتیجه</label><select id="sc_' + id + '_limit">' + scanLimitOptions(10) + '</select></div>';
+    }
+    controls += '<button class="btn primary" type="button" data-act="scan-run" data-mode="' + id + '">' + ICO.bolt + ' ' + (m.manual ? 'تست آدرس‌ها' : 'شروع اسکن') + '</button>';
+    return '<div class="scan-view" id="scanView_' + id + '">' +
+      '<div class="scan-head"><span class="scan-title">' + ICO[m.icon] + ' ' + m.title + '</span><span class="scan-desc">' + m.desc + '</span></div>' +
+      '<p class="scan-note">' + m.note + '</p>' +
+      '<div class="scan-controls">' + controls + '</div>' +
+      '<div class="scan-status" id="scStatus_' + id + '"></div>' +
+      '<div class="table-wrap"><table class="scan"><thead><tr><th>کشور</th><th>آدرس / پورت</th><th>نوع / پروتکل</th><th>پینگ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="scBody_' + id + '"><tr><td colspan="6" class="empty">هنوز اسکنی اجرا نشده است.</td></tr></tbody></table></div>' +
+      '</div>';
+  }
+
+  function buildScanViews() {
+    var host = $('scanViews');
+    if (!host) return;
+    host.innerHTML = Object.keys(SCAN_META).map(scanViewHtml).join('');
+    closeScanView();
+  }
+
+  function openScanView(id) {
+    if (!SCAN_META[id]) return;
+    currentScan = id;
+    showPanel('scanner');
+    if ($('scanHome')) $('scanHome').style.display = 'none';
+    if ($('scanBar')) $('scanBar').style.display = 'block';
+    if ($('scanBackBtn')) $('scanBackBtn').style.display = 'inline-flex';
+    if ($('scanPanelTitle')) $('scanPanelTitle').textContent = SCAN_META[id].title;
+    syncScanSwitches(id);
+    document.querySelectorAll('.scan-view').forEach(function(view) {
+      view.classList.toggle('is-active', view.id === 'scanView_' + id);
+    });
+    if ($('scanTarget')) $('scanTarget').value = SCAN_META[id].target;
+  }
+
+  function closeScanView() {
+    currentScan = '';
+    if ($('scanHome')) $('scanHome').style.display = '';
+    if ($('scanBar')) $('scanBar').style.display = 'none';
+    if ($('scanBackBtn')) $('scanBackBtn').style.display = 'none';
+    if ($('scanPanelTitle')) $('scanPanelTitle').textContent = t('panel.scanner');
+    syncScanSwitches('');
+    document.querySelectorAll('.scan-view').forEach(function(view) { view.classList.remove('is-active'); });
+  }
+
+  // کلیدهای روشن/خاموش اسکنر: فقط یکی روشن می‌ماند و با کارت هم‌زمان هماهنگ است
+  function syncScanSwitches(id) {
+    document.querySelectorAll('input[data-scan]').forEach(function(input) {
+      input.checked = input.getAttribute('data-scan') === id;
+    });
+    document.querySelectorAll('.scan-tile').forEach(function(tile) {
+      tile.classList.toggle('is-on', tile.getAttribute('data-mode') === id);
+    });
+  }
+
+  function toggleScanMode(id, on) {
+    if (!on) { closeScanView(); return; }
+    openScanView(id);
+    if (id !== 'manual') runScanMode(id);
+  }
+
+  function renderScanRows(items, mode) {
+    mode = mode || currentScan;
+    var body = $('scBody_' + mode);
+    if (!body) return;
     if (!items.length) {
       body.innerHTML = '<tr><td colspan="6" class="empty">' + t('scan.none') + '</td></tr>';
       return;
@@ -14660,7 +15540,7 @@ function renderAdminDashboardHtml(initialData = {}) {
         ? '<button class="btn sm" type="button" data-act="add-ip" data-ip="' + p.ip + '" data-port="' + p.port + '">' + ICO.plus + ' به ' + targetLabel + '</button>'
         : '<button class="btn sm" type="button" data-act="use-proxy" data-proxy="' + String(p.proxy || '').replace(/"/g, '&quot;') + '">' + ICO.link + ' ' + t('btn.connectS') + '</button>';
       return '<tr>' +
-        '<td><span class="code-badge">' + p.code + '</span> ' + p.country + '</td>' +
+        '<td><span class="code-badge">' + (p.code || '—') + '</span> ' + (p.country || '—') + '</td>' +
         '<td class="mono">' + (String(p.ip).includes(':') ? '[' + p.ip + ']' : p.ip) + ':' + p.port + '</td>' +
         '<td><span class="tag on">' + typeLabel + '</span></td>' +
         '<td class="mono ' + latClass + '">' + p.latencyMs + ' ms</td>' +
@@ -14712,26 +15592,31 @@ function renderAdminDashboardHtml(initialData = {}) {
       .catch(function() { showToast('خطای شبکه در اعمال نتیجه اسکن', 'err'); });
   }
 
-  function runScan() {
-    var country = $('scanCountry').value;
-    var limit = $('scanLimit').value;
-    var kind = $('scanKind') ? $('scanKind').value : 'ipv4';
-    var family = $('scanFamily') ? $('scanFamily').value : 'any';
-    var cfMode = ['ipv4', 'ipv6', 'domain', 'proxyip'].indexOf(kind) > -1;
-    var btn = $('btnScan');
-    var status = $('scanStatus');
-    btn.disabled = true;
-    status.className = 'scan-status';
-    status.textContent = cfMode
-      ? 'در حال خواندن منابع آدرس و تست اتصال...'
-      : 'در حال دریافت زنده لیست‌ها و تست واقعی اتصال TCP...';
-    $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
-
-    scanRequest(cfMode
-      ? { mode: kind, country: country, limit: limit }
-      : { country: country, limit: limit, kind: kind, family: family })
+  function runScanMode(id) {
+    if (id === 'manual') return runManualScan();
+    var meta = SCAN_META[id];
+    if (!meta) return Promise.resolve([]);
+    var status = $('scStatus_' + id);
+    var body = $('scBody_' + id);
+    var countryEl = $('sc_' + id + '_country');
+    var limitEl = $('sc_' + id + '_limit');
+    var familyEl = $('sc_' + id + '_family');
+    var payload = { country: countryEl ? countryEl.value : 'DE', limit: limitEl ? limitEl.value : '10' };
+    if (id === 'proxy') {
+      payload.kind = 'proxy';
+      payload.family = familyEl ? familyEl.value : 'any';
+    } else {
+      payload.mode = id;
+    }
+    if (body) body.innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
+    if (status) {
+      status.className = 'scan-status';
+      status.textContent = id === 'proxy'
+        ? 'در حال خواندن پروکسی‌های کشوری و تست اتصال...'
+        : 'در حال خواندن منابع آدرس و تست اتصال...';
+    }
+    return scanRequest(payload)
       .then(function(data) {
-        // خلاصهٔ سلامت منابع و زمان اسکن، تا اگر نتیجه صفر بود دلیلش دیده شود
         var diag = '';
         if (data.diagnostics && data.diagnostics.length) {
           var healthy = data.diagnostics.filter(function(d) { return d.reachable && d.entries > 0; }).length;
@@ -14740,22 +15625,99 @@ function renderAdminDashboardHtml(initialData = {}) {
         if (data.elapsedMs) diag += ' · ' + Math.round(data.elapsedMs / 1000) + 's';
         if (data.success && data.proxies && data.proxies.length) {
           scanResults = data.proxies;
-          renderScanRows(data.proxies);
-          status.textContent = (data.message || (data.proxies.length + ' مورد آنلاین از ' + data.testedCount + ' تست')) + diag;
-        } else {
-          $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">موردی یافت نشد.</td></tr>';
+          renderScanRows(data.proxies, id);
+          if (status) status.textContent = (data.message || (data.proxies.length + ' مورد آنلاین از ' + data.testedCount + ' تست')) + diag;
+          return data.proxies;
+        }
+        if (body) body.innerHTML = '<tr><td colspan="6" class="empty">موردی یافت نشد.</td></tr>';
+        if (status) {
           status.className = 'scan-status err';
           status.textContent = (data.message || 'دریافت لیست یا تست ناموفق بود.') + diag;
         }
+        return [];
       })
       .catch(function() {
-        $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">خطا.</td></tr>';
-        status.className = 'scan-status err';
-        status.textContent = 'خطای شبکه در اجرای اسکنر.';
-      })
-      .finally(function() {
-        btn.disabled = false;
+        if (body) body.innerHTML = '<tr><td colspan="6" class="empty">خطا.</td></tr>';
+        if (status) { status.className = 'scan-status err'; status.textContent = 'خطای شبکه در اجرای اسکنر.'; }
+        return [];
       });
+  }
+
+  // آدرس‌های دستی: خط‌به‌خط داخل همین پنل تست می‌شوند
+  function parseManualHosts(raw) {
+    var lines = String(raw || '').split(',').join(String.fromCharCode(10)).split(String.fromCharCode(10));
+    var out = [];
+    lines.forEach(function(line) {
+      var text = String(line || '').trim();
+      if (!text) return;
+      var scheme = text.indexOf('://');
+      if (scheme > -1) text = text.slice(scheme + 3);
+      var host = text;
+      var port = 443;
+      var colon = text.lastIndexOf(':');
+      if (colon > 0) {
+        var maybe = parseInt(text.slice(colon + 1), 10);
+        if (maybe > 0 && maybe < 65536) { host = text.slice(0, colon); port = maybe; }
+      }
+      if (host.charAt(0) === '[' && host.charAt(host.length - 1) === ']') host = host.slice(1, -1);
+      if (!host) return;
+      out.push({ host: host, port: port });
+    });
+    return out.slice(0, 24);
+  }
+
+  function runManualScan() {
+    var status = $('scStatus_manual');
+    var body = $('scBody_manual');
+    var hosts = parseManualHosts($('sc_manual_hosts') ? $('sc_manual_hosts').value : '');
+    if (!hosts.length) {
+      if (status) { status.className = 'scan-status err'; status.textContent = 'آدرسی وارد نشده است؛ هر خط یک آدرس یا host:port بنویسید.'; }
+      return Promise.resolve([]);
+    }
+    if (body) body.innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
+    var queue = hosts.slice();
+    var results = [];
+    var done = 0;
+    if (status) { status.className = 'scan-status'; status.textContent = 'تست ' + hosts.length + ' آدرس داخل پنل...'; }
+    var probeOne = function(item) {
+      return fetch(origin() + '/api/scanner/probe?host=' + encodeURIComponent(item.host) + '&port=' + item.port)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var ipv6 = item.host.indexOf(':') > -1;
+          results.push({
+            code: '—', country: 'دستی', ip: item.host, port: item.port, kind: 'ip',
+            family: ipv6 ? 'ipv6' : 'ipv4', protocol: ipv6 ? 'IPv6' : 'IPv4',
+            latencyMs: Number(data && data.latencyMs) || 0, verified: !!(data && data.success)
+          });
+        })
+        .catch(function() {
+          results.push({ code: '—', country: 'دستی', ip: item.host, port: item.port, kind: 'ip', family: 'ipv4', protocol: 'IPv4', latencyMs: 0, verified: false });
+        })
+        .then(function() {
+          done++;
+          if (status) status.textContent = 'تست ' + done + ' از ' + hosts.length + ' آدرس...';
+        });
+    };
+    var worker = function() {
+      if (!queue.length) return Promise.resolve();
+      var item = queue.shift();
+      return probeOne(item).then(worker);
+    };
+    var runners = [];
+    for (var i = 0; i < 6; i++) runners.push(worker());
+    return Promise.all(runners).then(function() {
+      results.sort(function(a, b) { return (b.verified ? 1 : 0) - (a.verified ? 1 : 0); });
+      var online = results.filter(function(r) { return r.verified; });
+      renderScanRows(results, 'manual');
+      scanResults = results;
+      if (status) {
+        status.className = online.length ? 'scan-status' : 'scan-status err';
+        status.textContent = online.length
+          ? online.length + ' از ' + results.length + ' آدرس پاسخ داد؛ با دکمهٔ ردیف به تنظیمات کاربر اضافه کنید.'
+          : 'هیچ آدرسی پاسخ نداد؛ آدرس‌ها یا پورت را بررسی کنید.';
+      }
+      return results;
+    });
   }
 
   function syncConditionalFields() {
@@ -14764,11 +15726,6 @@ function renderAdminDashboardHtml(initialData = {}) {
       var input = document.querySelector('.switch input[data-key="' + key + '"]');
       el.style.display = (!input || input.checked) ? '' : 'none';
     });
-    var famWrap = $('scanFamilyWrap');
-    if (famWrap) {
-      var kindSel = $('scanKind');
-      famWrap.style.display = (kindSel && kindSel.value === 'proxy') ? '' : 'none';
-    }
   }
 
   function rotatePath() {
@@ -14840,56 +15797,27 @@ function renderAdminDashboardHtml(initialData = {}) {
   }
 
   function countryProxy(code) {
-    showPanel('scanner');
-    if ($('scanCountry')) $('scanCountry').value = code;
-    if ($('scanKind')) $('scanKind').value = 'proxy';
-    syncConditionalFields();
-    var status = $('scanStatus');
-    status.className = 'scan-status';
-    status.textContent = 'در حال یافتن سریع‌ترین پروکسی ' + code + ' ...';
-    $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
-    scanRequest({ country: code, limit: 8, kind: 'proxy', family: 'any' })
-      .then(function(data) {
-        if (!data.success || !data.proxies || !data.proxies.length) {
-          status.className = 'scan-status err';
-          status.textContent = data.message || 'پروکسی زنده‌ای برای این کشور پیدا نشد.';
-          return;
-        }
-        renderScanRows(data.proxies);
-        status.textContent = 'سریع‌ترین پروکسی ' + code + ' (' + data.proxies[0].latencyMs + ' ms) به s وصل شد.';
-        return useProxy(data.proxies[0].proxy);
-      })
-      .catch(function() {
-        status.className = 'scan-status err';
-        status.textContent = 'خطای شبکه در دریافت پروکسی کشوری.';
-      });
+    openScanView('proxy');
+    if ($('sc_proxy_country')) $('sc_proxy_country').value = code;
+    if ($('scanTarget')) $('scanTarget').value = 's';
+    return runScanMode('proxy').then(function(items) {
+      if (!items || !items.length || !items[0].proxy) return;
+      var status = $('scStatus_proxy');
+      if (status) status.textContent = 'سریع‌ترین پروکسی ' + code + ' (' + items[0].latencyMs + ' ms) به‌عنوان پروکسی خروجی ثبت شد.';
+      return useProxy(items[0].proxy);
+    });
   }
 
   function countryIp(code) {
-    showPanel('scanner');
-    if ($('scanCountry')) $('scanCountry').value = code;
-    if ($('scanKind')) $('scanKind').value = 'ipv4';
-    if ($('scanFamily')) $('scanFamily').value = 'any';
-    syncConditionalFields();
-    var status = $('scanStatus');
-    status.className = 'scan-status';
-    status.textContent = 'در حال تست آی‌پی‌های ثابت...';
-    $('scanBody').innerHTML = '<tr><td colspan="6" class="empty">در حال تست...</td></tr>';
-    scanRequest({ mode: 'ipv4', country: code, limit: 10 })
-      .then(function(data) {
-        if (!data.success || !data.proxies || !data.proxies.length) {
-          status.className = 'scan-status err';
-          status.textContent = data.message || 'آی‌پی سالمی پیدا نشد.';
-          return;
-        }
-        renderScanRows(data.proxies);
-        return applyScanItems('yx', data.proxies.slice(0, 3).map(function(p) { return { ip: p.ip, port: p.port, name: p.ip }; }))
-          .then(function() { status.textContent = 'آدرس‌های ثابت به «آدرس‌های دستی» اضافه شدند (گزینهٔ آی‌پی‌های ثابت کلادفلر را روشن نگه دارید).'; });
-      })
-      .catch(function() {
-        status.className = 'scan-status err';
-        status.textContent = 'خطای شبکه در تست آی‌پی‌ها.';
-      });
+    openScanView('ipv4');
+    if ($('sc_ipv4_country')) $('sc_ipv4_country').value = code;
+    if ($('scanTarget')) $('scanTarget').value = 'yx';
+    return runScanMode('ipv4').then(function(items) {
+      if (!items || !items.length) return;
+      var status = $('scStatus_ipv4');
+      return applyScanItems('yx', items.slice(0, 3).map(function(p) { return { ip: p.ip, port: p.port, name: p.ip }; }))
+        .then(function() { if (status) status.textContent = 'آدرس‌های ثابت به «آدرس‌های دستی» اضافه شدند (گزینهٔ آی‌پی‌های ثابت کلادفلر را روشن نگه دارید).'; });
+    });
   }
 
   function savePassword() {
@@ -14929,7 +15857,13 @@ function renderAdminDashboardHtml(initialData = {}) {
 
   document.addEventListener('click', function(event) {
     var tab = event.target.closest('[data-tab]');
-    if (tab) { showPanel(tab.getAttribute('data-tab')); return; }
+    if (tab) {
+      var tabName = tab.getAttribute('data-tab');
+      // رفتن به تب اسکنر دوباره منوی اسکن‌ها را نشان می‌دهد
+      if (tabName === 'scanner') closeScanView();
+      showPanel(tabName);
+      return;
+    }
 
     var formTab = event.target.closest('[data-uf-tab]');
     if (formTab) { switchUserFormTab(formTab.getAttribute('data-uf-tab')); return; }
@@ -14960,8 +15894,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'reload-users') { reloadUsers(); }
     else if (act === 'save-password') { savePassword(); }
     else if (act === 'logout') { logout(); }
-    else if (act === 'go-scan') { showPanel('scanner'); }
-    else if (act === 'run-scan') { runScan(); }
+    else if (act === 'go-scan') { showPanel('scanner'); closeScanView(); }
     else if (act === 'add-node' || act === 'add-ip') { addNode(el.getAttribute('data-ip'), el.getAttribute('data-port')); }
     else if (act === 'use-proxy') { useProxy(el.getAttribute('data-proxy')); }
     else if (act === 'country-proxy') { countryProxy(el.getAttribute('data-code')); }
@@ -14976,7 +15909,26 @@ function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'copy-admin-path') { copyText('/' + ADMIN_PATH, 'مسیر مدیریت کپی شد'); }
     else if (act === 'rotate-path') { rotatePath(); }
     else if (act === 'test-nodes') { testUserNodes(el.getAttribute('data-user')); }
+    else if (act === 'scan-back') { closeScanView(); }
+    else if (act === 'scan-run') { runScanMode(el.getAttribute('data-mode')); }
   });
+
+  // بازخورد لمسی: موج نور از نقطهٔ لمس/کلیک روی دکمه‌ها و تب‌ها
+  document.addEventListener('pointerdown', function(event) {
+    var host = event.target.closest('.btn, .icon-btn, .ftab, .tab, .drawer-item, .loc-card');
+    if (!host || host.disabled) return;
+    var rect = host.getBoundingClientRect();
+    var wave = document.createElement('span');
+    wave.className = 'ripple';
+    wave.style.left = (event.clientX - rect.left) + 'px';
+    wave.style.top = (event.clientY - rect.top) + 'px';
+    host.appendChild(wave);
+    host.classList.add('is-press');
+    setTimeout(function() {
+      if (wave.parentNode) wave.parentNode.removeChild(wave);
+      host.classList.remove('is-press');
+    }, 620);
+  }, { passive: true });
 
   document.addEventListener('click', function(event) {
     if (event.target.classList && event.target.classList.contains('modal')) {
@@ -14991,13 +15943,8 @@ function renderAdminDashboardHtml(initialData = {}) {
       var key = target.getAttribute('data-key');
       if (key === 'frag' || key === 'ech') syncConditionalFields();
     }
-    if (target.id === 'scanKind') {
-      syncConditionalFields();
-      // مقصد نتیجه بر اساس نوع منبع پیشنهاد می‌شود: آدرس واسط ← ProxyIP، پروکسی ← خروجی
-      if ($('scanTarget')) {
-        var sel = $('scanKind').value;
-        $('scanTarget').value = sel === 'proxyip' ? 'p' : (sel === 'proxy' ? 's' : 'yx');
-      }
+    if (target.matches && target.matches('input[data-scan]')) {
+      toggleScanMode(target.getAttribute('data-scan'), target.checked);
     }
     if (target.id === 'uf_preset') applyPresetToForm();
     if (target.id === 'dnsPreset') {
@@ -15006,22 +15953,16 @@ function renderAdminDashboardHtml(initialData = {}) {
     }
   });
 
-  function tickClock() {
-    var d = new Date();
-    var txt = d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-    var chip = $('clockChip');
-    if (chip) chip.textContent = txt;
-  }
 
   if (lsGet('mili_theme') === 'light') document.body.classList.add('light-mode');
   applyLanguage();
+  buildScanViews();
   renderUsers();
   renderLocations();
   fillSettings();
   syncConditionalFields();
   renderMetrics();
-  tickClock();
-  setInterval(tickClock, 30000);
+
   // بررسی بی‌صدای نسخه در پس‌زمینه (خروجی ۱۰ دقیقه کش می‌شود)
   setTimeout(function() { checkUpdate(true); }, 1200);
 
@@ -15359,7 +16300,8 @@ const __MILI_WORKER_EXPORT__ = {
             }
           }
           const warpCfg = { ...globalCfg, ...((warpUser && warpUser.config) || {}) };
-          const format = String(url.searchParams.get('format') || 'zip').toLowerCase();
+          // پیش‌فرض clash است تا اگر کلاینت آدرس را بدون پارامتر وارد کند سابلینک سالم بگیرد (ZIP با format=zip)
+          const format = String(url.searchParams.get('format') || 'clash').toLowerCase();
           // پارامترهای مبهم‌سازی و ترتیب اندپوینت‌ها با شناسهٔ کاربر ساخته می‌شود
           // تا بستهٔ هر کاربر منحصر به فرد باشد.
           const bundle = await buildWarpConfBundle(warpCfg, { seed: warpUser?.uuid || 'public' });
@@ -15369,17 +16311,42 @@ const __MILI_WORKER_EXPORT__ = {
               status: 200,
               headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Content-Disposition': 'attachment; filename="miliconfig-warp-links.txt"',
+                // inline: بعضی کلاینت‌ها فایل attachment را به‌جای سابلینک پارس نمی‌کنند
+                'Content-Disposition': 'inline; filename="miliconfig-warp-links.txt"',
+                'Access-Control-Allow-Origin': '*',
                 'Cache-Control': 'no-store'
               }
             });
+          }
+          const pickFormat = (name, type, fileName) => {
+            const file = bundle.files.find(item => item.name === name);
+            return new Response(file ? file.data : '', {
+              status: file ? 200 : 404,
+              headers: {
+                'Content-Type': type,
+                'Content-Disposition': `inline; filename="${fileName}"`,
+                'Access-Control-Allow-Origin': '*',
+                'profile-update-interval': '12',
+                'Cache-Control': 'no-store'
+              }
+            });
+          };
+          if (format === 'clash' || format === 'yaml' || format === 'mihomo') {
+            return pickFormat('WARP-clash.yaml', 'text/yaml; charset=utf-8', 'miliconfig-warp-clash.yaml');
+          }
+          if (format === 'singbox' || format === 'sing-box' || format === 'sb') {
+            return pickFormat('WARP-singbox.json', 'application/json; charset=utf-8', 'miliconfig-warp-singbox.json');
+          }
+          if (format === 'base64' || format === 'sub') {
+            return pickFormat('WARP-sub-base64.txt', 'text/plain; charset=utf-8', 'miliconfig-warp-base64.txt');
           }
           if (format === 'conf' || format === 'wg' || format === 'txt') {
             return new Response(buildWireGuardConf(bundle.config, 'WARP'), {
               status: 200,
               headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Content-Disposition': 'attachment; filename="WARP.conf"',
+                'Content-Disposition': 'inline; filename="WARP.conf"',
+                'Access-Control-Allow-Origin': '*',
                 'Cache-Control': 'no-store'
               }
             });

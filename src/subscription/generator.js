@@ -237,8 +237,12 @@ function makeNodeEntry(link, proto, host, item = null, tls = true) {
 function balanceComboEntries(entries = [], limit = 0) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
   const groups = new Map();
+  // حذف تکرار: یک آدرس ممکن است از چند منبع (فهرست ثابت، ترجیحی و ...) بیاید
+  const seenLinks = new Set();
   for (const entry of entries) {
     if (!entry || !entry.link) continue;
+    if (seenLinks.has(entry.link)) continue;
+    seenLinks.add(entry.link);
     const key = `${entry.meta.proto}|${entry.meta.family || 'na'}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(entry);
@@ -247,8 +251,12 @@ function balanceComboEntries(entries = [], limit = 0) {
 
   // داخل هر گروه، نودهای پروکسی‌دار و بدون پروکسی یک‌درمیان بیایند
   for (const [key, list] of groups) {
-    const withProxy = list.filter(item => item.meta.proxy);
-    const plain = list.filter(item => !item.meta.proxy);
+    // ترتیب پایدار: مستقل از ترتیب رسیدن منابع، تا لینک‌ها بین دو درخواست
+    // جابه‌جا نشوند (آی‌پی نود در کلاینت ثابت می‌ماند).
+    const withProxy = list.filter(item => item.meta.proxy)
+      .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
+    const plain = list.filter(item => !item.meta.proxy)
+      .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
     const mixed = [];
     let a = 0;
     let b = 0;
@@ -335,7 +343,7 @@ export function getStaticCfAddresses(cfg = {}) {
 // ساخت نودهای چندلوکیشن: آدرس = آی‌پی ثابت CF، و پروکسی کشور از طریق ?s= در مسیر ws
 const LOCATION_PROXY_SCHEMES = ['socks5://', 'socks://', 'http://', 'https://'];
 
-export function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost = '') {
+export function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost = '', seed = '') {
   const usable = (Array.isArray(proxyPool) ? proxyPool : []).filter(item => {
     const p = String(item?.proxy || '').trim();
     return LOCATION_PROXY_SCHEMES.some(s => p.toLowerCase().startsWith(s));
@@ -357,8 +365,9 @@ export function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost =
   if (addressPool.length === 0) return [];
 
   const wanted = Math.max(1, Math.min(parseInt(cfg.locationNodeCount, 10) || 8, usable.length));
-  // چرخش پنج‌دقیقه‌ای پروکسی‌ها تا نودها همیشه از استخر تازه انتخاب شوند
-  const bucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  // انتخاب پایدار بر اساس seed کاربر (نه زمان): با هر بار خواندن ساب‌لینک
+  // همان پروکسی‌ها برمی‌گردند تا آی‌پی نود در کلاینت عوض نشود.
+  const bucket = seed ? stableAddressSeed(String(seed) + '-loc') : 0;
 
   // با گام‌بندی روی استخر، هم IPv4 و هم IPv6 (اگر فعال باشد) در ساب‌لینک حضور پیدا می‌کنند
   const stride = Math.max(1, Math.floor(addressPool.length / wanted));
@@ -1199,8 +1208,29 @@ function awgHash(text) {
   return h >>> 0;
 }
 
+// نسخه‌های AmneziaWG: نسخهٔ ۱ فقط بسته‌های Junk، نسخهٔ ۲ پدینگ/هدر و بسته‌های
+// امضایی I1..I5 را اضافه می‌کند و نسخهٔ ۳ تنظیمات زمان‌بندی و
+// ContentPaddingAddition را هم می‌آورد. برای WARP (همتای وایرگارد استاندارد)
+// مقدار S/H صفر و ۱..۴ است، وگرنه هندشیک رد می‌شود.
+export function normalizeAwgVersion(value) {
+  const v = String(value == null ? '' : value).trim();
+  return v === '1' || v === '2' || v === '3' ? v : '3';
+}
+
+// رشتهٔ امضای CPS برای بسته‌های ویژهٔ AmneziaWG — فقط تگ‌های مجاز
+// (<b 0x..> بایت ثابت، <r N> بایت تصادفی، <rc N> حرف، <rd N> رقم، <t> زمان)
+function buildAwgSignatureCps(idx, next) {
+  const fixed = ['ce00000001', 'f6ab3267fa', 'a10000000200', '8d00000001', 'e700000001'];
+  const hex = fixed[idx % fixed.length];
+  const letters = next(6, 14);
+  const rand = next(24, 64);
+  if (idx % 2 === 0) return `<b 0x${hex}><rc ${letters}><t><r ${rand}>`;
+  return `<b 0x${hex}><t><rd ${letters}><r ${rand}>`;
+}
+
 export function buildAmneziaWgParams(config = {}) {
-  const seed = `${config.seed || ''}:${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}`;
+  const version = normalizeAwgVersion(config.awgv);
+  const seed = `${config.seed || ''}:${config.server || WARP_DEFAULT_HOST}:${config.port || WARP_DEFAULT_PORT}:${config.publicKey || WARP_PEER_PUBLIC_KEY}:v${version}`;
   let h = awgHash(seed) || 1;
   const next = (min, max) => {
     h = (Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
@@ -1208,29 +1238,51 @@ export function buildAmneziaWgParams(config = {}) {
   };
   const jmin = next(40, 70);
   const jmax = jmin + next(950, 1150);
-  // سرورهای WARP وایرگارد استاندارد هستند: هدر و پدینگ دستکاری‌شده را رد می‌کنند.
-  // پس برای WARP فقط بسته‌های Junk (Jc) فعال می‌ماند و S/H صفر می‌شود تا هندشیک
-  // واقعاً برقرار شود؛ حالت کامل مبهم‌سازی فقط با obfuscateHandshake فعال می‌شود.
-  const fullObfuscation = config.obfuscateHandshake === true;
-  const h1 = fullObfuscation ? next(100000, 800000) : 0;
-  return {
-    jc: next(3, 8),
+  const jc = next(3, 7);
+  // سرورهای WARP وایرگارد استاندارد هستند: هدر و پدینگ دست‌کاری‌شده را رد می‌کنند.
+  // پس S همیشه صفر و H1..H4 همان ۱..۴ وایرگارد می‌ماند؛ فقط بسته‌های Junk و
+  // بسته‌های امضایی (که سمت سرور نادیده گرفته می‌شوند) فعال‌اند.
+  const fullObfuscation = config.obfuscateHandshake === true && version === '1';
+  const base = {
+    version,
+    jc,
     jmin,
     jmax,
     s1: fullObfuscation ? next(20, 60) : 0,
     s2: fullObfuscation ? next(30, 90) : 0,
-    h1,
-    h2: fullObfuscation ? h1 + next(1, 4000) : 0,
-    h3: fullObfuscation ? h1 + next(4001, 9000) : 0,
-    h4: fullObfuscation ? h1 + next(9001, 16000) : 0
+    s3: 0,
+    s4: 0,
+    h1: fullObfuscation ? next(100000, 800000) : 1,
+    h2: 0,
+    h3: 0,
+    h4: 0
   };
+  base.h2 = fullObfuscation ? base.h1 + next(1, 4000) : 2;
+  base.h3 = fullObfuscation ? base.h1 + next(4001, 9000) : 3;
+  base.h4 = fullObfuscation ? base.h1 + next(9001, 16000) : 4;
+  if (version === '1') return base;
+
+  // ‏۲.x و ۳.x: بسته‌های امضایی I1..I3 + بسته‌های اضافی؛ همه سمت کلاینت
+  const signatures = [];
+  const sigCount = version === '3' ? 3 : 2;
+  for (let i = 0; i < sigCount; i++) signatures.push(buildAwgSignatureCps(i, next));
+  base.signatures = signatures;
+  base.paddingAddition = `${next(10, 40)}-${next(60, 120)}`;
+  if (version === '3') {
+    base.rekeyAfterTime = `${next(100, 110)}-${next(115, 130)}`;
+    base.rekeyTimeout = `${next(3, 4)}-${next(5, 8)}`;
+    base.rejectAfterTime = `${next(150, 165)}-${next(175, 195)}`;
+    base.keepaliveTimeout = `${next(5, 8)}-${next(12, 18)}`;
+    base.maxHandshakeAttempts = `${next(15, 17)}-${next(18, 22)}`;
+  }
+  return base;
 }
 
 // قالب استاندارد wireguard:// (سازگار با v2rayN/NekoBox/Hiddify) + پارامترهای AmneziaWG
 export function buildWireguardLink(config = {}, name = 'WARP') {
   const host = String(config.server || WARP_DEFAULT_HOST);
   const endpoint = host.includes(':') ? `[${host}]` : host;
-  const awg = config.awg === false ? null : buildAmneziaWgParams(config);
+  const awg = config.awg === false ? null : buildAmneziaWgParams({ ...config, awgv: config.awgv || '3' });
   const params = new URLSearchParams();
   params.set('publickey', config.publicKey || WARP_PEER_PUBLIC_KEY);
   params.set('reserved', (Array.isArray(config.reserved) ? config.reserved : [0, 0, 0]).join(','));
@@ -1240,14 +1292,16 @@ export function buildWireguardLink(config = {}, name = 'WARP') {
   params.set('dns', String(config.dns || '1.1.1.1, 1.0.0.1'));
   if (config.address6) params.set('address6', String(config.address6));
   if (awg) {
-    params.set('awg', '1');
+    params.set('awg', awg.version || '1');
     params.set('jc', String(awg.jc));
     params.set('jmin', String(awg.jmin));
     params.set('jmax', String(awg.jmax));
     // مقادیر صفر در لینک نوشته نمی‌شوند (کلاینت آن‌ها را پیش‌فرض وایرگارد می‌گیرد)
-    for (const key of ['s1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+    for (const key of ['s1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4']) {
       if (awg[key] > 0) params.set(key, String(awg[key]));
     }
+    if (awg.paddingAddition) params.set('cpa', awg.paddingAddition);
+    (awg.signatures || []).forEach((sig, idx) => params.set(`i${idx + 1}`, sig));
   }
   const userInfo = encodeURIComponent(String(config.privateKey || ''));
   return `wireguard://${userInfo}@${endpoint}:${config.port || WARP_DEFAULT_PORT}?${params.toString()}#${encodeURIComponent(name)}`;
@@ -1281,9 +1335,17 @@ export function buildWireGuardConf(config = {}, name = 'WARP') {
   );
   // پارامترهای پدینگ/هدر فقط در حالت مبهم‌سازی کامل نوشته می‌شوند؛ صفر برای
   // WARP لازم است و گرنه هندشیک وایرگارد استاندارد رد می‌شود.
-  for (const [key, value] of [['S1', awg.s1], ['S2', awg.s2], ['H1', awg.h1], ['H2', awg.h2], ['H3', awg.h3], ['H4', awg.h4]]) {
+  for (const [key, value] of [['S1', awg.s1], ['S2', awg.s2], ['S3', awg.s3], ['S4', awg.s4], ['H1', awg.h1], ['H2', awg.h2], ['H3', awg.h3], ['H4', awg.h4]]) {
     if (value > 0) lines.push(`${key} = ${value}`);
   }
+  // AmneziaWG 2.x/3.x: بسته‌های امضایی و تنظیمات زمان‌بندی (فقط سمت کلاینت)
+  (awg.signatures || []).forEach((sig, idx) => lines.push(`I${idx + 1} = ${sig}`));
+  if (awg.paddingAddition) lines.push(`ContentPaddingAddition = ${awg.paddingAddition}`);
+  if (awg.rekeyAfterTime) lines.push(`RekeyAfterTime = ${awg.rekeyAfterTime}`);
+  if (awg.rekeyTimeout) lines.push(`RekeyTimeout = ${awg.rekeyTimeout}`);
+  if (awg.rejectAfterTime) lines.push(`RejectAfterTime = ${awg.rejectAfterTime}`);
+  if (awg.keepaliveTimeout) lines.push(`KeepaliveTimeout = ${awg.keepaliveTimeout}`);
+  if (awg.maxHandshakeAttempts) lines.push(`MaxHandshakeAttempts = ${awg.maxHandshakeAttempts}`);
   lines.push(
     '[Peer]',
     `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
@@ -1293,6 +1355,28 @@ export function buildWireGuardConf(config = {}, name = 'WARP') {
   );
   // لایسنس حساب هرگز داخل فایل کاربر نوشته نمی‌شود (نشت کلید پولی)
   return lines.join('\n') + '\n';
+}
+
+// کانفیگ WireGuard استاندارد (بدون پارامترهای امنزیا) — برای کلاینت‌هایی که
+// AmneziaWG ندارند ولی WARP ساده را کامل پشتیبانی می‌کنند.
+export function buildPlainWireGuardConf(config = {}, name = 'WARP') {
+  const endpointHost = String(config.server || WARP_DEFAULT_HOST);
+  const endpoint = endpointHost.includes(':') ? `[${endpointHost}]` : endpointHost;
+  const mtu = parseInt(config.mtu, 10) || 1280;
+  const dns = String(config.dns || '1.1.1.1, 1.0.0.1');
+  return [
+    `# ${name} — ${BRAND_NAME} (WireGuard)`,
+    '[Interface]',
+    `PrivateKey = ${config.privateKey || ''}`,
+    `Address = ${config.address4 || WARP_DEFAULT_ADDRESS}/32`,
+    `DNS = ${dns}`,
+    `MTU = ${mtu}`,
+    '[Peer]',
+    `PublicKey = ${config.publicKey || WARP_PEER_PUBLIC_KEY}`,
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    'PersistentKeepalive = 25',
+    `Endpoint = ${endpoint}:${config.port || WARP_DEFAULT_PORT}`
+  ].join('\n') + '\n';
 }
 
 // بستهٔ کانفیگ‌های آمادهٔ WARP برای دانلود (zip) — بدون نیاز به هیچ تنظیمی در پنل:
@@ -1316,6 +1400,7 @@ function warpEndpointTag(host) {
 export async function buildWarpConfBundle(cfg = {}, options = {}) {
   const registered = await fetchWarpRegistration(cfg);
   const base = registered || buildFallbackWarpConfig();
+  const awgv = normalizeAwgVersion(cfg.awgv);
   const seed = String(options.seed || cfg.wk || BRAND_NAME);
   const v4Hosts = WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':'));
   const v6Hosts = WARP_ENDPOINT_IPS.filter(host => String(host).includes(':'));
@@ -1354,7 +1439,7 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
     files.push({
       name,
       data: buildWireGuardConf(
-        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, seed: `${seed}:${name}` },
+        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, awgv, seed: `${seed}:${name}` },
         label
       )
     });
@@ -1379,11 +1464,119 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
   const links = entries.map(entry => {
     const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
     return buildWireguardLink(
-      { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, seed: `${seed}:link:${entry.host}:${entry.port}` },
+      { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, awgv, seed: `${seed}:link:${entry.host}:${entry.port}` },
       `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port}`
     );
   });
   files.push({ name: 'links.txt', data: links.join('\n') + '\n' });
+
+  // ---- همهٔ فرمت‌های دیگر WARP در همین زیپ ----
+  const reservedArr = (Array.isArray(base.reserved) ? base.reserved : [0, 0, 0]).slice(0, 3);
+  const dnsList = String(base.dns || '1.1.1.1, 1.0.0.1').split(',').map(item => item.trim()).filter(Boolean);
+  const localAddress = [base.address4 || WARP_DEFAULT_ADDRESS];
+  if (base.address6) localAddress.push(base.address6);
+
+  // ۱) ساب‌لینک base64 (v2rayN / NekoBox / Hiddify)
+  files.push({ name: 'WARP-sub-base64.txt', data: encodeBase64Utf8(links.join('\n')) + '\n' });
+
+  // ۲) Clash Meta / Mihomo
+  const proxyNames = [];
+  const clashProxies = entries.map((entry, idx) => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    const proxyName = `WARP ${idx + 1} ${entry.kind} ${entry.port}`;
+    proxyNames.push(proxyName);
+    const awg = buildAmneziaWgParams({ ...base, awgv, seed: `${seed}:clash:${entry.host}:${entry.port}` });
+    const parts = [
+      `name: "${proxyName}"`,
+      'type: wireguard',
+      `server: "${entry.host}"`,
+      `port: ${entry.port}`,
+      `ip: ${localAddress[0]}/32`,
+      `private-key: "${base.privateKey || ''}"`,
+      `public-key: "${base.publicKey || WARP_PEER_PUBLIC_KEY}"`,
+      `mtu: ${preset.mtu}`,
+      'udp: true',
+      `reserved: [${reservedArr.join(', ')}]`,
+      `dns: [${dnsList.map(item => `"${item}"`).join(', ')}]`,
+      'allowed-ips: ["0.0.0.0/0", "::/0"]',
+      'remote-dns-resolve: true'
+    ];
+    if (awgv >= 2) {
+      parts.push(`amnezia-wg-option: { jc: ${awg.jc}, jmin: ${awg.jmin}, jmax: ${awg.jmax}, s1: 0, s2: 0, h1: 1, h2: 2, h3: 3, h4: 4 }`);
+    }
+    return `  - { ${parts.join(', ')} }`;
+  });
+  files.push({
+    name: 'WARP-clash.yaml',
+    data: [
+      `# ${BRAND_NAME} — WARP / WARP PRO / multi-location`,
+      '# Clash Meta / Mihomo (clash-verge, flclash, stash)',
+      `# profiles: ${entries.length} — AmneziaWG junk packets, headers stay default for WARP`,
+      'mixed-port: 7890',
+      'allow-lan: false',
+      'mode: rule',
+      'log-level: warning',
+      'dns:',
+      '  enable: true',
+      '  enhanced-mode: fake-ip',
+      '  nameserver:',
+      ...dnsList.map(item => `    - ${item}`),
+      'proxies:',
+      ...clashProxies,
+      'proxy-groups:',
+      '  - name: "WARP"',
+      '    type: select',
+      '    proxies:',
+      ...proxyNames.map(name => `      - "${name}"`),
+      '      - DIRECT',
+      'rules:',
+      '  - MATCH,WARP'
+    ].join('\n') + '\n'
+  });
+
+  // ۳) sing-box
+  const sbOutbounds = entries.map((entry, idx) => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    return {
+      type: 'wireguard',
+      tag: `WARP ${idx + 1} ${entry.kind} ${entry.port}`,
+      server: entry.host,
+      server_port: entry.port,
+      local_address: localAddress.map(item => (item.includes('/') ? item : item.includes(':') ? `${item}/128` : `${item}/32`)),
+      private_key: base.privateKey || '',
+      peer_public_key: base.publicKey || WARP_PEER_PUBLIC_KEY,
+      mtu: preset.mtu,
+      reserved: reservedArr
+    };
+  });
+  const singboxConfig = {
+    log: { level: 'warn' },
+    inbounds: [{ type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: 2080 }],
+    outbounds: [
+      {
+        type: 'selector',
+        tag: 'select',
+        outbounds: sbOutbounds.map(item => item.tag).concat(['direct']),
+        default: sbOutbounds.length ? sbOutbounds[0].tag : 'direct'
+      },
+      ...sbOutbounds,
+      { type: 'direct', tag: 'direct' }
+    ],
+    route: { final: 'select' }
+  };
+  files.push({ name: 'WARP-singbox.json', data: JSON.stringify(singboxConfig, null, 2) + '\n' });
+
+  // ۴) WireGuard خالص (بدون پارامترهای امنزیا) برای کلاینت‌های معمولی
+  entries.slice(0, 6).forEach((entry, idx) => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    files.push({
+      name: `plain-wireguard/${String(idx + 1).padStart(2, '0')}-${entry.kind}-${warpEndpointTag(entry.host)}-${entry.port}-${entry.preset}.conf`,
+      data: buildPlainWireGuardConf(
+        { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns },
+        `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port}`
+      )
+    });
+  });
 
   const endpointList = [
     `# ${BRAND_NAME} — WARP endpoint matrix`,
@@ -1397,12 +1590,21 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
   files.push({
     name: 'README.txt',
     data: [
-      `${BRAND_NAME} — WARP / WARP PRO / multi-location (AmneziaWG)`,
+      `${BRAND_NAME} — WARP / WARP PRO / multi-location`,
       '',
       `files: ${files.length + 1} — IPv4 + IPv6 endpoints, multiple UDP ports, 4 tuning profiles`,
       '',
-      'Import any .conf into AmneziaWG (Windows/Android/iOS/macOS) or WireGuard.',
-      'links.txt = same profiles as wireguard:// links (NekoBox/Hiddify/v2rayN).',
+      'formats inside this zip:',
+      '  *.conf ................ AmneziaWG profile (Jc/Jmin/Jmax + AWG2/AWG3 signatures)',
+      '  plain-wireguard/*.conf . standard WireGuard profile (no AmneziaWG keys)',
+      '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
+      '  WARP-singbox.json ..... sing-box config with a selector group',
+      '  links.txt ............. wireguard:// links (NekoBox / Hiddify / v2rayN)',
+      '  WARP-sub-base64.txt ... same links in base64 subscription form',
+      '  endpoints.txt ......... endpoint matrix (host / port / profile)',
+      '',
+      'AmneziaWG: import any .conf into AmneziaWG (Windows / Android / iOS / macOS).',
+      'WireGuard: use plain-wireguard/ if your client does not support AmneziaWG.',
       'Jc/Jmin/Jmax send junk packets before the handshake; S/H stay 0 because',
       'Cloudflare WARP is a plain WireGuard peer and rejects modified headers.',
       'If a profile does not connect, try another port (500/1701/4500) or the IPv6 file.',
@@ -1427,21 +1629,26 @@ export async function buildWarpFamilyLinks(cfg = {}, options = {}) {
 
   const registered = await fetchWarpRegistration(cfg);
   const base = registered || buildFallbackWarpConfig();
+  // نسخهٔ AmneziaWG (۱/۲/۳) در همهٔ نودهای WARP اعمال می‌شود
+  const awgv = normalizeAwgVersion(cfg.awgv);
 
   if (wantWarp) {
-    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard' })));
+    links.push(buildWireguardLink({ ...base, awgv, seed: `warp:${awgv}` }, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard', awg: awgv })));
   }
   if (wantPro) {
     // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
-    links.push(buildWireguardLink(base, buildNodeDisplayName({ proto: 'warp_pro', family: 'WireGuard' })));
+    links.push(buildWireguardLink({ ...base, awgv, seed: `warp_pro:${awgv}` }, buildNodeDisplayName({ proto: 'warp_pro', family: 'WireGuard', awg: awgv })));
   }
   if (wantMl) {
     const endpoints = parseWarpEndpointList(cfg.warpEndpoint, cfg.warpCount);
     endpoints.forEach((endpoint, idx) => {
       const label = String(endpoint.label || '').trim().toUpperCase();
-      const meta = { proto: 'warp_ml', family: 'WireGuard', cc: /^[A-Z]{2}$/.test(label) ? label : '' };
+      const meta = { proto: 'warp_ml', family: 'WireGuard', cc: /^[A-Z]{2}$/.test(label) ? label : '', awg: awgv };
       const name = `${buildNodeDisplayName(meta)} · ${label || 'EP'}-${idx + 1}`;
-      links.push(buildWireguardLink({ ...base, server: endpoint.host, port: endpoint.port }, name));
+      links.push(buildWireguardLink(
+        { ...base, server: endpoint.host, port: endpoint.port, awgv, seed: `warp_ml:${endpoint.host}:${endpoint.port}:${awgv}` },
+        name
+      ));
     });
   }
   return links;
@@ -1675,11 +1882,114 @@ export async function fetchOpenVpnNodes(cfg = {}, force = false) {
   return items;
 }
 
+// ============================================================================
+// آدرس واسط «تحریم‌شکن»: خروجی همهٔ نودها از یک پروکسی بیرون از ایران عبور
+// می‍کند تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند. انتخاب پایدار
+// است تا با هر بار خواندن ساب‌لینک عوض نشود.
+// ============================================================================
+export function resolveSanctionsProxy(cfg = {}, seed = '') {
+  const pool = Array.isArray(FALLBACK_PROXY_IPS) ? FALLBACK_PROXY_IPS : [];
+  if (!pool.length) return '';
+  const wanted = String(cfg.sbRegion || cfg.region || 'DE').trim().toUpperCase();
+  const usable = wanted && wanted !== 'AUTO' ? pool.filter(item => String(item.regionCode).toUpperCase() === wanted) : [];
+  const list = usable.length ? usable : pool;
+  const idx = seed ? stableAddressSeed(String(seed) + '-sb') % list.length : 0;
+  const picked = list[idx];
+  return `${picked.domain}:${picked.port || 443}`;
+}
+
+// کش فهرست آی‌پی‌های ترجیحی (اپراتوری): این فهرست از شبکه خوانده می‌شود و
+// بدون کش، با هر بار خواندن ساب‌لینک آدرس نودها عوض می‌شد (پرش آی‌پی در کلاینت).
+const PREFERRED_CACHE_TTL = 6 * 60 * 60 * 1000;
+let preferredIpsCache = { key: '', at: 0, list: [] };
+
+// کش مشترک بین ایزوله‌ها: در ورکر هر درخواست ممکن است در ایزولهٔ تازه اجرا شود،
+// پس فقط حافظهٔ محلی کافی نیست و فهرست در D1 هم نگه داشته می‌شود تا آدرس نودها
+// برای همهٔ درخواست‌ها (و کلاینتها) یکی بماند.
+function getD1(env) {
+  const db = env && (env.DB || env.D1 || env.MILICONFIG_DB || env.MILI_DB);
+  return db && typeof db.prepare === 'function' ? db : null;
+}
+
+async function readSharedCache(env, key) {
+  const db = getD1(env);
+  if (!db) return null;
+  try {
+    const row = await db.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
+    if (!row || !row.value) return null;
+    const parsed = JSON.parse(String(row.value));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function writeSharedCache(env, key, payload) {
+  const db = getD1(env);
+  if (!db) return;
+  try {
+    await db.prepare(
+      `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    ).bind(key, JSON.stringify(payload), Date.now()).run();
+  } catch (_e) {}
+}
+
+async function fetchPreferredIpsCached(cfg = {}, env = null) {
+  const key = [cfg.ipv4, cfg.ipv6, cfg.ispMobile, cfg.ispUnicom, cfg.ispTelecom].join('|');
+  const sharedKey = 'preferred_ips_cache_' + stableAddressSeed(key);
+  if (preferredIpsCache.key === key && Date.now() - preferredIpsCache.at < PREFERRED_CACHE_TTL) {
+    return preferredIpsCache.list;
+  }
+  const shared = await readSharedCache(env, sharedKey);
+  if (shared && Array.isArray(shared.list) && shared.list.length && Date.now() - Number(shared.at || 0) < PREFERRED_CACHE_TTL) {
+    preferredIpsCache = { key, at: Number(shared.at), list: shared.list };
+    return shared.list;
+  }
+  const list = await fetchUouinPreferredIps(cfg).catch(() => []);
+  if (Array.isArray(list) && list.length) {
+    const at = Date.now();
+    preferredIpsCache = { key, at, list };
+    await writeSharedCache(env, sharedKey, { at, list });
+  }
+  return Array.isArray(list) ? list : [];
+}
+
+// کش کوتاه‌مدت لیست نودها: پاسخ یکسان برای همان کاربر/تنظیمات تا نودها بین
+// دو بار خواندن ساب‌لینک (پینگ، بروزرسانی کلاینت) جابه‌جا نشوند و ساب صفحهٔ
+// وضعیت و تب لوکیشن دقیقاً هماهنگ باشند.
+const NODES_CACHE_TTL = 15 * 60 * 1000;
+const NODES_CACHE_MAX = 80;
+const nodesCache = new Map();
+
+function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}) {
+  const uuid = String(userOrConfig?.uuid || overrides.uuid || 'default').toLowerCase();
+  const params = [
+    overrides.set || '', overrides.country || '', overrides.region || '',
+    overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
+    overrides.wk || '', overrides.scope || userOrConfig?.nodeScope || 'all',
+    overrides.nowarp || ''
+  ].join('|');
+  return `${workerHost}|${uuid}|${stableAddressSeed(JSON.stringify(cfg))}|${params}`;
+}
+
+function rememberNodes(key, links) {
+  if (!key) return;
+  nodesCache.set(key, { at: Date.now(), links });
+  if (nodesCache.size > NODES_CACHE_MAX) {
+    const oldest = [...nodesCache.entries()].sort((a, b) => a[1].at - b[1].at).slice(0, nodesCache.size - NODES_CACHE_MAX);
+    for (const [entryKey] of oldest) nodesCache.delete(entryKey);
+  }
+}
+
 // تولید لیست کامل لینک‌های نود برای کاربر با نام‌گذاری گویا (کشور/پروتکل/خانوادهٔ آدرس)
 // و رعایت سقف تعداد نود در ساب
 export async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
+  const cachedKey = buildNodesCacheKey(workerHost, userOrConfig, cfg, queryOverrides);
+  const cached = nodesCache.get(cachedKey);
+  if (cached && Date.now() - cached.at < NODES_CACHE_TTL) return cached.links.slice();
   // استخر لبهٔ ترکیبی دامنه/آی‌پی: پاسخ فوری از فهرست داخلی و تازه‌سازی
   // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
   const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
@@ -1699,6 +2009,15 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
   // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
   const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
+
+  // اولویت آدرس واسط: مقدار صریح کاربر → منطقهٔ انتخابی → پیش‌فرض تحریم‌شکن
+  const explicitProxy = String(rawCfg.p || '').trim();
+  if (!explicitProxy && regionFilter) {
+    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
+  }
+  if (!String(cfg.p || '').trim() && cfg.sb === 'yes') {
+    cfg.p = resolveSanctionsProxy(cfg, userUuid);
+  }
 
   if (ipv6Mode) {
     // فقط آی‌پی نسخه ۶؛ دامنه محور/لیست ترجیحی/سرور اصلی/چندلوکیشن کنار گذاشته می‌شوند
@@ -1771,9 +2090,6 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
   // منطقه (region) مثل cfnew با «آدرس جایگزین» پیاده می‌شود: آدرس نود همان
   // آی‌پی ثابت کلادفلر می‌ماند و خروجی از ProxyIP همان منطقه عبور می‌کند.
-  if (regionFilter && !String(cfg.p || '').trim()) {
-    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
-  }
   let countryMode = false;
   const countryFilter = (queryOverrides.country || '').trim().toUpperCase();
   if (!domainMode && !ipv6Mode && countryFilter) {
@@ -1799,7 +2115,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
         proxyPool.push({ proxy: item.proxy, country: code, unverified: item.unverified === true });
       }
     });
-    const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost);
+    const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost, userUuid + ':country');
     if (locationNodes.length > 0) {
       appendFromSource(locationNodes);
       countryMode = true;
@@ -1824,7 +2140,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
   if (!domainMode && !ipv6Mode && !countryMode && customProxies.length > 0) {
-    appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost));
+    appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost, userUuid + ':custom'));
   }
 
   if (!domainMode && !ipv6Mode && !disablePreferred && !countryMode) {
@@ -1857,7 +2173,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       }
       // ۲) استخر آی‌پی‌های بهینه ارائه‌شده بر اساس اپراتور
       if (cfg.epi === 'yes' && !cfg.yxURL) {
-        const uouinList = await fetchUouinPreferredIps(cfg);
+        const uouinList = await fetchPreferredIpsCached(cfg, queryOverrides.env || null);
         if (uouinList.length > 0) {
           // ترتیب پایدار: از بین آی‌پی‌های برگشتی، همیشه همان تعداد ثابت و با
           // ترتیب هش‌محور انتخاب می‌شود تا آدرس‌ها بین دو درخواست نبض نزنند.
@@ -1878,7 +2194,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
           appendFromSource(ipOnly);
         }
         if (proxyOnly.length > 0) {
-          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost));
+          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, userUuid + ':url'));
         }
       }
       // اگر به هر دلیلی هیچ نودی ساخته نشد، از استخر رسمی CF استفاده می‌کنیم
@@ -1922,7 +2238,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // ۳ نود اطلاع‌رسانی در صدر ساب‌لینک‌ها؛ در ساب اختصاصی IPv6 حذف می‌شوند
   // تا آن ساب واقعاً فقط نودهای IPv6 داشته باشد.
   const infoNodes = ipv6Mode ? [] : HARDCODED_INFO_NODES;
-  return [...infoNodes, ...finalized, ...warpLinks];
+  const result = [...infoNodes, ...finalized, ...warpLinks];
+  rememberNodes(cachedKey, result);
+  return result;
 }
 
 // تشخیص خودکار کلاینت از User-Agent در صورت عدم ارسال پارامتر target
