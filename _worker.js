@@ -623,7 +623,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.5.6';
+const VERSION = 'v3.5.7';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';
@@ -14322,28 +14322,9 @@ ${PWA_HEAD_TAGS}
   body.light-mode .loc-card [data-act="copy"] .mi { color: #2f8f2f; }
   body.light-mode .loc-card [data-act="country-proxy"] .mi { color: #1789c2; }
   body.light-mode .loc-card [data-act="country-ip"] .mi { color: #6b4fd6; }
-  /* اندپوینت اختصاصی WARP: آدرس بلند در عرض کارت می‌شکند و از کادر بیرون نمی‌زند */
+  /* اندپوینت اختصاصی WARP: آدرس طولانی نمایش داده نمی‌شود؛ فقط دکمه‌های کپی */
   .ep-card { grid-column: 1 / -1; flex-direction: column; align-items: stretch; gap: 10px; }
-  .ep-url {
-    display: block;
-    width: 100%;
-    text-decoration: none;
-    direction: ltr;
-    text-align: left;
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    line-height: 1.7;
-    color: var(--neon);
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 8px 10px;
-    overflow-wrap: anywhere;
-    word-break: break-all;
-  }
-  .ep-url:hover { border-color: var(--line-strong); background: rgba(0, 0, 0, 0.5); }
-  body.light-mode .ep-url { color: #0b8a4b; background: #f4f8f5; }
-  body.light-mode .ep-url:hover { background: #eaf4ee; }
+  .ep-card .toolbar { margin-top: 2px; }
 
 
   /* ---------- modal / toast ---------- */
@@ -15345,7 +15326,6 @@ ${PWA_HEAD_TAGS}
       '</div></div>' +
       // اندپوینت مخصوص WARP: یک آدرس با همهٔ فرمت‌ها
       '<div class="loc-card ep-card"><div><div class="loc-name">اندپوینت اختصاصی WARP</div><div class="loc-meta">Clash/Mihomo · Hiddify/sing-box · WireGuard · Shadowrocket — هر کاربر توکن خودش را دارد</div></div>' +
-      '<a class="ep-url" href="' + ep + '?format=clash" target="_blank" rel="noopener">' + ep + '?format=clash</a>' +
       '<div class="toolbar">' +
       '<button class="btn sm primary" type="button" data-act="copy" data-url="' + ep + '?format=clash">' + ICO.copy + ' Clash</button>' +
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=singbox">' + ICO.copy + ' sing-box</button>' +
