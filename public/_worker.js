@@ -360,6 +360,7 @@ function getFeedKind(url) {
 // خودکار هر چند ساعت به‌روز می‌شوند و آی‌پی‌های واقعاً سالم را نگه می‌دارند؛
 // همین باعث می‌شود تب چندلوکیشن بدون یک بار اسکن هم آی‌پی تازه داشته باشد.
 const IP_CANDIDATE_SOURCES = [
+  'https://bestcf.pages.dev/vps789/top10.txt',
   'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'
@@ -446,7 +447,23 @@ const EDGE_PROXY_IPS = [
   { domain: 'ProxyIP.Oracle.cmliussss.net', region: 'Oracle' },
   { domain: 'ProxyIP.DigitalOcean.CMLiussss.net', region: 'DigitalOcean' },
   { domain: 'ProxyIP.Vultr.CMLiussss.net', region: 'Vultr' },
-  { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' }
+  { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' },
+  // مجموعهٔ جهانی (انتخاب خودکار سالم‌ترین لبه)
+  { domain: 'ProxyIP.CMLiussss.net', region: 'Global' },
+  { domain: 'ProxyIP.FR.CMLiussss.net', region: 'FR' },
+  // دامنه‌های جایگزین پروژه‌های شناخته‌شده (وقتی CMLiussss کند/کپچا شد)
+  { domain: 'bpb.yousef.isegaro.com', region: 'BPB' },
+  { domain: 'di.nscl.ir', region: 'Multi' },
+  { domain: 'tr.diam4.ggff.net', region: 'Multi' },
+  { domain: 'proxy.zjcloud.us.ci', region: 'Multi' },
+  { domain: 'pyip.ygkkk.dpdns.org', region: 'Multi' },
+  { domain: 'proxyip.leilaomi.cc.cd', region: 'Multi' },
+  { domain: 'proxy.farel.is-a.dev', region: 'Multi' },
+  { domain: 'proxyip.vultr.fxxk.dedyn.io', region: 'Vultr' },
+  { domain: 'proxyip.digitalocean.hw.090227.xyz', region: 'DigitalOcean' },
+  { domain: 'proxyip.aliyun.hw.090227.xyz', region: 'SG' },
+  { domain: 'proxyip.oracle.fxxk.dedyn.io', region: 'Oracle' },
+  { domain: 'cdn-all.xn--b6gac.eu.org', region: 'Multi' }
 ];
 
 // فهرست آنلاین دامنه/آی‌پی ترجیحی
@@ -459,6 +476,8 @@ const EDGE_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/test/re
 // اسکنر پنل هم فقط از همین مخازن می‌خواند تا خروجی با موتور cfnew یکی باشد.
 // ============================================================================
 const CFNEW_IPV4_SOURCES = [
+  // مخزن رسمی cfnew (byJoey/cfnew): فهرست ۱۰ آی‌پی برتر که خود cfnew می‌خواند
+  'https://bestcf.pages.dev/vps789/top10.txt',
   'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'
@@ -604,7 +623,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.5.1';
+const VERSION = 'v3.5.2';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';
@@ -691,6 +710,9 @@ const CONFIG_DEFAULTS = {
   warpPro: 'no',
   warpMl: 'no',
   warpCount: 8,
+  // — WARP MASQUE (HTTP/3): فقط Mihomo/Clash.Meta و Hiddify آن را می‌خوانند
+  warpMasque: 'no',
+  warpMasqueCount: 3,
   warpLicense: '', // لایسنس WARP+ برای نود WARP PRO
   warpEndpoint: '', // لیست سفارشی نقاط پایانی: ip:port#برچسب,ip2:port2#برچسب (خالی = نقاط پایانی رسمی کلادفلر)
   // — OpenVPN (پروفایل‌های عمومی زنده از VPNGate)
@@ -707,7 +729,7 @@ const CONFIG_DEFAULTS = {
 const BOOLEAN_CONFIG_KEYS = [
   'ev', 'et', 'ex', 'es', 'ech', 'ena', 'epd', 'epi', 'egi',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag',
-  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate',
+  'pd', 'warp', 'warpPro', 'warpMl', 'warpMasque', 'ovpn', 'autoUpdate',
   'sb', 'doh', 'tcp', 'udp'
 ];
 
@@ -768,6 +790,8 @@ const ENV_KEY_MAPPING = {
   warpPro: ['warpPro', 'WARPPRO', 'WARP_PRO'],
   warpMl: ['warpMl', 'WARPML', 'WARP_MULTI_LOCATION'],
   warpCount: ['warpCount', 'WARPCOUNT', 'WARP_NODE_COUNT'],
+  warpMasque: ['warpMasque', 'WARPMASQUE', 'WARP_MASQUE'],
+  warpMasqueCount: ['warpMasqueCount', 'WARPMASQUECOUNT', 'WARP_MASQUE_COUNT'],
   warpLicense: ['warpLicense', 'WARPLICENSE', 'WARP_LICENSE'],
   warpEndpoint: ['warpEndpoint', 'WARPENDPOINT', 'WARP_ENDPOINT'],
   ovpn: ['ovpn', 'OVPN', 'OPENVPN'],
@@ -1078,6 +1102,7 @@ function normalizeEffectiveConfig(rawConfig = {}) {
   };
   snap.pdCount = clampInt(snap.pdCount, 0, 20, 2);
   snap.warpCount = clampInt(snap.warpCount, 1, 30, 8);
+  snap.warpMasqueCount = clampInt(snap.warpMasqueCount, 1, 6, 3);
   snap.ovpnCount = clampInt(snap.ovpnCount, 0, 24, 8);
   snap.warpLicense = String(snap.warpLicense || '').trim();
   snap.warpEndpoint = String(snap.warpEndpoint || '').trim();
@@ -1250,6 +1275,116 @@ function buildUserDefaultConfig(basePanelConfig = {}, presetId = 'iran-fast', cu
     ...(preset.configOverrides || {}),
     subNodeCount: 0, // تعداد کانفیگ دستی نیست؛ موتور cfnew خودش همهٔ آدرس‌ها را می‌سازد
     ...(customOverrides || {})
+  });
+}
+
+
+// --- MODULE: src/ui/pwa.js ---
+// ============================================================================
+// miliconfig v3.5.2 - لایهٔ نصب اپ (PWA)
+// سه چیز را فراهم می‌کند: manifest، سرویس‌ورکر و آیکون مستقل.
+// با همین‌ها پنل هم روی دسکتاپ (Chrome/Edge) و هم روی گوشی نصب‌شدنی می‌شود و
+// در حالت standalone (بدون نوار آدرس) اجرا می‌شود.
+// ============================================================================
+
+
+const THEME_BG = '#05080a';
+
+// آیکون ایستای اپ: همان سپر برند با پس‌زمینهٔ تیره تا در لانچر خوانا بماند
+const PWA_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512">
+  <rect width="128" height="128" rx="26" fill="${THEME_BG}"/>
+  <circle cx="64" cy="64" r="50" fill="#0c1a12" stroke="#65a30d" stroke-width="2" stroke-opacity="0.7"/>
+  <path d="M64 32L88 42.4V61.6C88 78.8 77.8 93.6 64 99C50.2 93.6 40 78.8 40 61.6V42.4L64 32Z" fill="none" stroke="#b5ff4d" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54.8 63.2L61.6 70L74 57.2" fill="none" stroke="#b5ff4d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+const MANIFEST = {
+  name: `${BRAND_NAME}OS`,
+  short_name: BRAND_NAME,
+  description: 'مرکز کنترل اتصال و کانفیگ',
+  lang: 'fa',
+  dir: 'rtl',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  display_override: ['standalone', 'minimal-ui'],
+  orientation: 'portrait-primary',
+  background_color: THEME_BG,
+  theme_color: THEME_BG,
+  version: String(VERSION).replace(/^v/i, ''),
+  icons: [
+    { src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+    { src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' }
+  ]
+};
+
+// سرویس‌ورکر عمداً هیچ صفحه‌ای را کش نمی‌کند: پنل پویاست و کش کهنه باعث
+// نمایش نسخهٔ قدیمی می‌شود. فقط شرط نصب‌پذیری و کنترل پنجره را فراهم می‌کند.
+const PWA_SW_JS = `/* ${BRAND_NAME}OS service worker */
+self.addEventListener('install', function (event) { self.skipWaiting(); });
+self.addEventListener('activate', function (event) {
+  event.waitUntil((self.clients && self.clients.claim) ? self.clients.claim() : Promise.resolve());
+});
+self.addEventListener('fetch', function () {});
+`;
+
+// تکه‌های head برای صفحات پنل/ورود/وضعیت
+const PWA_HEAD_TAGS = `<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="${THEME_BG}">
+<meta name="application-name" content="${BRAND_NAME}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="${BRAND_NAME}">
+<link rel="apple-touch-icon" href="/pwa-icon.svg">`;
+
+// اسکریپت سمت کلاینت (بدون بک‌اسلش تا از لایهٔ unescape سالم بیرون بیاید)
+const PWA_CLIENT_JS = `(function () {
+  try {
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
+  } catch (e) {}
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.miliInstallPrompt = e;
+    var btn = document.getElementById('installBtn');
+    if (btn) { btn.classList.add('is-ready'); btn.removeAttribute('hidden'); }
+  });
+  window.addEventListener('appinstalled', function () {
+    window.miliInstallPrompt = null;
+    var btn = document.getElementById('installBtn');
+    if (btn) btn.classList.remove('is-ready');
+  });
+})();`;
+
+function pwaManifestResponse() {
+  return new Response(JSON.stringify(MANIFEST), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/manifest+json; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600'
+    }
+  });
+}
+
+function pwaServiceWorkerResponse() {
+  return new Response(PWA_SW_JS, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Service-Worker-Allowed': '/'
+    }
+  });
+}
+
+function pwaIconResponse() {
+  return new Response(PWA_ICON_SVG, {
+    status: 200,
+    headers: {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400'
+    }
   });
 }
 
@@ -2859,6 +2994,10 @@ const ICONS = {
   logout: wrap('<path d="M14.5 4.5h-7A2.5 2.5 0 0 0 5 7v10a2.5 2.5 0 0 0 2.5 2.5h7"/><path d="M11 12h9"/><path d="m17 8.5 3.5 3.5L17 15.5"/>'),
   link: wrap('<path d="M10.2 6.8 12.6 4.4a4.1 4.1 0 0 1 5.8 5.8l-2.4 2.4"/><path d="M13.8 17.2 11.4 19.6a4.1 4.1 0 0 1-5.8-5.8l2.4-2.4"/><path d="m9.4 14.6 5.2-5.2"/>'),
   download: wrap('<path d="M12 3.5v11"/><path d="m7.6 10.6 4.4 4.4 4.4-4.4"/><path d="M4.5 19.5h15"/>'),
+  // نصب روی دستگاه: گوشی با فلش پایین
+  install: wrap('<rect x="6.5" y="2.6" width="11" height="18.8" rx="2.8"/><path d="M12 7.4v5.6"/><path d="m9.8 11 2.2 2.2 2.2-2.2"/><path d="M10.6 18.2h2.8"/>'),
+  // آیکون اختصاصی آرشیو ZIP: پوشهٔ فایل با زیپ وسط
+  zip: wrap('<path d="M15 3H8.5A2.5 2.5 0 0 0 6 5.5v13A2.5 2.5 0 0 0 8.5 21h7a2.5 2.5 0 0 0 2.5-2.5V6z"/><path d="M15 3v3.4h3"/><path d="M12 7.4v1.3M12 10.4v1.3M12 13.4v1.3M12 16.4v1.3"/>'),
   check: wrap('<path d="m4.5 12.5 4.8 4.8L19.5 6.8"/>'),
   close: wrap('<path d="m6 6 12 12"/><path d="m18 6-12 12"/>'),
   sun: wrap('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>'),
@@ -6592,6 +6731,148 @@ function buildFallbackWarpConfig() {
   };
 }
 
+// ============================================================================
+// WARP MASQUE (HTTP/3) — تونل IP روی CONNECT-IP
+// نه WireGuard است و نه AmneziaWG: کلید دستگاه ECDSA P-256 است و لبه با SNI
+// مخصوص MASQUE و پین‌کردن کلید عمومی لبه احراز می‌کند. این نوع نود فقط در
+// Mihomo/Clash.Meta (type: masque) و فورک Hiddify قابل استفاده است.
+// ============================================================================
+const WARP_MASQUE_SNI = 'consumer-masque.cloudflareclient.com';
+const WARP_MASQUE_PORTS = [443, 8443, 4443, 500, 1701, 4500];
+let warpMasqueCache = { key: '', at: 0, data: null };
+
+function derTlv(tag, bytes) {
+  const len = bytes.length;
+  let lenBytes;
+  if (len < 0x80) {
+    lenBytes = [len];
+  } else {
+    const tmp = [];
+    let n = len;
+    while (n > 0) { tmp.unshift(n & 0xff); n >>= 8; }
+    lenBytes = [0x80 | tmp.length, ...tmp];
+  }
+  return Uint8Array.from([tag, ...lenBytes, ...bytes]);
+}
+
+// کلید خصوصی P-256 را از JWK به قالب SEC1 DER می‌برد (چیزی که Mihomo می‌خواهد)
+function buildSec1PrivateKey(jwk = {}) {
+  const oidPrime256v1 = Uint8Array.from([0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]);
+  const version = Uint8Array.from([0x02, 0x01, 0x01]);
+  const privateKey = derTlv(0x04, base64ToBytes(jwk.d || ''));
+  const params = derTlv(0xa0, oidPrime256v1);
+  const point = Uint8Array.from([0x00, 0x04, ...base64ToBytes(jwk.x || ''), ...base64ToBytes(jwk.y || '')]);
+  const publicKey = derTlv(0xa1, derTlv(0x03, point));
+  const body = new Uint8Array(version.length + privateKey.length + params.length + publicKey.length);
+  body.set(version, 0);
+  body.set(privateKey, version.length);
+  body.set(params, version.length + privateKey.length);
+  body.set(publicKey, version.length + privateKey.length + params.length);
+  return derTlv(0x30, body);
+}
+
+// ثبت‌نام دستگاه MASQUE: اول ساخت دستگاه، بعد ارتقا به tunnel_type=masque با کلید P-256
+async function fetchWarpMasqueRegistration(cfg = {}, force = false) {
+  const license = String(cfg.warpLicense || '').trim();
+  const cacheKey = license ? `masque-lic:${license}` : 'masque-free';
+  if (!force && warpMasqueCache.data && warpMasqueCache.key === cacheKey && Date.now() - warpMasqueCache.at < WARP_REG_CACHE_TTL) {
+    return warpMasqueCache.data;
+  }
+  try {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const spki = new Uint8Array(await crypto.subtle.exportKey('spki', pair.publicKey));
+    const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    const pubB64 = bytesToBase64(spki);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const created = await fetch(WARP_REGISTRATION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Client-Version': WARP_CLIENT_VERSION,
+        'User-Agent': 'okhttp/3.12.1'
+      },
+      body: JSON.stringify({
+        key: pubB64,
+        install_id: '',
+        fcm_token: '',
+        tos: new Date().toISOString(),
+        model: 'PC',
+        serial_number: '',
+        locale: 'en_US'
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!created.ok) return null;
+    const device = await created.json();
+    if (!device?.id || !device?.token) return null;
+
+    const upgradeCtrl = new AbortController();
+    const upgradeTimer = setTimeout(() => upgradeCtrl.abort(), 8000);
+    const upgraded = await fetch(`${WARP_REGISTRATION_URL}/${device.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Client-Version': WARP_CLIENT_VERSION,
+        'User-Agent': 'okhttp/3.12.1',
+        Authorization: `Bearer ${device.token}`
+      },
+      body: JSON.stringify({
+        key: pubB64,
+        key_type: 'secp256r1',
+        tunnel_type: 'masque',
+        ...(license ? { license, warp_enabled: true } : {})
+      }),
+      signal: upgradeCtrl.signal
+    });
+    clearTimeout(upgradeTimer);
+    if (!upgraded.ok) return null;
+    const reg = await upgraded.json();
+    const peer = reg?.config?.peers?.[0] || {};
+    const edgePublicKey = String(peer.public_key || '').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+    const endpointHost = String(peer?.endpoint?.v4 || '').split(':')[0];
+    const ports = (Array.isArray(peer?.endpoint?.ports) ? peer.endpoint.ports : [])
+      .map(port => parseInt(port, 10))
+      .filter(port => port > 0);
+    const data = {
+      privateKey: bytesToBase64(buildSec1PrivateKey(jwk)),
+      publicKey: edgePublicKey,
+      address4: reg?.config?.interface?.addresses?.v4 || '',
+      address6: reg?.config?.interface?.addresses?.v6 || '',
+      server: endpointHost || '162.159.198.2',
+      ports: ports.length ? ports : WARP_MASQUE_PORTS.slice(),
+      license: reg?.account?.license || ''
+    };
+    if (!data.privateKey || !data.publicKey || !data.address4) return null;
+    warpMasqueCache = { key: cacheKey, at: Date.now(), data };
+    return data;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// نودهای MASQUE: چند پورت از همان لبهٔ ثبت‌شده — لوکیشن خروج را کلادفلر انتخاب می‌کند
+// و قابل پین‌کردن نیست؛ پس برچسب هر نود پورت/لبه است، نه کشور.
+async function buildWarpMasqueNodes(cfg = {}) {
+  if (!isEnabledValue(cfg.warpMasque, true)) return [];
+  const reg = await fetchWarpMasqueRegistration(cfg);
+  if (!reg) return [];
+  const wanted = parseInt(cfg.warpMasqueCount, 10);
+  const count = Math.max(1, Math.min(6, Number.isFinite(wanted) && wanted > 0 ? wanted : 3));
+  const ordered = [...new Set([...WARP_MASQUE_PORTS.filter(p => reg.ports.includes(p)), ...reg.ports])];
+  return ordered.slice(0, count).map((port, idx) => ({
+    name: `WARP MASQUE ${idx + 1} · ${port}`,
+    server: reg.server,
+    port,
+    privateKey: reg.privateKey,
+    publicKey: reg.publicKey,
+    address4: reg.address4,
+    address6: reg.address6
+  }));
+}
+
 // لیست نقاط پایانی: مقدار دستی پنل (ip:port#برچسب) یا رنج‌های رسمی WARP
 function parseWarpEndpointList(raw, count) {
   const manual = String(raw || '')
@@ -6937,6 +7218,15 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
     }
     return `  - { ${parts.join(', ')} }`;
   });
+  // ۲-ب) MASQUE: نودهای HTTP/3 جدا از WireGuard؛ فقط Mihomo/Clash.Meta و Hiddify
+  const masqueNodes = await buildWarpMasqueNodes(cfg).catch(() => []);
+  const masqueProxies = masqueNodes.map(node => `  - { name: "${node.name}", type: masque, server: "${node.server}", port: ${node.port}, ` +
+    `private-key: "${node.privateKey}", public-key: "${node.publicKey}", ip: ${node.address4}/32` +
+    (node.address6 ? `, ipv6: ${node.address6}/128` : '') +
+    `, sni: ${WARP_MASQUE_SNI}, mtu: 1280, udp: true, remote-dns-resolve: true, dns: [1.1.1.1, 1.0.0.1] }`);
+  masqueNodes.forEach(node => proxyNames.push(node.name));
+  clashProxies.push(...masqueProxies);
+
   files.push({
     name: 'WARP-clash.yaml',
     data: [
@@ -6964,6 +7254,36 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  - MATCH,WARP'
     ].join('\n') + '\n'
   });
+
+  if (masqueNodes.length) {
+    files.push({
+      name: 'WARP-masque.yaml',
+      data: [
+        `# ${BRAND_NAME} — WARP MASQUE (HTTP/3 CONNECT-IP)`,
+        '# فقط Mihomo / Clash.Meta / Hiddify؛ کلاینت‌های WireGuard این را نمی‌خوانند',
+        `# edge: ${masqueNodes[0].server} — sni: ${WARP_MASQUE_SNI}`,
+        'mixed-port: 7890',
+        'allow-lan: false',
+        'mode: rule',
+        'log-level: warning',
+        'dns:',
+        '  enable: true',
+        '  enhanced-mode: fake-ip',
+        '  nameserver:',
+        ...dnsList.map(item => `    - ${item}`),
+        'proxies:',
+        ...masqueProxies,
+        'proxy-groups:',
+        '  - name: "WARP-MASQUE"',
+        '    type: select',
+        '    proxies:',
+        ...masqueNodes.map(node => `      - "${node.name}"`),
+        '      - DIRECT',
+        'rules:',
+        '  - MATCH,WARP-MASQUE'
+      ].join('\n') + '\n'
+    });
+  }
 
   // ۳) sing-box
   const sbOutbounds = entries.map((entry, idx) => {
@@ -7029,6 +7349,7 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  *.conf ................ AmneziaWG profile (Jc/Jmin/Jmax + AWG2/AWG3 signatures)',
       '  plain-wireguard/*.conf . standard WireGuard profile (no AmneziaWG keys)',
       '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
+      '  WARP-masque.yaml ...... WARP over MASQUE (HTTP/3) for Mihomo / Clash.Meta / Hiddify',
       '  WARP-singbox.json ..... sing-box config with a selector group',
       '  links.txt ............. wireguard:// links (NekoBox / Hiddify / v2rayN)',
       '  WARP-sub-base64.txt ... same links in base64 subscription form',
@@ -7628,6 +7949,35 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
           appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, userUuid + ':url'));
         }
       }
+      // ترکیب خانواده‌ها در ساب‌لینک اصلی: بخشی از نودها IPv6 و بخشی دامنه‌محور
+      // می‌شوند تا هر سه استخر (IPv4 / IPv6 / دامنه) طبق تعداد نود همان کاربر
+      // در ساب‌لینک حاضر باشند؛ نه فقط در ساب‌های ?set=ipv6 و ?set=domain.
+      if (!domainMode && !ipv6Mode && !countryMode) {
+        const wantedTotal = parseInt(
+          queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0,
+          10
+        ) || 0;
+        if (wantedTotal === 0 || wantedTotal >= 6) {
+          const base = wantedTotal || 24;
+          const v6Wanted = cfg.ipv6 === 'no' ? 0 : Math.max(2, Math.min(8, Math.round(base * 0.2)));
+          const domWanted = Math.max(2, Math.min(10, Math.round(base * 0.25)));
+          if (v6Wanted > 0) {
+            const v6List = pickStableAddresses(
+              [...OFFICIAL_DIRECT_IPV6, ...edgePool.ipv6],
+              v6Wanted,
+              userUuid + '-mix-v6'
+            ).filter(Boolean);
+            appendFromSource(v6List.map(ip => ({ ip, port: 443, isp: 'CF-IPv6', family: 'ipv6' })));
+          }
+          const domList = pickStableAddresses(
+            [...DIRECT_DOMAINS.map(d => d.domain), ...edgePool.domains],
+            domWanted,
+            userUuid + '-mix-dom'
+          ).filter(Boolean);
+          appendFromSource(domList.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
+        }
+      }
+
       // اگر به هر دلیلی هیچ نودی ساخته نشد، از استخر رسمی CF استفاده می‌کنیم
       const builtCount = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.ss.length + protoGroups.xhttp.length;
       if (builtCount < 15 && cfg.epi === 'yes') {
@@ -11325,6 +11675,7 @@ function renderLoginGatewayHtml(options = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome to nginx!</title>
 <link rel="icon" href="${FAVICON_DATA_URI}">
+${PWA_HEAD_TAGS}
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; min-height: 100%; }
@@ -11824,6 +12175,9 @@ function renderLoginGatewayHtml(options = {}) {
 
   applyTheme();
   applyLang();
+
+  // نصب اپ (PWA) از همین صفحهٔ ورود هم ممکن است
+  ${PWA_CLIENT_JS}
 
   // استتار nginx → تاری صفحه → نمایش آرام پنجره ورود پس از ۳ ثانیه
   setTimeout(function() {
@@ -12376,12 +12730,12 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
       </div>
       <!-- دانلود مستقیم کانفیگ‌های آماده — فقط بخش‌هایی که برای این کاربر روشن است -->
       <div class="toolbar" style="margin-top:10px;">
-        ${warpEnabled ? `<a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('download')} دانلود ZIP همهٔ فرمت‌های WARP (AmneziaWG · WireGuard · Clash · sing-box)</a>
+        ${warpEnabled ? `<a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=zip" download>${icon('zip')} دانلود ZIP همهٔ فرمت‌های WARP (AmneziaWG · WireGuard · Clash · sing-box)</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=clash" download>${icon('download')} پروفایل Clash</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=singbox" download>${icon('download')} کانفیگ sing-box</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>` : ''}
-        ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('download')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
+        ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('zip')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
       </div>
     </div>
 
@@ -13080,6 +13434,9 @@ function renderAdminDashboardHtml(initialData = {}) {
     power: icon('power'),
     layers: icon('layers'),
     download: icon('download'),
+    zip: icon('zip'),
+    server: icon('server'),
+    terminal: icon('terminal'),
     signal: icon('signal'),
     settings: icon('settings'),
     edit: icon('settings'),
@@ -13117,6 +13474,7 @@ function renderAdminDashboardHtml(initialData = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${BRAND_UPPER} ${VERSION} — مرکز کنترل</title>
 <link rel="icon" href="${FAVICON_DATA_URI}">
+${PWA_HEAD_TAGS}
 <script>
 // ——— عیب‌یابی: هر خطای اجرایی را روی صفحه نشان بده (نه سکوت) ———
 (function() {
@@ -13287,6 +13645,14 @@ function renderAdminDashboardHtml(initialData = {}) {
   .topbar-actions .icon-btn.tg { color: #7fd7ff; border-color: rgba(125, 211, 252, 0.3); background: rgba(56, 189, 248, 0.1); }
   .topbar-actions .icon-btn.tg:hover { color: #b9edff; border-color: rgba(125, 211, 252, 0.5); background: rgba(56, 189, 248, 0.18); }
   .topbar-actions .icon-btn.danger { color: var(--danger); }
+  /* دکمهٔ نصب: وقتی مرورگر نصب را پیشنهاد می‌دهد درخشان می‌شود */
+  .topbar-actions .icon-btn.install.is-ready {
+    color: var(--neon);
+    border-color: rgba(181, 255, 77, 0.45);
+    background: var(--neon-soft);
+    box-shadow: 0 0 18px -10px var(--neon);
+    animation: mili-float 3.8s ease-in-out infinite;
+  }
   .chip {
     display: inline-flex;
     align-items: center;
@@ -13677,6 +14043,32 @@ function renderAdminDashboardHtml(initialData = {}) {
   .loc-grid .loc-card:nth-child(6) { animation-delay: .2s; }
   .loc-grid .loc-card:nth-child(7) { animation-delay: .24s; }
   .loc-grid .loc-card:nth-child(n+8) { animation-delay: .28s; }
+  /* دکمههای لوکیشن فقط آیکون، بدون کادر و بدون متن، همه در یک ردیف */
+  .loc-acts { display: flex; align-items: center; gap: 4px; flex: none; }
+  .loc-act {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .2s ease, transform .2s ease;
+  }
+  .loc-act .mi { width: 26px; height: 26px; }
+  .loc-act:hover { background: rgba(255, 255, 255, 0.05); transform: translateY(-2px); }
+  body.light-mode .loc-act:hover { background: rgba(12, 26, 18, 0.06); }
+  .loc-act.c-copy .mi { color: #a6e86b; }
+  .loc-act.c-proxy .mi { color: #62c8f7; }
+  .loc-act.c-ip .mi { color: #b79cff; }
+  body.light-mode .loc-act.c-copy .mi { color: #2f8f2f; }
+  body.light-mode .loc-act.c-proxy .mi { color: #1789c2; }
+  body.light-mode .loc-act.c-ip .mi { color: #6b4fd6; }
   .loc-card.is-press { transform: translateY(0) scale(.992); }
   .loc-card.is-press .mi { animation: mili-tap .44s cubic-bezier(.2, .8, .3, 1); }
   .loc-card .btn .mi { transition: transform .2s ease; }
@@ -13861,7 +14253,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     cursor: pointer;
     transition: transform .18s cubic-bezier(.2, .8, .3, 1), background .18s ease;
   }
-  .drawer-item .mi { width: 27px; height: 27px; }
+  .drawer-item .mi { width: 30px; height: 30px; }
   .drawer-item:hover, .drawer-item:focus-visible { background: rgba(255, 255, 255, 0.05); transform: translateY(-2px); }
   body.light-mode .drawer-item:hover { background: rgba(12, 26, 18, 0.05); }
   /* هر لوگو رنگ خودش را دارد */
@@ -13950,7 +14342,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   .btn:active, .btn.is-press { transform: translateY(0) scale(.975); }
   .icon-btn:active, .icon-btn.is-press { transform: scale(.94); }
   /* بدون position روی خود دکمه، موج لمس به گوشهٔ صفحه می‌پرد */
-  .ftab, .icon-btn, .drawer-item, .scan-tile, .loc-card { position: relative; overflow: hidden; }
+  .ftab, .icon-btn, .drawer-item, .scan-tile, .loc-card, .loc-act { position: relative; overflow: hidden; }
   .ripple {
     position: absolute;
     width: 130px;
@@ -13977,6 +14369,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   .tab.is-press .mi,
   .ftab.is-press .mi,
   .drawer-item.is-press .mi,
+  .loc-act.is-press .mi,
   .loc-card.is-press .mi { animation: mili-tap .44s cubic-bezier(.2, .8, .3, 1); }
   .brand .mili-shield-svg { animation: mili-float 6s ease-in-out infinite; }
 
@@ -13989,31 +14382,57 @@ function renderAdminDashboardHtml(initialData = {}) {
 
   /* اسکنر: منوی اسکن + صفحهٔ اختصاصی هر اسکن */
   /* هر اسکن یک کارت مربعی با کلید روشن/خاموش است؛ کارت خودش کلیک نمی‌شود */
-  .scan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 8px; }
+  .scan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 780px; margin: 0 auto; }
+  /* هر اسکن یک کارت کادردار با رنگ اختصاصی؛ آیکون بالا، نام وسط، کلید زیر لوگو */
   .scan-tile {
+    --accent: var(--neon);
+    position: relative;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     min-width: 0;
-    min-height: 0;
-    padding: 10px;
+    padding: 14px 8px 12px;
     border: 1px solid var(--line);
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.015);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008));
     color: var(--text);
     font-family: inherit;
-    transition: border-color .24s ease, background .24s ease, box-shadow .24s ease;
+    transition: transform .28s cubic-bezier(.2, .8, .3, 1), border-color .28s ease, box-shadow .28s ease, background .28s ease;
   }
-  .scan-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .scan-tile .mi { color: var(--neon); width: 22px; height: 22px; }
-  .scan-tile .scan-tile-text { min-width: 0; }
-  .scan-tile b { display: block; font-size: 0.72rem; font-weight: 800; line-height: 1.45; }
-  .scan-tile span { display: block; font-size: 0.62rem; color: var(--muted-2); margin-top: 2px; line-height: 1.55; }
-  @media (max-width: 430px) { .scan-tile-text > span { display: none; } }
-  @media (max-height: 720px) { .scan-tile-text > span { display: none; } }
-  .scan-tile:hover { border-color: var(--line-strong); }
-  .scan-tile.is-on { border-color: var(--line-strong); background: var(--neon-soft); box-shadow: inset 0 0 0 1px rgba(181, 255, 77, 0.1); }
+  .scan-tile[data-mode="ipv4"] { --accent: #b5ff4d; }
+  .scan-tile[data-mode="ipv6"] { --accent: #4fd8e4; }
+  .scan-tile[data-mode="domain"] { --accent: #6aa9ff; }
+  .scan-tile[data-mode="proxyip"] { --accent: #b79cff; }
+  .scan-tile[data-mode="proxy"] { --accent: #ffb35c; }
+  .scan-tile[data-mode="manual"] { --accent: #ff8fc7; }
+  body.light-mode .scan-tile[data-mode="ipv4"] { --accent: #2f8f2f; }
+  body.light-mode .scan-tile[data-mode="ipv6"] { --accent: #0f7f8c; }
+  body.light-mode .scan-tile[data-mode="domain"] { --accent: #2b6fd6; }
+  body.light-mode .scan-tile[data-mode="proxyip"] { --accent: #6a49c9; }
+  body.light-mode .scan-tile[data-mode="proxy"] { --accent: #b96b12; }
+  body.light-mode .scan-tile[data-mode="manual"] { --accent: #c0427f; }
+  body.light-mode .scan-tile { background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.55)); }
+  .scan-tile:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .scan-tile.is-on {
+    border-color: var(--accent);
+    box-shadow: 0 12px 28px -18px var(--accent), inset 0 0 22px -14px var(--accent);
+  }
+  .scan-tile .mi { color: var(--accent); width: 30px; height: 30px; transition: transform .28s cubic-bezier(.2, .8, .3, 1); }
+  .scan-tile:hover .mi { transform: scale(1.08); }
+  .scan-tile b { font-size: 0.72rem; font-weight: 700; line-height: 1.4; text-align: center; color: var(--text); }
+  .scan-tile.is-on b { color: var(--accent); }
+  /* کلید روشن/خاموش دقیقاً زیر لوگو می‌نشیند */
+  .scan-tile .scan-switch { flex: none; margin-top: 2px; }
+  .scan-tile.is-on .scan-switch i { border-color: var(--accent); }
+  .scan-tile.is-on .scan-switch i::after { background: var(--accent); box-shadow: 0 0 10px -1px var(--accent); }
+  @media (min-width: 900px) {
+    .scan-grid { gap: 14px; max-width: 900px; }
+    .scan-tile { padding: 20px 14px 16px; gap: 10px; }
+    .scan-tile .mi { width: 38px; height: 38px; }
+    .scan-tile b { font-size: 0.82rem; }
+  }
   .scan-view { display: none; }
   .scan-view.is-active { display: block; animation: rise .28s ease both; }
   .scan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -14023,31 +14442,36 @@ function renderAdminDashboardHtml(initialData = {}) {
   .scan-head .btn { margin-inline-start: auto; }
   .scan-note { font-size: 0.74rem; line-height: 1.95; color: var(--muted-2); margin: 0 0 12px; }
 
-  /* اسکنر: همه‌چیز داخل یک صفحه می‌ماند؛ فقط جدول نتایج اسکرول می‌شود */
+  /* اسکنر: ارتفاع آزاد؛ فهرست نتایج همیشه دیده می‌شود و فقط خودش اسکرول دارد */
   .panel[data-panel="scanner"].is-active {
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - 206px);
-    min-height: 360px;
+    height: auto;
+    min-height: 0;
   }
-  .panel[data-panel="scanner"] > .window { display: flex; flex-direction: column; flex: 1; min-height: 0; margin-bottom: 0; }
-  .panel[data-panel="scanner"] .window-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-  #scanHome { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .panel[data-panel="scanner"] > .window { display: flex; flex-direction: column; flex: none; margin-bottom: 0; }
+  .panel[data-panel="scanner"] .window-body { display: flex; flex-direction: column; min-height: 0; overflow: visible; }
+  #scanHome { display: flex; flex-direction: column; flex: none; min-height: 0; }
   /* wrapper نماها فقط وقتی نما فعال است ارتفاع می‌گیرد تا در حالت خانه فضای شبکه را نخورد */
-  #scanViews { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-  #scanHome .scan-grid { flex: 1; min-height: 0; }
-  #scanHome .scan-note, #scanBar, .scan-view .scan-head { flex: none; }
+  #scanViews { display: block; }
+  #scanHome { justify-content: center; }
+  #scanHome .scan-grid { flex: none; }
+  #scanBar { flex: none; }
   #scanHome .toolbar { flex: none; margin: 10px 0 0 !important; flex-wrap: wrap; }
-  .scan-view.is-active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-  .scan-view .scan-note {
-    flex: none;
-    margin-bottom: 8px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  .scan-view.is-active { display: block; }
+  /* فهرست نتایج: ارتفاع تضمین‌شده برای دیده شدن؛ اگر بیشتر شد خود جدول اسکرول می‌شود */
+  .scan-view .table-wrap { overflow: auto; min-height: 160px; max-height: 58vh; }
+  .scan-view .scan-status { min-height: 18px; }
+  .panel[data-panel="scanner"] .window-body {
+    background: radial-gradient(78% 58% at 50% 0%, rgba(181, 255, 77, 0.055), transparent 72%);
   }
-  .scan-view .table-wrap { flex: 1; min-height: 0; overflow: auto; }
+  /* دسکتاپ: کارت اسکنر جمع‌وجور و وسط‌چین می‌شود، نه کشیده و خالی */
+  @media (min-width: 1000px) {
+    .panel[data-panel="scanner"] > .window { max-width: 1040px; margin: 0 auto; }
+    .panel[data-panel="scanner"] .window-body { padding: 26px 30px 22px; }
+    #scanHome .toolbar { margin-top: 18px !important; justify-content: center; }
+    .scan-view .table-wrap { max-height: 52vh; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -14061,6 +14485,7 @@ function renderAdminDashboardHtml(initialData = {}) {
   @media (max-width: 820px) {
     .topbar-actions .icon-btn.opt { display: none; }
     .topbar-actions .icon-btn { width: 34px; height: 34px; }
+    .topbar-actions .icon-btn.install { width: 34px; height: 34px; }
     .topbar-actions { gap: 6px; }
     .menu-btn { display: inline-flex; }
     .nav-drawer { display: block; }
@@ -14085,6 +14510,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     </div>
     <div class="topbar-spacer"></div>
     <div class="topbar-actions">
+      <button class="icon-btn install" id="installBtn" type="button" data-act="install-app" title="نصب روی دسکتاپ یا گوشی" aria-label="install">${icon('install')}</button>
       <a class="icon-btn tg" href="${SUPPORT_URL}" target="_blank" rel="noopener" title="${TELEGRAM_SUPPORT}" aria-label="Telegram" data-act="open-support">${icon('telegram')}</a>
       <button class="icon-btn opt" type="button" data-act="toggle-theme" id="themeBtn" title="حالت روز / شب" aria-label="themes">${icon('sun')}</button>
       <button class="icon-btn opt" type="button" data-act="toggle-lang" id="langBtn" title="تغییر زبان" aria-label="language">${icon('globe')}</button>
@@ -14237,36 +14663,37 @@ function renderAdminDashboardHtml(initialData = {}) {
         <div class="window-body">
           <!-- خانهٔ اسکنر: هر اسکن یک کارت مربعی با کلید روشن/خاموش است -->
           <div id="scanHome">
-            <p class="scan-note">کلید هر اسکن را روشن کنید؛ همان اسکن داخل پنل اجرا می‌شود و خاموش کردن کلید آن را می‌بندد.</p>
             <div class="scan-grid">
-              <div class="scan-tile" data-mode="ipv4">
-                <div class="scan-tile-top">${icon('server')}<label class="switch"><input type="checkbox" data-scan="ipv4" aria-label="آی‌پی ثابت IPv4"><i></i></label></div>
-                <span class="scan-tile-text"><b>آی‌پی ثابت IPv4</b><span>آدرس‌های سالم IPv4 به تفکیک کشور</span></span>
+              <div class="scan-tile" data-mode="ipv4" title="IPv4">
+                ${icon('server')}
+                <b>IPv4</b>
+                <label class="switch scan-switch"><input type="checkbox" data-scan="ipv4" aria-label="IPv4"><i></i></label>
               </div>
-              <div class="scan-tile" data-mode="ipv6">
-                <div class="scan-tile-top">${icon('signal')}<label class="switch"><input type="checkbox" data-scan="ipv6" aria-label="آی‌پی ثابت IPv6"><i></i></label></div>
-                <span class="scan-tile-text"><b>آی‌پی ثابت IPv6</b><span>آدرس‌های نسخهٔ ۶ برای شبکه‌های همراه</span></span>
+              <div class="scan-tile" data-mode="ipv6" title="IPv6">
+                ${icon('signal')}
+                <b>IPv6</b>
+                <label class="switch scan-switch"><input type="checkbox" data-scan="ipv6" aria-label="IPv6"><i></i></label>
               </div>
-              <div class="scan-tile" data-mode="domain">
-                <div class="scan-tile-top">${icon('globe')}<label class="switch"><input type="checkbox" data-scan="domain" aria-label="دامنه‌های جایگزین"><i></i></label></div>
-                <span class="scan-tile-text"><b>دامنه‌های جایگزین</b><span>دامنه‌های لبهٔ کلادفلر به جای آی‌پی خام</span></span>
+              <div class="scan-tile" data-mode="domain" title="Domain">
+                ${icon('globe')}
+                <b>Domain</b>
+                <label class="switch scan-switch"><input type="checkbox" data-scan="domain" aria-label="Domain"><i></i></label>
               </div>
-              <div class="scan-tile" data-mode="proxyip">
-                <div class="scan-tile-top">${icon('api')}<label class="switch"><input type="checkbox" data-scan="proxyip" aria-label="آدرس واسط"><i></i></label></div>
-                <span class="scan-tile-text"><b>آدرس واسط</b><span>ProxyIP آماده برای خروج از ایران</span></span>
+              <div class="scan-tile" data-mode="proxyip" title="ProxyIP">
+                ${icon('api')}
+                <b>ProxyIP</b>
+                <label class="switch scan-switch"><input type="checkbox" data-scan="proxyip" aria-label="ProxyIP"><i></i></label>
               </div>
-              <div class="scan-tile" data-mode="proxy">
-                <div class="scan-tile-top">${icon('link')}<label class="switch"><input type="checkbox" data-scan="proxy" aria-label="پروکسی کشوری"><i></i></label></div>
-                <span class="scan-tile-text"><b>پروکسی کشوری</b><span>SOCKS5 و HTTP به تفکیک کشور</span></span>
+              <div class="scan-tile" data-mode="proxy" title="SOCKS5">
+                ${icon('link')}
+                <b>SOCKS5</b>
+                <label class="switch scan-switch"><input type="checkbox" data-scan="proxy" aria-label="SOCKS5"><i></i></label>
               </div>
-              <div class="scan-tile" data-mode="manual">
-                <div class="scan-tile-top">${icon('terminal')}<label class="switch"><input type="checkbox" data-scan="manual" aria-label="تست آدرس دستی"><i></i></label></div>
-                <span class="scan-tile-text"><b>تست آدرس دستی</b><span>فهرست خودتان را وارد کنید و همان‌جا تست کنید</span></span>
+              <div class="scan-tile" data-mode="manual" title="Manual">
+                ${icon('terminal')}
+                <b>Manual</b>
+                <label class="switch scan-switch"><input type="checkbox" data-scan="manual" aria-label="Manual"><i></i></label>
               </div>
-            </div>
-            <div class="toolbar" style="margin-top: 12px;">
-              <button class="btn sm" type="button" data-act="add-cf-ips">${icon('plus')} <span data-i18n="scanner.addCfIps">آی‌پی‌های کلادفلر → آدرس‌های دستی</span></button>
-              <button class="btn sm" type="button" data-act="add-cf-domains">${icon('globe')} <span data-i18n="scanner.addCfDomains">دامنه‌های کلادفلر → آدرس‌های دستی</span></button>
             </div>
           </div>
           <!-- مقصد نتیجه: در همهٔ صفحه‌های اسکن مشترک است -->
@@ -14468,6 +14895,30 @@ function renderAdminDashboardHtml(initialData = {}) {
   }
   function userKey(u) { return (u && (u.uuid || u.id)) || ''; }
 
+  // نصب اپ: اگر مرورگر رویداد نصب داده باشد پنجرهٔ نصب باز می‌شود، وگرنه
+  // راهنمای همان دستگاه (iOS / اندروید / دسکتاپ) نشان داده می‌شود.
+  function promptInstall() {
+    var p = window.miliInstallPrompt;
+    if (p && typeof p.prompt === 'function') {
+      p.prompt();
+      if (p.userChoice && p.userChoice.then) {
+        p.userChoice.then(function() { window.miliInstallPrompt = null; });
+      }
+      return;
+    }
+    var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    if (standalone || (window.navigator && window.navigator.standalone)) {
+      showToast('برنامه از قبل نصب شده و در حالت مستقل اجرا می‌شود', 'ok');
+      return;
+    }
+    var ua = String((window.navigator && window.navigator.userAgent) || '');
+    var isIos = ua.indexOf('iPhone') > -1 || ua.indexOf('iPad') > -1 || ua.indexOf('iPod') > -1;
+    var isAndroid = ua.indexOf('Android') > -1;
+    if (isIos) showToast('در سافاری: دکمهٔ اشتراک‌گذاری ← Add to Home Screen', 'ok');
+    else if (isAndroid) showToast('در کروم: منوی سه‌نقطه ← Install app / افزودن به صفحهٔ اصلی', 'ok');
+    else showToast('در کروم یا اج: آیکون نصب در نوار آدرس ← Install', 'ok');
+  }
+
   function showToast(text, kind) {
     var t = $('toastBody');
     t.textContent = text;
@@ -14640,11 +15091,11 @@ function renderAdminDashboardHtml(initialData = {}) {
     var token = userKey(state.users[0]) || '';
     var ep = origin() + '/warp/' + encodeURIComponent(token);
     var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
-      '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=MULTI">' + ICO.copy + ' کپی</button></div>' +
+      '<div class="loc-acts"><button class="loc-act c-copy" type="button" data-act="copy" data-url="' + base + '?country=MULTI" title="کپی ساب" aria-label="کپی ساب">' + ICO.copy + '</button></div></div>' +
       // وارپ و اپن‌وی‌پی آماده، بدون اسکنر و بدون تنظیم
       '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG + WireGuard · Clash · sing-box · IPv4+IPv6</div></div>' +
       '<div class="toolbar">' +
-      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.download + ' ZIP همهٔ فرمت‌ها</a>' +
+      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP همهٔ فرمت‌ها</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
       '</div></div>' +
@@ -14656,21 +15107,21 @@ function renderAdminDashboardHtml(initialData = {}) {
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=singbox">' + ICO.copy + ' sing-box</button>' +
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=conf">' + ICO.copy + ' WireGuard</button>' +
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=base64">' + ICO.copy + ' base64</button>' +
-      '<a class="btn sm ghost" href="' + ep + '?format=zip">' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + ep + '?format=zip">' + ICO.zip + ' ZIP</a>' +
       '</div></div>' +
       '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · 3 پروفایل تنظیم · ZIP</div></div>' +
       '<div class="toolbar">' +
-      '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.download + ' ZIP</a>' +
+      '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.zip + ' ZIP</a>' +
       '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +
       '</div></div>';
     var vipList = INITIAL_DATA.vipCountries || [];
     Object.keys(countries).forEach(function(code) {
       var vip = vipList.indexOf(code) > -1;
       html += '<div class="loc-card"><div><div class="loc-name">' + countries[code].name + (vip ? ' <span class="tag on">VIP</span>' : '') + '</div><div class="loc-meta">' + code + ' · ' + (vip ? 'منابع ویژه + منابع عادی' : 'منابع منطقه‌ای') + '</div></div>' +
-        '<div class="toolbar">' +
-        '<button class="btn sm" type="button" data-act="copy" data-url="' + base + '?country=' + code + '">' + ICO.copy + ' کپی</button>' +
-        '<button class="btn sm ghost" type="button" data-act="country-proxy" data-code="' + code + '">' + ICO.link + ' پروکسی → s</button>' +
-        '<button class="btn sm ghost" type="button" data-act="country-ip" data-code="' + code + '">' + ICO.globe + ' آی‌پی → yx</button>' +
+        '<div class="loc-acts">' +
+        '<button class="loc-act c-copy" type="button" data-act="copy" data-url="' + base + '?country=' + code + '" title="کپی ساب" aria-label="کپی ساب">' + ICO.copy + '</button>' +
+        '<button class="loc-act c-proxy" type="button" data-act="country-proxy" data-code="' + code + '" title="پروکسی → s" aria-label="پروکسی → s">' + ICO.link + '</button>' +
+        '<button class="loc-act c-ip" type="button" data-act="country-ip" data-code="' + code + '" title="آی‌پی → yx" aria-label="آی‌پی → yx">' + ICO.globe + '</button>' +
         '</div></div>';
     });
     grid.innerHTML = html;
@@ -14899,6 +15350,8 @@ function renderAdminDashboardHtml(initialData = {}) {
         { key: 'warpPro', section: 'WARP', label: 'WARP پلاس', type: 'switch', def: 'no' },
         { key: 'warpMl', section: 'WARP', label: 'WARP چندلوکیشن', type: 'switch', def: 'no' },
         { key: 'warpCount', section: 'WARP', label: 'تعداد WARP', type: 'number', def: 8, min: 1, max: 30 },
+        { key: 'warpMasque', section: 'WARP', label: 'WARP MASQUE (HTTP/3)', type: 'switch', def: 'no' },
+        { key: 'warpMasqueCount', section: 'WARP', label: 'تعداد MASQUE', type: 'number', def: 3, min: 1, max: 6 },
         { key: 'warpLicense', section: 'WARP', label: 'لایسنس WARP پلاس', type: 'text', def: '' },
         { key: 'warpEndpoint', section: 'WARP', label: 'نقاط پایانی WARP', type: 'text', def: '', list: 'dlWarpEndpoint' },
         { key: 'ovpn', section: 'OpenVPN', label: 'OpenVPN', type: 'switch', def: 'no' },
@@ -15061,7 +15514,10 @@ function renderAdminDashboardHtml(initialData = {}) {
     var base = user ? (INITIAL_DATA.defaults || {}) : Object.assign({}, INITIAL_DATA.defaults || {}, state.config || {});
     var cfg = Object.assign({}, base, (user && user.config) || {});
     var preset = (INITIAL_DATA.presets || {})[presetId || (user && user.preset) || 'iran-fast'];
-    if (preset && preset.configOverrides) cfg = Object.assign({}, cfg, preset.configOverrides);
+    // در ویرایش، تنظیمات ذخیره‌شدهٔ کاربر باید برنده باشد؛ پریست فقط برای کاربر تازه
+    // یا وقتی خود مدیر پریست را عوض می‌کند اعمال می‌شود (باگ: قبلاً مقادیر پریست
+    // روی تنظیمات ذخیره‌شده می‌نشست و فرم همان تنظیمات پایه را نشان می‌داد).
+    if (preset && preset.configOverrides && (!user || presetId)) cfg = Object.assign({}, cfg, preset.configOverrides);
     var activeTab = formState.tab || 'basic';
     var basicHtml = '<div class="uf-section"><span>مشخصات کاربر</span><i></i></div>' +
       '<div class="form-grid">' +
@@ -15465,9 +15921,12 @@ function renderAdminDashboardHtml(initialData = {}) {
     }
     controls += '<button class="btn primary" type="button" data-act="scan-run" data-mode="' + id + '">' + ICO.bolt + ' ' + (m.manual ? 'تست آدرس‌ها' : 'شروع اسکن') + '</button>';
     return '<div class="scan-view" id="scanView_' + id + '">' +
-      '<div class="scan-head"><span class="scan-title">' + ICO[m.icon] + ' ' + m.title + '</span><span class="scan-desc">' + m.desc + '</span></div>' +
-      '<p class="scan-note">' + m.note + '</p>' +
+      '<div class="scan-head"><span class="scan-title">' + ICO[m.icon] + ' ' + m.title + '</span></div>' +
       '<div class="scan-controls">' + controls + '</div>' +
+      (m.manual ? '<div class="toolbar" style="margin:0 0 8px;">' +
+        '<button class="btn sm" type="button" data-act="add-cf-ips">' + ICO.plus + ' <span data-i18n="scanner.addCfIps">آی‌پی‌های کلادفلر → آدرس‌های دستی</span></button>' +
+        '<button class="btn sm ghost" type="button" data-act="add-cf-domains">' + ICO.globe + ' <span data-i18n="scanner.addCfDomains">دامنه‌های کلادفلر → آدرس‌های دستی</span></button>' +
+        '</div>' : '') +
       '<div class="scan-status" id="scStatus_' + id + '"></div>' +
       '<div class="table-wrap"><table class="scan"><thead><tr><th>کشور</th><th>آدرس / پورت</th><th>نوع / پروتکل</th><th>پینگ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="scBody_' + id + '"><tr><td colspan="6" class="empty">هنوز اسکنی اجرا نشده است.</td></tr></tbody></table></div>' +
       '</div>';
@@ -15903,6 +16362,7 @@ function renderAdminDashboardHtml(initialData = {}) {
     else if (act === 'loc-copy-region') { locCopyRegion(); }
     else if (act === 'country-ip') { countryIp(el.getAttribute('data-code')); }
     else if (act === 'toggle-theme') { toggleTheme(); }
+    else if (act === 'install-app') { promptInstall(); }
     else if (act === 'toggle-lang') { toggleLang(); }
     else if (act === 'add-cf-ips') { addCfDefaults('ips'); }
     else if (act === 'add-cf-domains') { addCfDefaults('domains'); }
@@ -15915,7 +16375,7 @@ function renderAdminDashboardHtml(initialData = {}) {
 
   // بازخورد لمسی: موج نور از نقطهٔ لمس/کلیک روی دکمه‌ها و تب‌ها
   document.addEventListener('pointerdown', function(event) {
-    var host = event.target.closest('.btn, .icon-btn, .ftab, .tab, .drawer-item, .loc-card');
+    var host = event.target.closest('.btn, .icon-btn, .ftab, .tab, .drawer-item, .loc-card, .loc-act');
     if (!host || host.disabled) return;
     var rect = host.getBoundingClientRect();
     var wave = document.createElement('span');
@@ -15962,6 +16422,9 @@ function renderAdminDashboardHtml(initialData = {}) {
   fillSettings();
   syncConditionalFields();
   renderMetrics();
+
+  // نصب اپ: ثبت سرویس‌ورکر و نگه‌داشتن رویداد نصب مرورگر
+  ${PWA_CLIENT_JS}
 
   // بررسی بی‌صدای نسخه در پس‌زمینه (خروجی ۱۰ دقیقه کش می‌شود)
   setTimeout(function() { checkUpdate(true); }, 1200);
@@ -16140,6 +16603,11 @@ const __MILI_WORKER_EXPORT__ = {
 
       // ۴. هندل کردن درخواست‌های GET
       if (request.method === 'GET' || request.method === 'HEAD') {
+        // ۴-۰: فایل‌های نصب اپ (PWA) — برای دسکتاپ و گوشی، بیرون از مسیر مدیریت
+        if (url.pathname === '/manifest.webmanifest') return pwaManifestResponse();
+        if (url.pathname === '/sw.js') return pwaServiceWorkerResponse();
+        if (url.pathname === '/pwa-icon.svg') return pwaIconResponse();
+
         // ۴-الف: صفحه اصلی /
         if (url.pathname === '/' || pathParts.length === 0) {
           if (globalCfg.homepage && String(globalCfg.homepage).trim()) {

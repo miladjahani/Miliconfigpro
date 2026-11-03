@@ -337,6 +337,7 @@ export function getFeedKind(url) {
 // خودکار هر چند ساعت به‌روز می‌شوند و آی‌پی‌های واقعاً سالم را نگه می‌دارند؛
 // همین باعث می‌شود تب چندلوکیشن بدون یک بار اسکن هم آی‌پی تازه داشته باشد.
 export const IP_CANDIDATE_SOURCES = [
+  'https://bestcf.pages.dev/vps789/top10.txt',
   'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'
@@ -423,7 +424,23 @@ export const EDGE_PROXY_IPS = [
   { domain: 'ProxyIP.Oracle.cmliussss.net', region: 'Oracle' },
   { domain: 'ProxyIP.DigitalOcean.CMLiussss.net', region: 'DigitalOcean' },
   { domain: 'ProxyIP.Vultr.CMLiussss.net', region: 'Vultr' },
-  { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' }
+  { domain: 'ProxyIP.Multacom.CMLiussss.net', region: 'Multacom' },
+  // مجموعهٔ جهانی (انتخاب خودکار سالم‌ترین لبه)
+  { domain: 'ProxyIP.CMLiussss.net', region: 'Global' },
+  { domain: 'ProxyIP.FR.CMLiussss.net', region: 'FR' },
+  // دامنه‌های جایگزین پروژه‌های شناخته‌شده (وقتی CMLiussss کند/کپچا شد)
+  { domain: 'bpb.yousef.isegaro.com', region: 'BPB' },
+  { domain: 'di.nscl.ir', region: 'Multi' },
+  { domain: 'tr.diam4.ggff.net', region: 'Multi' },
+  { domain: 'proxy.zjcloud.us.ci', region: 'Multi' },
+  { domain: 'pyip.ygkkk.dpdns.org', region: 'Multi' },
+  { domain: 'proxyip.leilaomi.cc.cd', region: 'Multi' },
+  { domain: 'proxy.farel.is-a.dev', region: 'Multi' },
+  { domain: 'proxyip.vultr.fxxk.dedyn.io', region: 'Vultr' },
+  { domain: 'proxyip.digitalocean.hw.090227.xyz', region: 'DigitalOcean' },
+  { domain: 'proxyip.aliyun.hw.090227.xyz', region: 'SG' },
+  { domain: 'proxyip.oracle.fxxk.dedyn.io', region: 'Oracle' },
+  { domain: 'cdn-all.xn--b6gac.eu.org', region: 'Multi' }
 ];
 
 // فهرست آنلاین دامنه/آی‌پی ترجیحی
@@ -436,6 +453,8 @@ export const EDGE_REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/byJoey/
 // اسکنر پنل هم فقط از همین مخازن می‌خواند تا خروجی با موتور cfnew یکی باشد.
 // ============================================================================
 export const CFNEW_IPV4_SOURCES = [
+  // مخزن رسمی cfnew (byJoey/cfnew): فهرست ۱۰ آی‌پی برتر که خود cfnew می‌خواند
+  'https://bestcf.pages.dev/vps789/top10.txt',
   'https://raw.githubusercontent.com/panel-zeus/Z-E-U-S/main/ips.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/bestcf.txt',
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestCF/bestcfv4.txt'

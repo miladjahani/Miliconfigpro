@@ -18,6 +18,7 @@ const MODULE_ORDER = [
   'src/config/sources.js',
   'src/config/defaults.js',
   'src/config/presets.js',
+  'src/ui/pwa.js',
   'src/core/utils.js',
   'src/core/updater.js',
   'src/core/proxyGeo.js',

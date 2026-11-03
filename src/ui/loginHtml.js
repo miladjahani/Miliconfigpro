@@ -6,6 +6,7 @@
 
 import { BRAND_NAME, BRAND_UPPER, VERSION } from '../config/defaults.js';
 import { FAVICON_DATA_URI, stripEmoji } from './icons.js';
+import { PWA_CLIENT_JS, PWA_HEAD_TAGS } from './pwa.js';
 
 const I18N = {
   fa: {
@@ -95,6 +96,7 @@ export function renderLoginGatewayHtml(options = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome to nginx!</title>
 <link rel="icon" href="${FAVICON_DATA_URI}">
+${PWA_HEAD_TAGS}
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; min-height: 100%; }
@@ -594,6 +596,9 @@ export function renderLoginGatewayHtml(options = {}) {
 
   applyTheme();
   applyLang();
+
+  // نصب اپ (PWA) از همین صفحهٔ ورود هم ممکن است
+  ${PWA_CLIENT_JS}
 
   // استتار nginx → تاری صفحه → نمایش آرام پنجره ورود پس از ۳ ثانیه
   setTimeout(function() {

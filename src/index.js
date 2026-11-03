@@ -42,6 +42,7 @@ import {
 import { renderLoginGatewayHtml } from './ui/loginHtml.js';
 import { renderUserStatusPageHtml } from './ui/statusHtml.js';
 import { renderAdminDashboardHtml } from './ui/adminHtml.js';
+import { pwaIconResponse, pwaManifestResponse, pwaServiceWorkerResponse } from './ui/pwa.js';
 
 // پرچم آماده‌سازی یک‌بارهٔ اسکیمای D1 در هر ایزوله
 let schemaReady = false;
@@ -201,6 +202,11 @@ export default {
 
       // ۴. هندل کردن درخواست‌های GET
       if (request.method === 'GET' || request.method === 'HEAD') {
+        // ۴-۰: فایل‌های نصب اپ (PWA) — برای دسکتاپ و گوشی، بیرون از مسیر مدیریت
+        if (url.pathname === '/manifest.webmanifest') return pwaManifestResponse();
+        if (url.pathname === '/sw.js') return pwaServiceWorkerResponse();
+        if (url.pathname === '/pwa-icon.svg') return pwaIconResponse();
+
         // ۴-الف: صفحه اصلی /
         if (url.pathname === '/' || pathParts.length === 0) {
           if (globalCfg.homepage && String(globalCfg.homepage).trim()) {

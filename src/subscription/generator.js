@@ -1161,6 +1161,148 @@ export function buildFallbackWarpConfig() {
   };
 }
 
+// ============================================================================
+// WARP MASQUE (HTTP/3) — تونل IP روی CONNECT-IP
+// نه WireGuard است و نه AmneziaWG: کلید دستگاه ECDSA P-256 است و لبه با SNI
+// مخصوص MASQUE و پین‌کردن کلید عمومی لبه احراز می‌کند. این نوع نود فقط در
+// Mihomo/Clash.Meta (type: masque) و فورک Hiddify قابل استفاده است.
+// ============================================================================
+const WARP_MASQUE_SNI = 'consumer-masque.cloudflareclient.com';
+const WARP_MASQUE_PORTS = [443, 8443, 4443, 500, 1701, 4500];
+let warpMasqueCache = { key: '', at: 0, data: null };
+
+function derTlv(tag, bytes) {
+  const len = bytes.length;
+  let lenBytes;
+  if (len < 0x80) {
+    lenBytes = [len];
+  } else {
+    const tmp = [];
+    let n = len;
+    while (n > 0) { tmp.unshift(n & 0xff); n >>= 8; }
+    lenBytes = [0x80 | tmp.length, ...tmp];
+  }
+  return Uint8Array.from([tag, ...lenBytes, ...bytes]);
+}
+
+// کلید خصوصی P-256 را از JWK به قالب SEC1 DER می‌برد (چیزی که Mihomo می‌خواهد)
+function buildSec1PrivateKey(jwk = {}) {
+  const oidPrime256v1 = Uint8Array.from([0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]);
+  const version = Uint8Array.from([0x02, 0x01, 0x01]);
+  const privateKey = derTlv(0x04, base64ToBytes(jwk.d || ''));
+  const params = derTlv(0xa0, oidPrime256v1);
+  const point = Uint8Array.from([0x00, 0x04, ...base64ToBytes(jwk.x || ''), ...base64ToBytes(jwk.y || '')]);
+  const publicKey = derTlv(0xa1, derTlv(0x03, point));
+  const body = new Uint8Array(version.length + privateKey.length + params.length + publicKey.length);
+  body.set(version, 0);
+  body.set(privateKey, version.length);
+  body.set(params, version.length + privateKey.length);
+  body.set(publicKey, version.length + privateKey.length + params.length);
+  return derTlv(0x30, body);
+}
+
+// ثبت‌نام دستگاه MASQUE: اول ساخت دستگاه، بعد ارتقا به tunnel_type=masque با کلید P-256
+async function fetchWarpMasqueRegistration(cfg = {}, force = false) {
+  const license = String(cfg.warpLicense || '').trim();
+  const cacheKey = license ? `masque-lic:${license}` : 'masque-free';
+  if (!force && warpMasqueCache.data && warpMasqueCache.key === cacheKey && Date.now() - warpMasqueCache.at < WARP_REG_CACHE_TTL) {
+    return warpMasqueCache.data;
+  }
+  try {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const spki = new Uint8Array(await crypto.subtle.exportKey('spki', pair.publicKey));
+    const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    const pubB64 = bytesToBase64(spki);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const created = await fetch(WARP_REGISTRATION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Client-Version': WARP_CLIENT_VERSION,
+        'User-Agent': 'okhttp/3.12.1'
+      },
+      body: JSON.stringify({
+        key: pubB64,
+        install_id: '',
+        fcm_token: '',
+        tos: new Date().toISOString(),
+        model: 'PC',
+        serial_number: '',
+        locale: 'en_US'
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!created.ok) return null;
+    const device = await created.json();
+    if (!device?.id || !device?.token) return null;
+
+    const upgradeCtrl = new AbortController();
+    const upgradeTimer = setTimeout(() => upgradeCtrl.abort(), 8000);
+    const upgraded = await fetch(`${WARP_REGISTRATION_URL}/${device.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Client-Version': WARP_CLIENT_VERSION,
+        'User-Agent': 'okhttp/3.12.1',
+        Authorization: `Bearer ${device.token}`
+      },
+      body: JSON.stringify({
+        key: pubB64,
+        key_type: 'secp256r1',
+        tunnel_type: 'masque',
+        ...(license ? { license, warp_enabled: true } : {})
+      }),
+      signal: upgradeCtrl.signal
+    });
+    clearTimeout(upgradeTimer);
+    if (!upgraded.ok) return null;
+    const reg = await upgraded.json();
+    const peer = reg?.config?.peers?.[0] || {};
+    const edgePublicKey = String(peer.public_key || '').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+    const endpointHost = String(peer?.endpoint?.v4 || '').split(':')[0];
+    const ports = (Array.isArray(peer?.endpoint?.ports) ? peer.endpoint.ports : [])
+      .map(port => parseInt(port, 10))
+      .filter(port => port > 0);
+    const data = {
+      privateKey: bytesToBase64(buildSec1PrivateKey(jwk)),
+      publicKey: edgePublicKey,
+      address4: reg?.config?.interface?.addresses?.v4 || '',
+      address6: reg?.config?.interface?.addresses?.v6 || '',
+      server: endpointHost || '162.159.198.2',
+      ports: ports.length ? ports : WARP_MASQUE_PORTS.slice(),
+      license: reg?.account?.license || ''
+    };
+    if (!data.privateKey || !data.publicKey || !data.address4) return null;
+    warpMasqueCache = { key: cacheKey, at: Date.now(), data };
+    return data;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// نودهای MASQUE: چند پورت از همان لبهٔ ثبت‌شده — لوکیشن خروج را کلادفلر انتخاب می‌کند
+// و قابل پین‌کردن نیست؛ پس برچسب هر نود پورت/لبه است، نه کشور.
+export async function buildWarpMasqueNodes(cfg = {}) {
+  if (!isEnabledValue(cfg.warpMasque, true)) return [];
+  const reg = await fetchWarpMasqueRegistration(cfg);
+  if (!reg) return [];
+  const wanted = parseInt(cfg.warpMasqueCount, 10);
+  const count = Math.max(1, Math.min(6, Number.isFinite(wanted) && wanted > 0 ? wanted : 3));
+  const ordered = [...new Set([...WARP_MASQUE_PORTS.filter(p => reg.ports.includes(p)), ...reg.ports])];
+  return ordered.slice(0, count).map((port, idx) => ({
+    name: `WARP MASQUE ${idx + 1} · ${port}`,
+    server: reg.server,
+    port,
+    privateKey: reg.privateKey,
+    publicKey: reg.publicKey,
+    address4: reg.address4,
+    address6: reg.address6
+  }));
+}
+
 // لیست نقاط پایانی: مقدار دستی پنل (ip:port#برچسب) یا رنج‌های رسمی WARP
 function parseWarpEndpointList(raw, count) {
   const manual = String(raw || '')
@@ -1506,6 +1648,15 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
     }
     return `  - { ${parts.join(', ')} }`;
   });
+  // ۲-ب) MASQUE: نودهای HTTP/3 جدا از WireGuard؛ فقط Mihomo/Clash.Meta و Hiddify
+  const masqueNodes = await buildWarpMasqueNodes(cfg).catch(() => []);
+  const masqueProxies = masqueNodes.map(node => `  - { name: "${node.name}", type: masque, server: "${node.server}", port: ${node.port}, ` +
+    `private-key: "${node.privateKey}", public-key: "${node.publicKey}", ip: ${node.address4}/32` +
+    (node.address6 ? `, ipv6: ${node.address6}/128` : '') +
+    `, sni: ${WARP_MASQUE_SNI}, mtu: 1280, udp: true, remote-dns-resolve: true, dns: [1.1.1.1, 1.0.0.1] }`);
+  masqueNodes.forEach(node => proxyNames.push(node.name));
+  clashProxies.push(...masqueProxies);
+
   files.push({
     name: 'WARP-clash.yaml',
     data: [
@@ -1533,6 +1684,36 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  - MATCH,WARP'
     ].join('\n') + '\n'
   });
+
+  if (masqueNodes.length) {
+    files.push({
+      name: 'WARP-masque.yaml',
+      data: [
+        `# ${BRAND_NAME} — WARP MASQUE (HTTP/3 CONNECT-IP)`,
+        '# فقط Mihomo / Clash.Meta / Hiddify؛ کلاینت‌های WireGuard این را نمی‌خوانند',
+        `# edge: ${masqueNodes[0].server} — sni: ${WARP_MASQUE_SNI}`,
+        'mixed-port: 7890',
+        'allow-lan: false',
+        'mode: rule',
+        'log-level: warning',
+        'dns:',
+        '  enable: true',
+        '  enhanced-mode: fake-ip',
+        '  nameserver:',
+        ...dnsList.map(item => `    - ${item}`),
+        'proxies:',
+        ...masqueProxies,
+        'proxy-groups:',
+        '  - name: "WARP-MASQUE"',
+        '    type: select',
+        '    proxies:',
+        ...masqueNodes.map(node => `      - "${node.name}"`),
+        '      - DIRECT',
+        'rules:',
+        '  - MATCH,WARP-MASQUE'
+      ].join('\n') + '\n'
+    });
+  }
 
   // ۳) sing-box
   const sbOutbounds = entries.map((entry, idx) => {
@@ -1598,6 +1779,7 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  *.conf ................ AmneziaWG profile (Jc/Jmin/Jmax + AWG2/AWG3 signatures)',
       '  plain-wireguard/*.conf . standard WireGuard profile (no AmneziaWG keys)',
       '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
+      '  WARP-masque.yaml ...... WARP over MASQUE (HTTP/3) for Mihomo / Clash.Meta / Hiddify',
       '  WARP-singbox.json ..... sing-box config with a selector group',
       '  links.txt ............. wireguard:// links (NekoBox / Hiddify / v2rayN)',
       '  WARP-sub-base64.txt ... same links in base64 subscription form',
@@ -2197,6 +2379,35 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
           appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, userUuid + ':url'));
         }
       }
+      // ترکیب خانواده‌ها در ساب‌لینک اصلی: بخشی از نودها IPv6 و بخشی دامنه‌محور
+      // می‌شوند تا هر سه استخر (IPv4 / IPv6 / دامنه) طبق تعداد نود همان کاربر
+      // در ساب‌لینک حاضر باشند؛ نه فقط در ساب‌های ?set=ipv6 و ?set=domain.
+      if (!domainMode && !ipv6Mode && !countryMode) {
+        const wantedTotal = parseInt(
+          queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0,
+          10
+        ) || 0;
+        if (wantedTotal === 0 || wantedTotal >= 6) {
+          const base = wantedTotal || 24;
+          const v6Wanted = cfg.ipv6 === 'no' ? 0 : Math.max(2, Math.min(8, Math.round(base * 0.2)));
+          const domWanted = Math.max(2, Math.min(10, Math.round(base * 0.25)));
+          if (v6Wanted > 0) {
+            const v6List = pickStableAddresses(
+              [...OFFICIAL_DIRECT_IPV6, ...edgePool.ipv6],
+              v6Wanted,
+              userUuid + '-mix-v6'
+            ).filter(Boolean);
+            appendFromSource(v6List.map(ip => ({ ip, port: 443, isp: 'CF-IPv6', family: 'ipv6' })));
+          }
+          const domList = pickStableAddresses(
+            [...DIRECT_DOMAINS.map(d => d.domain), ...edgePool.domains],
+            domWanted,
+            userUuid + '-mix-dom'
+          ).filter(Boolean);
+          appendFromSource(domList.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
+        }
+      }
+
       // اگر به هر دلیلی هیچ نودی ساخته نشد، از استخر رسمی CF استفاده می‌کنیم
       const builtCount = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.ss.length + protoGroups.xhttp.length;
       if (builtCount < 15 && cfg.epi === 'yes') {

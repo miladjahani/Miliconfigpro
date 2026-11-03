@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.5.1';
+export const VERSION = 'v3.5.2';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
@@ -130,6 +130,9 @@ export const CONFIG_DEFAULTS = {
   warpPro: 'no',
   warpMl: 'no',
   warpCount: 8,
+  // — WARP MASQUE (HTTP/3): فقط Mihomo/Clash.Meta و Hiddify آن را می‌خوانند
+  warpMasque: 'no',
+  warpMasqueCount: 3,
   warpLicense: '', // لایسنس WARP+ برای نود WARP PRO
   warpEndpoint: '', // لیست سفارشی نقاط پایانی: ip:port#برچسب,ip2:port2#برچسب (خالی = نقاط پایانی رسمی کلادفلر)
   // — OpenVPN (پروفایل‌های عمومی زنده از VPNGate)
@@ -146,7 +149,7 @@ export const CONFIG_DEFAULTS = {
 export const BOOLEAN_CONFIG_KEYS = [
   'ev', 'et', 'ex', 'es', 'ech', 'ena', 'epd', 'epi', 'egi',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'frag',
-  'pd', 'warp', 'warpPro', 'warpMl', 'ovpn', 'autoUpdate',
+  'pd', 'warp', 'warpPro', 'warpMl', 'warpMasque', 'ovpn', 'autoUpdate',
   'sb', 'doh', 'tcp', 'udp'
 ];
 
@@ -207,6 +210,8 @@ export const ENV_KEY_MAPPING = {
   warpPro: ['warpPro', 'WARPPRO', 'WARP_PRO'],
   warpMl: ['warpMl', 'WARPML', 'WARP_MULTI_LOCATION'],
   warpCount: ['warpCount', 'WARPCOUNT', 'WARP_NODE_COUNT'],
+  warpMasque: ['warpMasque', 'WARPMASQUE', 'WARP_MASQUE'],
+  warpMasqueCount: ['warpMasqueCount', 'WARPMASQUECOUNT', 'WARP_MASQUE_COUNT'],
   warpLicense: ['warpLicense', 'WARPLICENSE', 'WARP_LICENSE'],
   warpEndpoint: ['warpEndpoint', 'WARPENDPOINT', 'WARP_ENDPOINT'],
   ovpn: ['ovpn', 'OVPN', 'OPENVPN'],
@@ -548,6 +553,7 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   };
   snap.pdCount = clampInt(snap.pdCount, 0, 20, 2);
   snap.warpCount = clampInt(snap.warpCount, 1, 30, 8);
+  snap.warpMasqueCount = clampInt(snap.warpMasqueCount, 1, 6, 3);
   snap.ovpnCount = clampInt(snap.ovpnCount, 0, 24, 8);
   snap.warpLicense = String(snap.warpLicense || '').trim();
   snap.warpEndpoint = String(snap.warpEndpoint || '').trim();
