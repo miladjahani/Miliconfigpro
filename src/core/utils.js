@@ -173,18 +173,24 @@ export function buildNodeDisplayName(meta = {}) {
 // ورودی می‌تواند شیء { link, meta } یا لینک خام باشد.
 export function finalizeMiliSubscriptionLinks(entries = [], subNodeCount = 0) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
-  const limit = parseInt(subNodeCount, 10);
-  const sliced = Number.isFinite(limit) && limit > 0 ? entries.slice(0, limit) : entries.slice();
-  return sliced.map((entry, idx) => {
+  const prepared = entries.map((entry, idx) => {
     const raw = typeof entry === 'string' ? entry : String(entry?.link || '');
-    if (!raw) return '';
+    if (!raw) return null;
     const meta = typeof entry === 'string' ? {} : (entry.meta || {});
-    const baseName = buildNodeDisplayName(meta);
-    const nodeName = `${baseName} · #${idx + 1}`;
     const hashIdx = raw.indexOf('#');
     const base = hashIdx > -1 ? raw.substring(0, hashIdx) : raw;
-    return `${base}#${encodeURIComponent(nodeName)}`;
+    return { base, meta, idx };
   }).filter(Boolean);
+  // ترتیب نهایی بر اساس خود آدرس است، نه ترتیب استخر؛ پس اگر مجموعهٔ آدرس‌ها
+  // یکی باشد، شمارهٔ نود و آدرس پشت آن حتی بین دو ایزولهٔ مختلف یکی می‌ماند و
+  // «پرش آی‌پی» در کلاینت دیده نمی‌شود.
+  prepared.sort((a, b) => (a.base < b.base ? -1 : a.base > b.base ? 1 : a.idx - b.idx));
+  const limit = parseInt(subNodeCount, 10);
+  const sliced = Number.isFinite(limit) && limit > 0 ? prepared.slice(0, limit) : prepared;
+  return sliced.map((item, idx) => {
+    const nodeName = `${buildNodeDisplayName(item.meta)} · #${idx + 1}`;
+    return `${item.base}#${encodeURIComponent(nodeName)}`;
+  });
 }
 
 // ============================================================================

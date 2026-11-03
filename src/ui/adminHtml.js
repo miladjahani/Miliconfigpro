@@ -2083,7 +2083,8 @@ ${PWA_HEAD_TAGS}
         { key: 'homepage', section: 'دسترسی و مسیر', label: 'صفحهٔ استتار', type: 'text', def: '', list: 'dlHomepage' },
         { key: 'scu', section: 'دسترسی و مسیر', label: 'سرویس تبدیل اشتراک', type: 'text', def: '', list: 'dlScu' },
         { key: 'pd', section: 'دامنهٔ پنل', label: 'نود با دامنهٔ پنل', type: 'switch', def: 'no' },
-        { key: 'pdCount', section: 'دامنهٔ پنل', label: 'تعداد نود دامنهٔ پنل', type: 'number', def: 2, min: 0, max: 20 }
+        { key: 'pdCount', section: 'دامنهٔ پنل', label: 'تعداد نود دامنهٔ پنل', type: 'number', def: 2, min: 0, max: 20 },
+        { key: 'sniHosts', section: 'دامنهٔ پنل', label: 'دامنه‌های SNI و Host', type: 'text', def: '', hint: 'کاما بین دامنه‌ها؛ هر دامنه باید به همین ورکر وصل باشد. نودها به ترتیب بین این دامنه‌ها می‌چرخند (خالی = فقط دامنهٔ همین ورکر).' }
       ]
     },
     {

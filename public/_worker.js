@@ -623,7 +623,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.5.2';
+const VERSION = 'v3.5.5';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 const MAX_USERS_LIMIT = 3;
 const TELEGRAM_SUPPORT = '@miliconfig';
@@ -705,6 +705,8 @@ const CONFIG_DEFAULTS = {
   // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
   pd: 'no',
   pdCount: 2,
+  // دامنه‌های اضافی SNI/Host (کاما) — هر دامنه باید به همین ورکر وصل باشد
+  sniHosts: '',
   // — WARP / WARP PRO / WARP چندلوکیشن
   warp: 'no',
   warpPro: 'no',
@@ -786,6 +788,7 @@ const ENV_KEY_MAPPING = {
   locationNodeCount: ['locationNodeCount', 'LOCATION_NODE_COUNT'],
   pd: ['pd', 'PD', 'PANEL_DOMAIN_NODES'],
   pdCount: ['pdCount', 'PDCOUNT', 'PANEL_DOMAIN_NODE_COUNT'],
+  sniHosts: ['sniHosts', 'SNIHOSTS', 'SNI_HOSTS', 'CUSTOM_DOMAINS', 'FRONT_DOMAINS'],
   warp: ['warp', 'WARP'],
   warpPro: ['warpPro', 'WARPPRO', 'WARP_PRO'],
   warpMl: ['warpMl', 'WARPML', 'WARP_MULTI_LOCATION'],
@@ -1565,18 +1568,24 @@ function buildNodeDisplayName(meta = {}) {
 // ورودی می‌تواند شیء { link, meta } یا لینک خام باشد.
 function finalizeMiliSubscriptionLinks(entries = [], subNodeCount = 0) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
-  const limit = parseInt(subNodeCount, 10);
-  const sliced = Number.isFinite(limit) && limit > 0 ? entries.slice(0, limit) : entries.slice();
-  return sliced.map((entry, idx) => {
+  const prepared = entries.map((entry, idx) => {
     const raw = typeof entry === 'string' ? entry : String(entry?.link || '');
-    if (!raw) return '';
+    if (!raw) return null;
     const meta = typeof entry === 'string' ? {} : (entry.meta || {});
-    const baseName = buildNodeDisplayName(meta);
-    const nodeName = `${baseName} · #${idx + 1}`;
     const hashIdx = raw.indexOf('#');
     const base = hashIdx > -1 ? raw.substring(0, hashIdx) : raw;
-    return `${base}#${encodeURIComponent(nodeName)}`;
+    return { base, meta, idx };
   }).filter(Boolean);
+  // ترتیب نهایی بر اساس خود آدرس است، نه ترتیب استخر؛ پس اگر مجموعهٔ آدرس‌ها
+  // یکی باشد، شمارهٔ نود و آدرس پشت آن حتی بین دو ایزولهٔ مختلف یکی می‌ماند و
+  // «پرش آی‌پی» در کلاینت دیده نمی‌شود.
+  prepared.sort((a, b) => (a.base < b.base ? -1 : a.base > b.base ? 1 : a.idx - b.idx));
+  const limit = parseInt(subNodeCount, 10);
+  const sliced = Number.isFinite(limit) && limit > 0 ? prepared.slice(0, limit) : prepared;
+  return sliced.map((item, idx) => {
+    const nodeName = `${buildNodeDisplayName(item.meta)} · #${idx + 1}`;
+    return `${item.base}#${encodeURIComponent(nodeName)}`;
+  });
 }
 
 // ============================================================================
@@ -2623,8 +2632,14 @@ async function verifyCountryProxies(proxies = [], options = {}) {
 // ============================================================================
 
 
-const POOL_TTL_MS = 30 * 60 * 1000;
+// استخرهای cfnew چند بار در روز عوض می‌شوند؛ با TTL کوتاه هر نصب همیشه به
+// نسخهٔ تازهٔ همان منابع وصل است و فقط اگر شبکه در دسترس نباشد به لیست داخلی
+// برمی‌گردد. عدد را عمداً کوچک گذاشتیم: خواندن لیست‌ها ارزان است.
+const POOL_TTL_MS = 10 * 60 * 1000;
 const POOL_FETCH_TIMEOUT_MS = 2500;
+// حداکثر صبر یک ایزولهٔ سرد برای گرفتن لیست زنده (بعد از آن همان استخر داخلی)
+// کوتاه است تا ساب‌لینک کند نشود؛ لیست زنده در همان درخواست بعدی می‌نشیند.
+const POOL_COLD_WAIT_MS = 700;
 const POOL_MAX_CHARS = 200000;
 const POOL_MAX_ITEMS = 240;
 const POOL_CACHE_BASE = 'https://edge-pool.miliconfig.internal';
@@ -2787,9 +2802,19 @@ function poolMergeFetched(builtin, fetched) {
     domains: [...builtin.domains],
     echDomains: [...builtin.echDomains],
     echDns: [...builtin.echDns],
-    proxyIps: builtin.proxyIps,
+    proxyIps: [...builtin.proxyIps],
     origin: 'live'
   };
+
+  // ProxyIP های زندهٔ فیدها (مناطق جدید مثل FR/GB یا استخرهای تازه) هم اضافه می‌شوند
+  const proxySeen = new Set(out.proxyIps.map(item => String(item.domain).toLowerCase()));
+  for (const item of (fetched.proxyIps || [])) {
+    const domain = String(item?.domain || '').toLowerCase();
+    if (!domain || proxySeen.has(domain) || !isValidDomain(domain)) continue;
+    proxySeen.add(domain);
+    out.proxyIps.push({ domain, region: item.region || 'Multi' });
+    if (out.proxyIps.length >= 80) break;
+  }
 
   for (const item of fetched.ipv4) {
     if (!isValidIpAddress(item) || !isCloudflareIpv4(item)) continue;
@@ -2840,6 +2865,7 @@ function poolParseAddressLines(text) {
 
 let memoryPool = { at: 0, value: null };
 let inflight = null;
+let lastLiveAt = 0;
 
 function poolGetCache() {
   try {
@@ -2849,37 +2875,89 @@ function poolGetCache() {
   }
 }
 
+// همهٔ فیدهای cfnew به‌صورت زنده خوانده می‌شوند (نه فقط اولین منبع هر دسته):
+// آی‌پی برتر ۱۰، رنج‌های IPv4/IPv6، دامنه‌های 直连، دامنه‌های ECH و استخر ProxyIP.
 async function poolFetchFresh() {
-  const [ips, ip6, dom, echDom, echDns, edgeList] = await Promise.all([
-    poolFetchText(EDGE_MIRROR_SOURCES.ipv4),
-    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.ipv6),
-    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.domains),
+  const uniq = list => [...new Set(list.filter(Boolean))];
+  const v4Urls = uniq([EDGE_MIRROR_SOURCES.ipv4, ...IP_CANDIDATE_SOURCES, ...CFNEW_IPV4_SOURCES]);
+  const v6Urls = uniq([IPV6_CANDIDATE_SOURCES[0], EDGE_MIRROR_SOURCES.ipv6, ...IPV6_CANDIDATE_SOURCES, ...CFNEW_IPV6_SOURCES]);
+  const domUrls = uniq([EDGE_MIRROR_SOURCES.domains, ...DOMAIN_CANDIDATE_SOURCES, EDGE_LIST_URL]);
+  const proxyUrls = uniq(CFNEW_PROXYIP_SOURCES);
+
+  // هر دسته حداکثر ۴ فید و همه هم‌زمان؛ سقف subrequest ورکر رعایت می‌شود
+  const fetchMany = urls => Promise.all(urls.slice(0, 4).map(url => poolFetchText(url)));
+  const [v4Texts, v6Texts, domTexts, proxyTexts, echDom, echDns] = await Promise.all([
+    fetchMany(v4Urls),
+    fetchMany(v6Urls),
+    fetchMany(domUrls),
+    fetchMany(proxyUrls),
     poolFetchText(EDGE_MIRROR_SOURCES.echDomains),
-    poolFetchText(EDGE_MIRROR_SOURCES.echDns),
-    poolFetchText(EDGE_LIST_URL, 2000)
+    poolFetchText(EDGE_MIRROR_SOURCES.echDns)
   ]);
-  const v4Parsed = poolParseAddressLines(ips);
-  const v6Parsed = poolParseAddressLines(ip6);
-  const domParsed = poolParseAddressLines(dom);
+
+  const flat = (texts) => texts.flatMap(text => {
+    const parsed = poolParseAddressLines(text);
+    return [...parsed.hosts, ...parsed.domains];
+  });
+
+  // ProxyIP های زندهٔ فیدها: دامنه‌های ProxyIP.* منطقه‌دار و بقیه به‌عنوان مولتی
+  const proxyIps = [];
+  const proxySeen = new Set();
+  for (const text of proxyTexts) {
+    for (const rawLine of String(text || '').split(/[\r\n]+/)) {
+      let line = rawLine.trim();
+      if (!line || line.length > 120) continue;
+      line = line.replace(/^[a-z0-9+.-]+:\/\//i, '').split('#')[0].split('|')[0].split(',')[0].trim();
+      const host = line.split('/')[0].replace(/^\[|\].*$/g, '').split(':')[0].trim().toLowerCase();
+      if (!host || !isValidDomain(host) || proxySeen.has(host)) continue;
+      proxySeen.add(host);
+      const region = (host.match(/proxyip\.([a-z]{2})\./i) || [])[1] || '';
+      proxyIps.push({ domain: host, region: region ? region.toUpperCase() : 'Multi' });
+      if (proxyIps.length >= 60) break;
+    }
+  }
+
+  const domParsedAll = domTexts.map(text => poolParseAddressLines(text));
   const echParsed = poolParseAddressLines(echDom);
-  const edgeParsed = poolParseAddressLines(edgeList);
-  const dnsParsed = poolParseAddressLines(echDns);
   return {
-    ipv4: v4Parsed.hosts,
-    ipv6: v6Parsed.hosts,
-    domains: [...domParsed.domains, ...edgeParsed.domains, ...edgeParsed.hosts],
+    ipv4: [...flat(v4Texts), ...domParsedAll.flatMap(parsed => parsed.hosts)],
+    ipv6: flat(v6Texts),
+    domains: domParsedAll.flatMap(parsed => parsed.domains),
     echDomains: echParsed.domains,
-    echDns: dnsParsed.hosts
+    echDns: poolParseAddressLines(echDns).hosts,
+    proxyIps
   };
 }
 
 // استخر لبه برای یک درخواست ساب‌لینک. مسیر پیش‌فرض: پاسخ فوری از استخر داخلی و
 // در صورت داشتن waitUntil، تازه‌سازی در پس‌زمینه (بدون تأخیر برای کاربر).
+// خواندن آخرین استخر زنده از Cache API — برای ایزولهٔ تازه که هنوز حافظه ندارد
+async function poolReadCache() {
+  const cache = poolGetCache();
+  if (!cache) return null;
+  try {
+    const hit = await cache.match(`${POOL_CACHE_BASE}/v1`);
+    if (!hit) return null;
+    const data = await hit.json();
+    if (!data || !Array.isArray(data.ipv4) || !data.ipv4.length) return null;
+    return data;
+  } catch (_e) {
+    return null;
+  }
+}
+
 async function getEdgePool(cfg = {}, options = {}) {
   const now = Date.now();
   if (memoryPool.value && now - memoryPool.at < POOL_TTL_MS) return memoryPool.value;
 
   const builtin = poolBuiltin();
+  // ایزولهٔ سرد (مثلاً بعد از استقرار تازه): آخرین استخر زنده‌ای که در Cache API
+  // ذخیره شده فوراً برگردانده می‌شود و در پس‌زمینه تازه می‌شود؛ پس کاربر هیچ‌وقت
+  // با لیست ثابت و کهنه روبه‌رو نمی‌شود.
+  if (!memoryPool.value) {
+    const cached = await poolReadCache();
+    if (cached) memoryPool = { at: now - POOL_TTL_MS, value: cached };
+  }
 
   const refresh = async () => {
     if (inflight) return inflight;
@@ -2887,6 +2965,7 @@ async function getEdgePool(cfg = {}, options = {}) {
       try {
         const fetched = await poolFetchFresh();
         const merged = poolMergeFetched(builtin, fetched);
+        lastLiveAt = Date.now();
         memoryPool = { at: Date.now(), value: merged };
         const cache = poolGetCache();
         if (cache) {
@@ -2912,19 +2991,23 @@ async function getEdgePool(cfg = {}, options = {}) {
     return inflight;
   };
 
-  // ورکر: تازه‌سازی پس‌زمینه تا اولین بازدید کاربر هم کند نشود
+  // تازه‌سازی همیشه شروع می‌شود؛ اگر waitUntil باشد در پس‌زمینه ادامه می‌دهد
+  const live = refresh();
   if (options.waitUntil) {
-    try { options.waitUntil(refresh()); } catch (_e) {}
-  } else if (options.awaitRefresh !== false && options.allowNetwork !== false && !memoryPool.value) {
-    // فقط وقتی هیچ استخری در حافظه نیست و امکان شبکه هست، منتظر می‌مانیم
+    try { options.waitUntil(live); } catch (_e) {}
+  }
+
+  // اگر استخری در حافظه یا کش نیست، حداکثر ۲.۶ ثانیه منتظر لیست زنده می‌مانیم
+  // تا همان اولین درخواست هم از منابع به‌روز ساخته شود.
+  if (!memoryPool.value && options.allowNetwork !== false && options.awaitRefresh !== false) {
     const merged = await Promise.race([
-      refresh(),
-      new Promise(resolve => setTimeout(() => resolve(builtin), POOL_FETCH_TIMEOUT_MS + 300))
+      live,
+      new Promise(resolve => setTimeout(() => resolve(null), POOL_COLD_WAIT_MS))
     ]);
     return merged || builtin;
   }
 
-  return builtin;
+  return memoryPool.value || builtin;
 }
 
 // تازه‌سازی اجباری (کرون) — خروجی خلاصه برای لاگ
@@ -2932,13 +3015,29 @@ async function warmEdgePool() {
   const builtin = poolBuiltin();
   const fetched = await poolFetchFresh();
   const merged = poolMergeFetched(builtin, fetched);
+  lastLiveAt = Date.now();
   memoryPool = { at: Date.now(), value: merged };
+  const cache = poolGetCache();
+  if (cache) {
+    try {
+      await cache.put(
+        `${POOL_CACHE_BASE}/v1`,
+        new Response(JSON.stringify(merged), {
+          headers: {
+            'content-type': 'application/json',
+            'cache-control': `max-age=${Math.floor(POOL_TTL_MS / 1000)}`
+          }
+        })
+      );
+    } catch (_e) {}
+  }
   return {
     ipv4: merged.ipv4.length,
     ipv6: merged.ipv6.length,
     domains: merged.domains.length,
     echDomains: merged.echDomains.length,
-    echDns: merged.echDns.length
+    echDns: merged.echDns.length,
+    proxyIps: merged.proxyIps.length
   };
 }
 
@@ -6276,6 +6375,36 @@ async function getVerifiedCountryProxies(code, urls, options = {}) {
   return list;
 }
 
+// ---------------------------------------------------------------------------
+// دامنه‌های SNI/Host
+// بعضی نصب‌ها چند دامنه دارند که همه به همین ورکر وصل‌اند (دامنهٔ سفارشی،
+// چند دامنهٔ ثبت‌شده روی اکانت و …). این دامنه‌ها در تنظیمات وارد می‌شوند و
+// نودها به ترتیب بین آن‌ها می‌چرخند تا اگر یک دامنه کند/مسدود شد بقیه کار کنند.
+// فقط دامنه‌هایی که واقعاً به همین ورکر مسیر می‌شوند معتبرند؛ دامنهٔ دلخواه باعث
+// می‌شود نود به سایت دیگری وصل شود.
+// ---------------------------------------------------------------------------
+function resolveFrontHosts(workerHost, cfg = {}) {
+  const out = [];
+  const push = (value) => {
+    const host = normalizeNodeHost(value);
+    if (!host) return;
+    if (out.some(item => item.toLowerCase() === host.toLowerCase())) return;
+    out.push(host);
+  };
+  push(workerHost);
+  const raw = String(cfg.sniHosts || '')
+    .split(/[,\n]+/)
+    .map(item => item.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, ''))
+    .filter(Boolean);
+  raw.forEach(push);
+  return out;
+}
+
+function frontHostFor(item, fallbackHost) {
+  const host = item && item.frontHost ? String(item.frontHost).trim() : '';
+  return host || fallbackHost;
+}
+
 function buildVlessLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
   const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
   const defaultHttps = [443];
@@ -6293,6 +6422,7 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
 
     // مسیر یکتا برای نوع نود + کشور؛ پروکسی خروجی هم داخل همان مسیر به ورکر داده می‌شود
     const itemPath = buildNodePath('vless', cfg, wkOverride, item);
+    const nodeHost = frontHostFor(item, workerHost);
 
     for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
       const nodeName = buildNodeDisplayName({
@@ -6306,10 +6436,10 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
         const params = new URLSearchParams({
           encryption: 'none',
           security: 'tls',
-          sni: workerHost,
+          sni: nodeHost,
           fp: cfg.fp || 'chrome',
           type: 'ws',
-          host: workerHost,
+          host: nodeHost,
           path: itemPath
         });
         if (alpn) params.set('alpn', alpn);
@@ -6321,7 +6451,7 @@ function buildVlessLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
           encryption: 'none',
           security: 'none',
           type: 'ws',
-          host: workerHost,
+          host: nodeHost,
           path: itemPath
         });
         links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'vless', rawHost, item, tls));
@@ -6370,7 +6500,7 @@ function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
     const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
     const nodeName = buildNodeDisplayName({ proto: 'ss', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     const itemPath = buildNodePath('ss', cfg, '', item);
-    const pluginOpts = `v2ray-plugin;mode=websocket;host=${workerHost};path=${itemPath};tls`;
+    const pluginOpts = `v2ray-plugin;mode=websocket;host=${frontHostFor(item, workerHost)};path=${itemPath};tls`;
     links.push(
       makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
     );
@@ -6411,6 +6541,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
 
     {
       const itemPath = buildNodePath('trojan', cfg, wkOverride, item);
+      const nodeHost = frontHostFor(item, workerHost);
       for (const { port, tls } of buildPortVariants(cfg, item, idx)) {
         const nodeName = buildNodeDisplayName({
           proto: 'trojan',
@@ -6422,10 +6553,10 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
         if (tls) {
           const params = new URLSearchParams({
             security: 'tls',
-            sni: workerHost,
+            sni: nodeHost,
             fp: cfg.fp || 'chrome',
             type: 'ws',
-            host: workerHost,
+            host: nodeHost,
             path: itemPath
           });
           if (alpn) params.set('alpn', alpn);
@@ -6436,7 +6567,7 @@ function buildTrojanLinks(list, userUuid, workerHost, cfg, wkOverride = '') {
           const params = new URLSearchParams({
             security: 'none',
             type: 'ws',
-            host: workerHost,
+            host: nodeHost,
             path: itemPath
           });
           links.push(makeNodeEntry(`trojan://${encodeURIComponent(password)}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'trojan', rawHost, item, tls));
@@ -6467,13 +6598,14 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg) {
     const xhttpCountry = String(item.country || '').trim().toUpperCase();
     if (/^[A-Z]{2}$/.test(xhttpCountry)) xhttpPath += `&cc=${xhttpCountry}`;
     if (item.proxy) xhttpPath += `&s=${encodeProxyForPath(item.proxy)}`;
+    const nodeHost = frontHostFor(item, workerHost);
     const params = new URLSearchParams({
       encryption: 'none',
       security: 'tls',
-      sni: workerHost,
+      sni: nodeHost,
       fp: cfg.fp || 'chrome',
       type: 'xhttp',
-      host: workerHost,
+      host: nodeHost,
       path: xhttpPath,
       mode: 'stream-one'
     });
@@ -7710,11 +7842,12 @@ async function fetchPreferredIpsCached(cfg = {}, env = null) {
 // کش کوتاه‌مدت لیست نودها: پاسخ یکسان برای همان کاربر/تنظیمات تا نودها بین
 // دو بار خواندن ساب‌لینک (پینگ، بروزرسانی کلاینت) جابه‌جا نشوند و ساب صفحهٔ
 // وضعیت و تب لوکیشن دقیقاً هماهنگ باشند.
-const NODES_CACHE_TTL = 15 * 60 * 1000;
+//Cache کوتاه‌تر از TTL استخر است تا آدرس‌های تازهٔ منابع cfnew زودتر در ساب نشینند
+const NODES_CACHE_TTL = 5 * 60 * 1000;
 const NODES_CACHE_MAX = 80;
 const nodesCache = new Map();
 
-function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}) {
+function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}, epoch = 0) {
   const uuid = String(userOrConfig?.uuid || overrides.uuid || 'default').toLowerCase();
   const params = [
     overrides.set || '', overrides.country || '', overrides.region || '',
@@ -7722,7 +7855,20 @@ function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}) {
     overrides.wk || '', overrides.scope || userOrConfig?.nodeScope || 'all',
     overrides.nowarp || ''
   ].join('|');
-  return `${workerHost}|${uuid}|${stableAddressSeed(JSON.stringify(cfg))}|${params}`;
+  return `${workerHost}|${uuid}|${stableAddressSeed(JSON.stringify(cfg))}|${params}|e${epoch}`;
+}
+
+// ---------------------------------------------------------------------------
+// نوبت بروزرسانی (refresh epoch)
+// آدرس نودها باید با هر بروزرسانی در کلاینت تازه شود، ولی با پینگ‌گرفتن یا
+// درخواست تکراری نباید بپرد. «نوبت» را از پنجرهٔ زمانی سراسری می‌گیریم (نه از
+// حافظهٔ یک ایزوله) تا همهٔ ایزوله‌ها و همهٔ درخواست‌های یک کلاینت در یک پنجره
+// دقیقاً همان مجموعه آدرس را ببینند و فقط با شروع پنجرهٔ بعدی آدرس تازه بیاید.
+// ---------------------------------------------------------------------------
+const REFRESH_EPOCH_MS = 5 * 60 * 1000;
+
+function nextRefreshEpoch(_key = '') {
+  return Math.floor(Date.now() / REFRESH_EPOCH_MS);
 }
 
 function rememberNodes(key, links) {
@@ -7739,13 +7885,16 @@ function rememberNodes(key, links) {
 async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = {}) {
   const rawCfg = userOrConfig?.config ? userOrConfig.config : (userOrConfig || {});
   const cfg = normalizeEffectiveConfig(rawCfg);
-  const cachedKey = buildNodesCacheKey(workerHost, userOrConfig, cfg, queryOverrides);
+  const rotationEpoch = nextRefreshEpoch(String(userOrConfig?.uuid || queryOverrides.uuid || 'anonymous'));
+  const cachedKey = buildNodesCacheKey(workerHost, userOrConfig, cfg, queryOverrides, rotationEpoch);
   const cached = nodesCache.get(cachedKey);
   if (cached && Date.now() - cached.at < NODES_CACHE_TTL) return cached.links.slice();
   // استخر لبهٔ ترکیبی دامنه/آی‌پی: پاسخ فوری از فهرست داخلی و تازه‌سازی
   // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
   const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
   const userUuid = String(userOrConfig?.uuid || queryOverrides.uuid || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase();
+  // بذر انتخاب آدرس: شناسهٔ کاربر + نوبت بروزرسانی (نه زمان لحظه‌ای)
+  const addrSeed = `${userUuid}~e${rotationEpoch}`;
   const nodeScope = queryOverrides.scope || userOrConfig?.nodeScope || 'all';
   const wkOverride = (queryOverrides.wk || cfg.wk || '').trim().toUpperCase();
   const protoFilter = (queryOverrides.proto || '').trim().toLowerCase();
@@ -7795,13 +7944,26 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   // شادوساکس هیچ‌وقت پارامتر fragment نمی‌گیرد و همیشه در سابلینک می‌ماند.
   cfg.fragmentValue = buildFragmentValue(cfg);
 
+  // دامنه‌های SNI/Host: ابتدا مقدار خود کاربر، بعد تنظیمات کلی پنل (چون این
+  // فهرست یک تنظیم نصب است و معمولاً فقط روی تنظیمات کلی ست می‌شود).
+  const globalSniHosts = queryOverrides.sniHosts
+    || (queryOverrides.globalCfg && queryOverrides.globalCfg.sniHosts)
+    || '';
+  const frontHosts = resolveFrontHosts(workerHost, {
+    sniHosts: String(cfg.sniHosts || '').trim() ? cfg.sniHosts : globalSniHosts
+  });
+  let frontCursor = 0;
+
   function appendFromSource(sourceList) {
     const safeList = filterAddressFamily(sourceList, cfg);
     if (!Array.isArray(safeList) || safeList.length === 0) return;
-    if (evEnabled) protoGroups.vless.push(...buildVlessLinks(safeList, userUuid, workerHost, cfg, wkOverride));
-    if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(safeList, userUuid, workerHost, cfg, wkOverride));
-    if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(safeList, userUuid, workerHost, cfg));
-    if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(safeList, userUuid, workerHost, cfg));
+    const decorated = frontHosts.length > 1
+      ? safeList.map(item => ({ ...item, frontHost: frontHosts[(frontCursor++) % frontHosts.length] }))
+      : safeList;
+    if (evEnabled) protoGroups.vless.push(...buildVlessLinks(decorated, userUuid, workerHost, cfg, wkOverride));
+    if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(decorated, userUuid, workerHost, cfg, wkOverride));
+    if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(decorated, userUuid, workerHost, cfg));
+    if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(decorated, userUuid, workerHost, cfg));
   }
 
   // ساب اختصاصی IPv6: همهٔ آی‌پی‌های نسخه ۶ استخر + آی‌پی‌های رسمی کلادفلر
@@ -7809,7 +7971,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     // فهرست رسمی IPv6 کلادفلر (ثابت) + استخر زنده به‌صورت مرتب‌شده
     const v6Pool = [
       ...OFFICIAL_DIRECT_IPV6,
-      ...pickStableAddresses(edgePool.ipv6, 12, userUuid + '-v6')
+      ...pickStableAddresses(edgePool.ipv6, 12, addrSeed + '-v6')
     ].filter(Boolean);
     appendFromSource(v6Pool.map(ip => ({ ip, isp: 'CF-IPv6', family: 'ipv6' })));
   }
@@ -7833,7 +7995,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     const domains = pickStableAddresses(
       [...DIRECT_DOMAINS.map(d => d.domain), ...edgePool.domains],
       addressCount,
-      userUuid + '-dom'
+      addrSeed + '-dom'
     );
     appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
   }
@@ -7867,7 +8029,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
         proxyPool.push({ proxy: item.proxy, country: code, unverified: item.unverified === true });
       }
     });
-    const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost, userUuid + ':country');
+    const locationNodes = buildLocationSourceList(proxyPool, cfg, workerHost, addrSeed + ':country');
     if (locationNodes.length > 0) {
       appendFromSource(locationNodes);
       countryMode = true;
@@ -7892,7 +8054,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
   if (!domainMode && !ipv6Mode && !countryMode && customProxies.length > 0) {
-    appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost, userUuid + ':custom'));
+    appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost, addrSeed + ':custom'));
   }
 
   if (!domainMode && !ipv6Mode && !disablePreferred && !countryMode) {
@@ -7910,13 +8072,13 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
       // آی‌پی ثابت در کلاینت: فقط از فهرست‌های ثابت (رسمی کلادفلر و ۲۱ دامنهٔ
       // cfnew) با ترتیب هش‌محور انتخاب می‌شود تا با هر بار خواندن ساب عوض نشود.
       const pooledAddresses = [
-        ...pickStableAddresses(OFFICIAL_DIRECT_IPS, 8, userUuid + '-v4'),
-        ...(cfg.ipv6 === 'no' ? [] : pickStableAddresses(OFFICIAL_DIRECT_IPV6, 4, userUuid + '-v6'))
+        ...pickStableAddresses(OFFICIAL_DIRECT_IPS, 8, addrSeed + '-v4'),
+        ...(cfg.ipv6 === 'no' ? [] : pickStableAddresses(OFFICIAL_DIRECT_IPV6, 4, addrSeed + '-v6'))
       ];
       const staticIpNodes = cfg.epi === 'yes'
         ? pooledAddresses.map(ip => ({ ip, isp: 'CF-Fast' }))
         : [];
-      const pooledDomains = pickStableAddresses(DIRECT_DOMAINS.map(d => d.domain), 9, userUuid + '-dom');
+      const pooledDomains = pickStableAddresses(DIRECT_DOMAINS.map(d => d.domain), 9, addrSeed + '-dom');
       const domainNodes = cfg.epd === 'yes'
         ? pooledDomains.map(domain => ({ ip: domain, isp: domain }))
         : [];
@@ -7930,7 +8092,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
           // ترتیب پایدار: از بین آی‌پی‌های برگشتی، همیشه همان تعداد ثابت و با
           // ترتیب هش‌محور انتخاب می‌شود تا آدرس‌ها بین دو درخواست نبض نزنند.
           const byHost = new Map(uouinList.map(item => [String(item.ip), item]));
-          const stable = pickStableAddresses([...byHost.keys()], 6, userUuid + '-uouin')
+          const stable = pickStableAddresses([...byHost.keys()], 6, addrSeed + '-uouin')
             .map(ip => byHost.get(ip))
             .filter(Boolean);
           appendFromSource(stable);
@@ -7946,7 +8108,7 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
           appendFromSource(ipOnly);
         }
         if (proxyOnly.length > 0) {
-          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, userUuid + ':url'));
+          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, addrSeed + ':url'));
         }
       }
       // ترکیب خانواده‌ها در ساب‌لینک اصلی: بخشی از نودها IPv6 و بخشی دامنه‌محور
@@ -7965,14 +8127,14 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
             const v6List = pickStableAddresses(
               [...OFFICIAL_DIRECT_IPV6, ...edgePool.ipv6],
               v6Wanted,
-              userUuid + '-mix-v6'
+              addrSeed + '-mix-v6'
             ).filter(Boolean);
             appendFromSource(v6List.map(ip => ({ ip, port: 443, isp: 'CF-IPv6', family: 'ipv6' })));
           }
           const domList = pickStableAddresses(
             [...DIRECT_DOMAINS.map(d => d.domain), ...edgePool.domains],
             domWanted,
-            userUuid + '-mix-dom'
+            addrSeed + '-mix-dom'
           ).filter(Boolean);
           appendFromSource(domList.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
         }
@@ -8158,6 +8320,13 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
     scope: url.searchParams.get('scope') || userOrConfig?.nodeScope || 'all',
     limit: url.searchParams.get('limit') !== null ? url.searchParams.get('limit') : undefined
   };
+
+  // تنظیمات کلی پنل برای فهرست دامنه‌های SNI/Host (تنظیم نصب، نه تنظیم کاربر)
+  if (env && !queryOverrides.globalCfg) {
+    try {
+      queryOverrides.globalCfg = await loadGlobalConfig(env);
+    } catch (_e) {}
+  }
 
   const finalLinks = await generateUserNodesList(userOrConfig, workerHost, queryOverrides);
 
@@ -8525,17 +8694,80 @@ function openRawSocket(address, port, fetcher = null, options = undefined) {
   return options === undefined ? cfConnect(target) : cfConnect(target, options);
 }
 
+// اتصال مستقیم ورکر به بعضی مقصدها (مثل سایت‌های پشت خود کلادفلر) یا بی‌صدا
+// معلق می‌ماند یا رد می‌شود. بدون مهلت، retryConnect هیچ‌وقت اجرا نمی‌شد و همان
+// نود در کلاینت «بعضی سایت‌ها را باز نمی‌کند»؛ پس هر اتصال مهلت سخت دارد.
+const CONNECT_TIMEOUT_MS = 2200;
+
+function raceTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(label || 'connect-timeout'));
+    }, ms);
+    promise.then(value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    }, err => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 async function openVerifiedSocket(address, port, fetcher = null) {
   try {
     const sock = openRawSocket(address, port, fetcher);
-    if (sock?.opened) await sock.opened;
+    if (sock?.opened) await raceTimeout(sock.opened, CONNECT_TIMEOUT_MS, 'direct-timeout');
     return sock;
   } catch (err) {
     if (!fetcher) throw err;
     const sock = cfConnect({ hostname: address, port });
-    if (sock?.opened) await sock.opened;
+    if (sock?.opened) await raceTimeout(sock.opened, CONNECT_TIMEOUT_MS, 'direct-timeout');
     return sock;
   }
+}
+
+// مقصدهایی که مسیر مستقیم برایشان جواب نداده (معمولاً پشت کلادفلر هستند) در
+// حافظهٔ ایزوله علامت می‌خورند تا اتصال بعدی همان سایت معطل ۲ ثانیه‌ای نشود.
+const DEAD_DIRECT_HOSTS = new Map();
+const DEAD_DIRECT_TTL_MS = 10 * 60 * 1000;
+
+function markDirectDead(host) {
+  if (!host) return;
+  DEAD_DIRECT_HOSTS.set(String(host).toLowerCase(), Date.now() + DEAD_DIRECT_TTL_MS);
+  if (DEAD_DIRECT_HOSTS.size > 400) {
+    const now = Date.now();
+    for (const [key, until] of DEAD_DIRECT_HOSTS) if (until <= now) DEAD_DIRECT_HOSTS.delete(key);
+  }
+}
+
+function isDirectMarkedDead(host) {
+  const key = String(host || '').toLowerCase();
+  const until = DEAD_DIRECT_HOSTS.get(key);
+  if (!until) return false;
+  if (until <= Date.now()) {
+    DEAD_DIRECT_HOSTS.delete(key);
+    return false;
+  }
+  return true;
+}
+
+// آیا بستهٔ اول کلاینت یک TLS ClientHello با SNI است؟ (شرط کار کردن ProxyIP)
+function hasTlsClientHello(bytes) {
+  if (!bytes || bytes.byteLength < 6) return false;
+  if (bytes[0] !== 0x16 || bytes[1] !== 0x03) return false;
+  for (let i = 5; i < Math.min(bytes.byteLength, 2200); i++) {
+    // امتداد server_name در ClientHello
+    if (bytes[i] === 0x00 && bytes[i + 1] === 0x00) return true;
+  }
+  return false;
 }
 
 async function connectRacedSocket(address, port, fetcher = null, raceCount = 1) {
@@ -9019,9 +9251,15 @@ async function establishOutboundAndPipe(
   }
 
   async function connectAndSend(targetHost, targetPort, useProxy = false) {
+    if (!useProxy && isDirectMarkedDead(targetHost)) {
+      throw new Error('direct-blocked-host');
+    }
     const remoteSock = useProxy
       ? await connectViaOutboundProxy(addressType, targetHost, targetPort, parsedProxy, fetcher, firstPacket)
-      : await connectRacedSocket(targetHost, targetPort, fetcher, CONNECT_RACE_COUNT);
+      : await connectRacedSocket(targetHost, targetPort, fetcher, CONNECT_RACE_COUNT).catch((err) => {
+          markDirectDead(targetHost);
+          throw err;
+        });
     const writer = remoteSock.writable.getWriter();
     if (!useProxy && firstPacket.byteLength) await writer.write(firstPacket);
     return { remoteSock, writer };
@@ -9054,10 +9292,24 @@ async function establishOutboundAndPipe(
     });
   }
 
-  async function retryConnect() {
+  async function retryConnect(mode = 'fail') {
     if (proxyOnly && proxyEnabled) {
       closeSocketSafe(ws);
       return;
+    }
+    // بستن ناگهانی مقصد: اول همان مقصد اصلی را یک بار دیگر امتحان کن؛ اگر نشد،
+    // مسیر جایگزین (ProxyIP) فقط وقتی معنا دارد که بستهٔ کلاینت TLS با SNI باشد.
+    if (mode === 'close' && !(downgradeEnabled && proxyEnabled)) {
+      try {
+        const { remoteSock, writer } = await connectAndSend(host, port, false);
+        bindRemote(remoteSock, writer, () => { detachIfCurrent(remoteSock, writer); retryConnect('close'); });
+        return;
+      } catch (_retryErr) {
+        if (!hasTlsClientHello(firstPacket) && !fallbackAddr) {
+          closeSocketSafe(ws);
+          return;
+        }
+      }
     }
     if (downgradeEnabled && proxyEnabled) {
       try {
@@ -9107,10 +9359,10 @@ async function establishOutboundAndPipe(
     const { remoteSock, writer } = await connectAndSend(host, port, firstHopProxy);
     bindRemote(remoteSock, writer, () => {
       detachIfCurrent(remoteSock, writer);
-      retryConnect();
+      retryConnect('close');
     });
   } catch (_err) {
-    await retryConnect();
+    await retryConnect('fail');
   }
 }
 
@@ -15338,7 +15590,8 @@ ${PWA_HEAD_TAGS}
         { key: 'homepage', section: 'دسترسی و مسیر', label: 'صفحهٔ استتار', type: 'text', def: '', list: 'dlHomepage' },
         { key: 'scu', section: 'دسترسی و مسیر', label: 'سرویس تبدیل اشتراک', type: 'text', def: '', list: 'dlScu' },
         { key: 'pd', section: 'دامنهٔ پنل', label: 'نود با دامنهٔ پنل', type: 'switch', def: 'no' },
-        { key: 'pdCount', section: 'دامنهٔ پنل', label: 'تعداد نود دامنهٔ پنل', type: 'number', def: 2, min: 0, max: 20 }
+        { key: 'pdCount', section: 'دامنهٔ پنل', label: 'تعداد نود دامنهٔ پنل', type: 'number', def: 2, min: 0, max: 20 },
+        { key: 'sniHosts', section: 'دامنهٔ پنل', label: 'دامنه‌های SNI و Host', type: 'text', def: '', hint: 'کاما بین دامنه‌ها؛ هر دامنه باید به همین ورکر وصل باشد. نودها به ترتیب بین این دامنه‌ها می‌چرخند (خالی = فقط دامنهٔ همین ورکر).' }
       ]
     },
     {

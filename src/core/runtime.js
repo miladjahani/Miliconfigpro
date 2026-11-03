@@ -280,17 +280,80 @@ function openRawSocket(address, port, fetcher = null, options = undefined) {
   return options === undefined ? cfConnect(target) : cfConnect(target, options);
 }
 
+// اتصال مستقیم ورکر به بعضی مقصدها (مثل سایت‌های پشت خود کلادفلر) یا بی‌صدا
+// معلق می‌ماند یا رد می‌شود. بدون مهلت، retryConnect هیچ‌وقت اجرا نمی‌شد و همان
+// نود در کلاینت «بعضی سایت‌ها را باز نمی‌کند»؛ پس هر اتصال مهلت سخت دارد.
+const CONNECT_TIMEOUT_MS = 2200;
+
+function raceTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(label || 'connect-timeout'));
+    }, ms);
+    promise.then(value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    }, err => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 async function openVerifiedSocket(address, port, fetcher = null) {
   try {
     const sock = openRawSocket(address, port, fetcher);
-    if (sock?.opened) await sock.opened;
+    if (sock?.opened) await raceTimeout(sock.opened, CONNECT_TIMEOUT_MS, 'direct-timeout');
     return sock;
   } catch (err) {
     if (!fetcher) throw err;
     const sock = cfConnect({ hostname: address, port });
-    if (sock?.opened) await sock.opened;
+    if (sock?.opened) await raceTimeout(sock.opened, CONNECT_TIMEOUT_MS, 'direct-timeout');
     return sock;
   }
+}
+
+// مقصدهایی که مسیر مستقیم برایشان جواب نداده (معمولاً پشت کلادفلر هستند) در
+// حافظهٔ ایزوله علامت می‌خورند تا اتصال بعدی همان سایت معطل ۲ ثانیه‌ای نشود.
+const DEAD_DIRECT_HOSTS = new Map();
+const DEAD_DIRECT_TTL_MS = 10 * 60 * 1000;
+
+function markDirectDead(host) {
+  if (!host) return;
+  DEAD_DIRECT_HOSTS.set(String(host).toLowerCase(), Date.now() + DEAD_DIRECT_TTL_MS);
+  if (DEAD_DIRECT_HOSTS.size > 400) {
+    const now = Date.now();
+    for (const [key, until] of DEAD_DIRECT_HOSTS) if (until <= now) DEAD_DIRECT_HOSTS.delete(key);
+  }
+}
+
+function isDirectMarkedDead(host) {
+  const key = String(host || '').toLowerCase();
+  const until = DEAD_DIRECT_HOSTS.get(key);
+  if (!until) return false;
+  if (until <= Date.now()) {
+    DEAD_DIRECT_HOSTS.delete(key);
+    return false;
+  }
+  return true;
+}
+
+// آیا بستهٔ اول کلاینت یک TLS ClientHello با SNI است؟ (شرط کار کردن ProxyIP)
+function hasTlsClientHello(bytes) {
+  if (!bytes || bytes.byteLength < 6) return false;
+  if (bytes[0] !== 0x16 || bytes[1] !== 0x03) return false;
+  for (let i = 5; i < Math.min(bytes.byteLength, 2200); i++) {
+    // امتداد server_name در ClientHello
+    if (bytes[i] === 0x00 && bytes[i + 1] === 0x00) return true;
+  }
+  return false;
 }
 
 export async function connectRacedSocket(address, port, fetcher = null, raceCount = 1) {
@@ -774,9 +837,15 @@ async function establishOutboundAndPipe(
   }
 
   async function connectAndSend(targetHost, targetPort, useProxy = false) {
+    if (!useProxy && isDirectMarkedDead(targetHost)) {
+      throw new Error('direct-blocked-host');
+    }
     const remoteSock = useProxy
       ? await connectViaOutboundProxy(addressType, targetHost, targetPort, parsedProxy, fetcher, firstPacket)
-      : await connectRacedSocket(targetHost, targetPort, fetcher, CONNECT_RACE_COUNT);
+      : await connectRacedSocket(targetHost, targetPort, fetcher, CONNECT_RACE_COUNT).catch((err) => {
+          markDirectDead(targetHost);
+          throw err;
+        });
     const writer = remoteSock.writable.getWriter();
     if (!useProxy && firstPacket.byteLength) await writer.write(firstPacket);
     return { remoteSock, writer };
@@ -809,10 +878,24 @@ async function establishOutboundAndPipe(
     });
   }
 
-  async function retryConnect() {
+  async function retryConnect(mode = 'fail') {
     if (proxyOnly && proxyEnabled) {
       closeSocketSafe(ws);
       return;
+    }
+    // بستن ناگهانی مقصد: اول همان مقصد اصلی را یک بار دیگر امتحان کن؛ اگر نشد،
+    // مسیر جایگزین (ProxyIP) فقط وقتی معنا دارد که بستهٔ کلاینت TLS با SNI باشد.
+    if (mode === 'close' && !(downgradeEnabled && proxyEnabled)) {
+      try {
+        const { remoteSock, writer } = await connectAndSend(host, port, false);
+        bindRemote(remoteSock, writer, () => { detachIfCurrent(remoteSock, writer); retryConnect('close'); });
+        return;
+      } catch (_retryErr) {
+        if (!hasTlsClientHello(firstPacket) && !fallbackAddr) {
+          closeSocketSafe(ws);
+          return;
+        }
+      }
     }
     if (downgradeEnabled && proxyEnabled) {
       try {
@@ -862,10 +945,10 @@ async function establishOutboundAndPipe(
     const { remoteSock, writer } = await connectAndSend(host, port, firstHopProxy);
     bindRemote(remoteSock, writer, () => {
       detachIfCurrent(remoteSock, writer);
-      retryConnect();
+      retryConnect('close');
     });
   } catch (_err) {
-    await retryConnect();
+    await retryConnect('fail');
   }
 }
 

@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.5.2';
+export const VERSION = 'v3.5.5';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
@@ -125,6 +125,8 @@ export const CONFIG_DEFAULTS = {
   // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
   pd: 'no',
   pdCount: 2,
+  // دامنه‌های اضافی SNI/Host (کاما) — هر دامنه باید به همین ورکر وصل باشد
+  sniHosts: '',
   // — WARP / WARP PRO / WARP چندلوکیشن
   warp: 'no',
   warpPro: 'no',
@@ -206,6 +208,7 @@ export const ENV_KEY_MAPPING = {
   locationNodeCount: ['locationNodeCount', 'LOCATION_NODE_COUNT'],
   pd: ['pd', 'PD', 'PANEL_DOMAIN_NODES'],
   pdCount: ['pdCount', 'PDCOUNT', 'PANEL_DOMAIN_NODE_COUNT'],
+  sniHosts: ['sniHosts', 'SNIHOSTS', 'SNI_HOSTS', 'CUSTOM_DOMAINS', 'FRONT_DOMAINS'],
   warp: ['warp', 'WARP'],
   warpPro: ['warpPro', 'WARPPRO', 'WARP_PRO'],
   warpMl: ['warpMl', 'WARPML', 'WARP_MULTI_LOCATION'],

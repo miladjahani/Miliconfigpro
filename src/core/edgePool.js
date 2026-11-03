@@ -17,12 +17,16 @@
 // ============================================================================
 
 import {
+  CFNEW_IPV4_SOURCES,
+  CFNEW_IPV6_SOURCES,
+  CFNEW_PROXYIP_SOURCES,
   DIRECT_EDGE_IPS,
   EDGE_LIST_URL,
   PREFERRED_EDGE_DOMAINS,
   EDGE_PROXY_IPS,
   DOMAIN_CANDIDATE_SOURCES,
   IPV6_CANDIDATE_SOURCES,
+  IP_CANDIDATE_SOURCES,
   EDGE_MIRROR_SOURCES
 } from '../config/sources.js';
 import {
@@ -34,8 +38,14 @@ import {
 } from '../config/defaults.js';
 import { isValidDomain, isValidIpAddress } from './utils.js';
 
-const POOL_TTL_MS = 30 * 60 * 1000;
+// استخرهای cfnew چند بار در روز عوض می‌شوند؛ با TTL کوتاه هر نصب همیشه به
+// نسخهٔ تازهٔ همان منابع وصل است و فقط اگر شبکه در دسترس نباشد به لیست داخلی
+// برمی‌گردد. عدد را عمداً کوچک گذاشتیم: خواندن لیست‌ها ارزان است.
+const POOL_TTL_MS = 10 * 60 * 1000;
 const POOL_FETCH_TIMEOUT_MS = 2500;
+// حداکثر صبر یک ایزولهٔ سرد برای گرفتن لیست زنده (بعد از آن همان استخر داخلی)
+// کوتاه است تا ساب‌لینک کند نشود؛ لیست زنده در همان درخواست بعدی می‌نشیند.
+const POOL_COLD_WAIT_MS = 700;
 const POOL_MAX_CHARS = 200000;
 const POOL_MAX_ITEMS = 240;
 const POOL_CACHE_BASE = 'https://edge-pool.miliconfig.internal';
@@ -198,9 +208,19 @@ function poolMergeFetched(builtin, fetched) {
     domains: [...builtin.domains],
     echDomains: [...builtin.echDomains],
     echDns: [...builtin.echDns],
-    proxyIps: builtin.proxyIps,
+    proxyIps: [...builtin.proxyIps],
     origin: 'live'
   };
+
+  // ProxyIP های زندهٔ فیدها (مناطق جدید مثل FR/GB یا استخرهای تازه) هم اضافه می‌شوند
+  const proxySeen = new Set(out.proxyIps.map(item => String(item.domain).toLowerCase()));
+  for (const item of (fetched.proxyIps || [])) {
+    const domain = String(item?.domain || '').toLowerCase();
+    if (!domain || proxySeen.has(domain) || !isValidDomain(domain)) continue;
+    proxySeen.add(domain);
+    out.proxyIps.push({ domain, region: item.region || 'Multi' });
+    if (out.proxyIps.length >= 80) break;
+  }
 
   for (const item of fetched.ipv4) {
     if (!isValidIpAddress(item) || !isCloudflareIpv4(item)) continue;
@@ -251,6 +271,7 @@ function poolParseAddressLines(text) {
 
 let memoryPool = { at: 0, value: null };
 let inflight = null;
+let lastLiveAt = 0;
 
 function poolGetCache() {
   try {
@@ -260,37 +281,89 @@ function poolGetCache() {
   }
 }
 
+// همهٔ فیدهای cfnew به‌صورت زنده خوانده می‌شوند (نه فقط اولین منبع هر دسته):
+// آی‌پی برتر ۱۰، رنج‌های IPv4/IPv6، دامنه‌های 直连، دامنه‌های ECH و استخر ProxyIP.
 async function poolFetchFresh() {
-  const [ips, ip6, dom, echDom, echDns, edgeList] = await Promise.all([
-    poolFetchText(EDGE_MIRROR_SOURCES.ipv4),
-    poolFetchText(IPV6_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.ipv6),
-    poolFetchText(DOMAIN_CANDIDATE_SOURCES[0] || EDGE_MIRROR_SOURCES.domains),
+  const uniq = list => [...new Set(list.filter(Boolean))];
+  const v4Urls = uniq([EDGE_MIRROR_SOURCES.ipv4, ...IP_CANDIDATE_SOURCES, ...CFNEW_IPV4_SOURCES]);
+  const v6Urls = uniq([IPV6_CANDIDATE_SOURCES[0], EDGE_MIRROR_SOURCES.ipv6, ...IPV6_CANDIDATE_SOURCES, ...CFNEW_IPV6_SOURCES]);
+  const domUrls = uniq([EDGE_MIRROR_SOURCES.domains, ...DOMAIN_CANDIDATE_SOURCES, EDGE_LIST_URL]);
+  const proxyUrls = uniq(CFNEW_PROXYIP_SOURCES);
+
+  // هر دسته حداکثر ۴ فید و همه هم‌زمان؛ سقف subrequest ورکر رعایت می‌شود
+  const fetchMany = urls => Promise.all(urls.slice(0, 4).map(url => poolFetchText(url)));
+  const [v4Texts, v6Texts, domTexts, proxyTexts, echDom, echDns] = await Promise.all([
+    fetchMany(v4Urls),
+    fetchMany(v6Urls),
+    fetchMany(domUrls),
+    fetchMany(proxyUrls),
     poolFetchText(EDGE_MIRROR_SOURCES.echDomains),
-    poolFetchText(EDGE_MIRROR_SOURCES.echDns),
-    poolFetchText(EDGE_LIST_URL, 2000)
+    poolFetchText(EDGE_MIRROR_SOURCES.echDns)
   ]);
-  const v4Parsed = poolParseAddressLines(ips);
-  const v6Parsed = poolParseAddressLines(ip6);
-  const domParsed = poolParseAddressLines(dom);
+
+  const flat = (texts) => texts.flatMap(text => {
+    const parsed = poolParseAddressLines(text);
+    return [...parsed.hosts, ...parsed.domains];
+  });
+
+  // ProxyIP های زندهٔ فیدها: دامنه‌های ProxyIP.* منطقه‌دار و بقیه به‌عنوان مولتی
+  const proxyIps = [];
+  const proxySeen = new Set();
+  for (const text of proxyTexts) {
+    for (const rawLine of String(text || '').split(/[\r\n]+/)) {
+      let line = rawLine.trim();
+      if (!line || line.length > 120) continue;
+      line = line.replace(/^[a-z0-9+.-]+:\/\//i, '').split('#')[0].split('|')[0].split(',')[0].trim();
+      const host = line.split('/')[0].replace(/^\[|\].*$/g, '').split(':')[0].trim().toLowerCase();
+      if (!host || !isValidDomain(host) || proxySeen.has(host)) continue;
+      proxySeen.add(host);
+      const region = (host.match(/proxyip\.([a-z]{2})\./i) || [])[1] || '';
+      proxyIps.push({ domain: host, region: region ? region.toUpperCase() : 'Multi' });
+      if (proxyIps.length >= 60) break;
+    }
+  }
+
+  const domParsedAll = domTexts.map(text => poolParseAddressLines(text));
   const echParsed = poolParseAddressLines(echDom);
-  const edgeParsed = poolParseAddressLines(edgeList);
-  const dnsParsed = poolParseAddressLines(echDns);
   return {
-    ipv4: v4Parsed.hosts,
-    ipv6: v6Parsed.hosts,
-    domains: [...domParsed.domains, ...edgeParsed.domains, ...edgeParsed.hosts],
+    ipv4: [...flat(v4Texts), ...domParsedAll.flatMap(parsed => parsed.hosts)],
+    ipv6: flat(v6Texts),
+    domains: domParsedAll.flatMap(parsed => parsed.domains),
     echDomains: echParsed.domains,
-    echDns: dnsParsed.hosts
+    echDns: poolParseAddressLines(echDns).hosts,
+    proxyIps
   };
 }
 
 // استخر لبه برای یک درخواست ساب‌لینک. مسیر پیش‌فرض: پاسخ فوری از استخر داخلی و
 // در صورت داشتن waitUntil، تازه‌سازی در پس‌زمینه (بدون تأخیر برای کاربر).
+// خواندن آخرین استخر زنده از Cache API — برای ایزولهٔ تازه که هنوز حافظه ندارد
+async function poolReadCache() {
+  const cache = poolGetCache();
+  if (!cache) return null;
+  try {
+    const hit = await cache.match(`${POOL_CACHE_BASE}/v1`);
+    if (!hit) return null;
+    const data = await hit.json();
+    if (!data || !Array.isArray(data.ipv4) || !data.ipv4.length) return null;
+    return data;
+  } catch (_e) {
+    return null;
+  }
+}
+
 export async function getEdgePool(cfg = {}, options = {}) {
   const now = Date.now();
   if (memoryPool.value && now - memoryPool.at < POOL_TTL_MS) return memoryPool.value;
 
   const builtin = poolBuiltin();
+  // ایزولهٔ سرد (مثلاً بعد از استقرار تازه): آخرین استخر زنده‌ای که در Cache API
+  // ذخیره شده فوراً برگردانده می‌شود و در پس‌زمینه تازه می‌شود؛ پس کاربر هیچ‌وقت
+  // با لیست ثابت و کهنه روبه‌رو نمی‌شود.
+  if (!memoryPool.value) {
+    const cached = await poolReadCache();
+    if (cached) memoryPool = { at: now - POOL_TTL_MS, value: cached };
+  }
 
   const refresh = async () => {
     if (inflight) return inflight;
@@ -298,6 +371,7 @@ export async function getEdgePool(cfg = {}, options = {}) {
       try {
         const fetched = await poolFetchFresh();
         const merged = poolMergeFetched(builtin, fetched);
+        lastLiveAt = Date.now();
         memoryPool = { at: Date.now(), value: merged };
         const cache = poolGetCache();
         if (cache) {
@@ -323,19 +397,23 @@ export async function getEdgePool(cfg = {}, options = {}) {
     return inflight;
   };
 
-  // ورکر: تازه‌سازی پس‌زمینه تا اولین بازدید کاربر هم کند نشود
+  // تازه‌سازی همیشه شروع می‌شود؛ اگر waitUntil باشد در پس‌زمینه ادامه می‌دهد
+  const live = refresh();
   if (options.waitUntil) {
-    try { options.waitUntil(refresh()); } catch (_e) {}
-  } else if (options.awaitRefresh !== false && options.allowNetwork !== false && !memoryPool.value) {
-    // فقط وقتی هیچ استخری در حافظه نیست و امکان شبکه هست، منتظر می‌مانیم
+    try { options.waitUntil(live); } catch (_e) {}
+  }
+
+  // اگر استخری در حافظه یا کش نیست، حداکثر ۲.۶ ثانیه منتظر لیست زنده می‌مانیم
+  // تا همان اولین درخواست هم از منابع به‌روز ساخته شود.
+  if (!memoryPool.value && options.allowNetwork !== false && options.awaitRefresh !== false) {
     const merged = await Promise.race([
-      refresh(),
-      new Promise(resolve => setTimeout(() => resolve(builtin), POOL_FETCH_TIMEOUT_MS + 300))
+      live,
+      new Promise(resolve => setTimeout(() => resolve(null), POOL_COLD_WAIT_MS))
     ]);
     return merged || builtin;
   }
 
-  return builtin;
+  return memoryPool.value || builtin;
 }
 
 // تازه‌سازی اجباری (کرون) — خروجی خلاصه برای لاگ
@@ -343,13 +421,29 @@ export async function warmEdgePool() {
   const builtin = poolBuiltin();
   const fetched = await poolFetchFresh();
   const merged = poolMergeFetched(builtin, fetched);
+  lastLiveAt = Date.now();
   memoryPool = { at: Date.now(), value: merged };
+  const cache = poolGetCache();
+  if (cache) {
+    try {
+      await cache.put(
+        `${POOL_CACHE_BASE}/v1`,
+        new Response(JSON.stringify(merged), {
+          headers: {
+            'content-type': 'application/json',
+            'cache-control': `max-age=${Math.floor(POOL_TTL_MS / 1000)}`
+          }
+        })
+      );
+    } catch (_e) {}
+  }
   return {
     ipv4: merged.ipv4.length,
     ipv6: merged.ipv6.length,
     domains: merged.domains.length,
     echDomains: merged.echDomains.length,
-    echDns: merged.echDns.length
+    echDns: merged.echDns.length,
+    proxyIps: merged.proxyIps.length
   };
 }
 
