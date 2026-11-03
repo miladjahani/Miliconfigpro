@@ -13,7 +13,6 @@ import {
   DIRECT_DOMAINS,
   FALLBACK_PROXY_IPS,
   FRAGMENT_PRESETS,
-  HARDCODED_INFO_NODES,
   OFFICIAL_DIRECT_IPS,
   OFFICIAL_DIRECT_IPV6,
   OPENVPN_CSV_SOURCES,
@@ -2510,10 +2509,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const nowarp = String(queryOverrides.nowarp || '') === '1' || cfg.warp === 'no' && cfg.warpPro === 'no';
   const warpLinks = warpAllowed && !domainMode && !ipv6Mode && !nowarp ? await buildWarpFamilyLinks(cfg, { always: true }) : [];
 
-  // ۳ نود اطلاع‌رسانی در صدر ساب‌لینک‌ها؛ در ساب اختصاصی IPv6 حذف می‌شوند
-  // تا آن ساب واقعاً فقط نودهای IPv6 داشته باشد.
-  const infoNodes = ipv6Mode ? [] : HARDCODED_INFO_NODES;
-  const result = [...infoNodes, ...finalized, ...warpLinks];
+  // ساب‌لینک فقط نود واقعی دارد: نودهای «اطلاع‌رسانی» با آدرس 127.0.0.1 در کلاینت
+  // کار نمی‌کردند و کاربر فکر می‌کرد نود خراب است؛ دیگر تزریق نمی‌شوند.
+  const result = [...finalized, ...warpLinks];
   rememberNodes(cachedKey, result);
   return result;
 }

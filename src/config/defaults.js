@@ -43,17 +43,10 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.5.5';
+export const VERSION = 'v3.5.6';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 export const MAX_USERS_LIMIT = 3;
 export const TELEGRAM_SUPPORT = '@miliconfig';
-
-// ۳ نود هاردکدشده اطلاع‌رسانی که باید در ابتدای تمام سابلینک‌ها قرار گیرند
-export const HARDCODED_INFO_NODES = [
-  'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=none&type=ws#%DB%B1.%20%D9%85%DB%8C%D9%84%DB%8C%20%D8%B1%D8%A7%DB%8C%DA%AF%D8%A7%D9%86%20%D8%A7%D8%B3%D8%AA',
-  'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=none&type=ws#%DB%B2.%20%D9%81%D8%B1%D9%88%D8%B4%20%D8%A7%DB%8C%D9%86%20%DA%A9%D8%A7%D9%86%D9%81%DB%8C%DA%AF%20%D9%87%D8%A7%20%D8%AD%D8%B1%D8%A7%D9%85%20%D8%A7%D8%B3%D8%AA',
-  'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none&security=none&type=ws#%DB%B3.%20%D8%A8%D9%87%20%D8%B7%D9%88%D8%B1%20%D8%B4%D8%AE%D8%B5%DB%8C%20%D8%A7%D8%B3%D8%AA%D9%81%D8%A7%D8%AF%D9%87%20%DA%A9%D9%86%DB%8C%D8%AF'
-];
 
 // مقادیر پیش‌فرض دقیقاً مطابق cfnew (byJoey): vless روشن، بقیهٔ پروتکل‌ها و
 // امکانات اضافه خاموش تا کاربر خودش از فرم ساخت/ویرایش کاربر روشن کند.
