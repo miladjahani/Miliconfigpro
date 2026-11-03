@@ -1,10 +1,15 @@
 {
-  "version": "3.5.7",
-  "build": "2026-11-03.6",
-  "publishedAt": "2026-11-03T23:40:00.000Z",
+  "version": "3.6.0",
+  "build": "2026-11-03.9",
+  "publishedAt": "2026-11-04T01:10:00.000Z",
   "bundle": "https://raw.githubusercontent.com/miladjahani/Miliconfigpro/main/_worker.js",
   "repo": "https://github.com/miladjahani/Miliconfigpro",
   "notes": [
+    "دکمهٔ قرمز «بازگشت به پیش‌فرض» در هدر: همهٔ تنظیمات موتور را ریست می‌کند ولی کاربران، رمز، مسیر پنل و توکن بروزرسانی را نگه می‌دارد",
+    "راهنمای فارسی خوش‌آمدگویی با ۷ تب (شروع سریع، ساخت کانفیگ، کاربران، اسکنر، چندلوکیشن و WARP، کلاینت‌ها، عیب‌یابی) که دو ثانیه بعد از ورود با انیمیشن نرم باز می‌شود",
+    "ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود است و همهٔ پروتکل‌ها (VLESS، Trojan، XHTTP، Shadowsocks) به‌همراه WARP را پوشش می‌دهد",
+    "اندپوینت WARP حالا قالب را از روی User-Agent کلاینت انتخاب می‌کند: Clash/Mihomo → YAML، Hiddify/sing-box → JSON، بقیه (v2rayN، NekoBox، Shadowrocket) → base64؛ پیش‌فرض base64 است تا همه‌جا وارد شود",
+    "نام‌های format بیشتری شناخته می‌شوند: v2ray، v2rayng، nekobox، shadowrocket، hiddify، karing، text و json-sub",
     "کارت اندپوینت اختصاصی WARP تمیز شد: آدرس طولانی دیگر نمایش داده نمی‌شود و فقط دکمه‌های کپی (Clash، sing-box، WireGuard، base64) و ZIP می‌مانند",
     "سابلینک‌ها فقط نود واقعی دارند: سه نود تزئینی با آدرس 127.0.0.1 حذف شدند و حالا هر عددی که کلاینت نشان می‌دهد یک نود قابل استفاده است",
     "راهنمای فارسی رفع خطای ۱۱۰۱ در how.md و رویهٔ استقرار بدون ۱۱۰۱ در how2.md اضافه شد",

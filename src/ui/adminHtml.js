@@ -863,6 +863,174 @@ ${PWA_HEAD_TAGS}
   body.light-mode .adv-box { background: #f8faf9; }
   .modal-foot { padding: 0 16px 16px; display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; }
   .user-form-modal .modal-foot { padding: 12px 16px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.02); }
+
+  /* ---------- بازنشانی تنظیمات (دکمهٔ قرمز هدر) ---------- */
+  .topbar-actions .icon-btn.reset-all {
+    color: #ff8080;
+    border-color: rgba(255, 98, 98, 0.38);
+    background: rgba(255, 98, 98, 0.09);
+  }
+  .topbar-actions .icon-btn.reset-all:hover {
+    color: #fff;
+    border-color: rgba(255, 98, 98, 0.75);
+    background: rgba(255, 98, 98, 0.26);
+    box-shadow: 0 10px 26px rgba(255, 98, 98, 0.3);
+  }
+  .topbar-actions .icon-btn.help-btn {
+    color: var(--info);
+    border-color: rgba(99, 230, 212, 0.36);
+    background: rgba(99, 230, 212, 0.09);
+  }
+  .topbar-actions .icon-btn.help-btn:hover {
+    color: #eafffb;
+    border-color: rgba(99, 230, 212, 0.7);
+    background: rgba(99, 230, 212, 0.22);
+    box-shadow: 0 10px 26px rgba(99, 230, 212, 0.26);
+  }
+  .reset-list { margin: 0; padding-inline-start: 18px; color: var(--muted); line-height: 2; font-size: 0.82rem; }
+  .reset-list b { color: var(--text); }
+
+  /* ---------- راهنمای خوش‌آمدگویی: آبی فیروزه‌ای + سبز نئونی ---------- */
+  .modal.animated { opacity: 0; transition: opacity 0.28s ease; }
+  .modal.animated.is-open { opacity: 1; animation: help-fade 0.38s ease both; }
+  .modal.animated.is-open .modal-card { animation: help-rise 0.58s cubic-bezier(0.2, 0.85, 0.25, 1) both; }
+  @keyframes help-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes help-rise { from { opacity: 0; transform: translateY(30px) scale(0.955); } to { opacity: 1; transform: none; } }
+  @keyframes help-pane-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  .help-modal {
+    width: min(960px, 100%);
+    max-height: min(92vh, 920px);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(99, 230, 212, 0.36);
+    background:
+      radial-gradient(880px 380px at 10% -12%, rgba(99, 230, 212, 0.16), transparent 62%),
+      radial-gradient(720px 360px at 94% -4%, rgba(181, 255, 77, 0.14), transparent 60%),
+      #070d0b;
+    box-shadow: 0 36px 90px rgba(0, 0, 0, 0.72), inset 0 0 0 1px rgba(181, 255, 77, 0.07);
+  }
+  .help-modal .modal-head {
+    background: linear-gradient(90deg, rgba(99, 230, 212, 0.14), rgba(181, 255, 77, 0.1));
+    border-bottom-color: rgba(99, 230, 212, 0.26);
+  }
+  .help-modal .modal-head b { color: #d8fffb; }
+  .help-modal .modal-head b .mi { color: var(--info); }
+  .help-tabs {
+    display: flex;
+    gap: 7px;
+    padding: 12px 16px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: none;
+  }
+  .help-tabs::-webkit-scrollbar { display: none; }
+  .help-tab {
+    flex: none;
+    cursor: pointer;
+    border: 1px solid rgba(99, 230, 212, 0.26);
+    background: rgba(99, 230, 212, 0.06);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 7px 13px;
+    font: inherit;
+    font-size: 0.76rem;
+    transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .help-tab:hover { transform: translateY(-1px); color: #eafffb; background: rgba(99, 230, 212, 0.14); }
+  .help-tab.is-active {
+    color: #04120d;
+    border-color: transparent;
+    background: linear-gradient(120deg, #63e6d4, #b5ff4d);
+    box-shadow: 0 10px 26px rgba(99, 230, 212, 0.3);
+    font-weight: 700;
+  }
+  .help-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 18px 10px;
+    display: block;
+  }
+  .help-pane { display: none; }
+  .help-pane.is-active { display: block; animation: help-pane-in 0.36s ease both; }
+  .help-lead { margin: 0 0 12px; color: var(--text); font-size: 0.86rem; line-height: 2; }
+  .help-lead b { color: var(--neon); }
+  .help-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .help-card {
+    border: 1px solid rgba(99, 230, 212, 0.2);
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, rgba(99, 230, 212, 0.07), rgba(181, 255, 77, 0.03));
+  }
+  .help-card h4 {
+    margin: 0 0 7px;
+    font-size: 0.82rem;
+    color: #cffcf6;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .help-card h4 .mi { width: 17px; height: 17px; color: var(--info); }
+  .help-card ul, .help-card ol { margin: 0; padding-inline-start: 17px; color: var(--muted); font-size: 0.78rem; line-height: 1.95; }
+  .help-card li { margin-bottom: 3px; }
+  .help-card li::marker { color: #63e6d4; }
+  .help-card b, .help-card strong { color: #e9fff9; font-weight: 700; }
+  .help-kbd {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    direction: ltr;
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 6px;
+    color: var(--neon);
+    background: rgba(181, 255, 77, 0.1);
+    border: 1px solid rgba(181, 255, 77, 0.26);
+  }
+  .help-note {
+    margin-top: 10px;
+    border-inline-start: 3px solid var(--neon);
+    background: rgba(181, 255, 77, 0.07);
+    border-radius: 0 12px 12px 0;
+    padding: 9px 12px;
+    color: var(--muted);
+    font-size: 0.77rem;
+    line-height: 1.9;
+  }
+  .help-note b { color: var(--neon); }
+  .help-foot {
+    flex: none;
+    border-top: 1px solid rgba(99, 230, 212, 0.2);
+    background: rgba(99, 230, 212, 0.04);
+    padding: 11px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .help-foot .help-check {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 0.74rem;
+    cursor: pointer;
+    margin-inline-start: auto;
+  }
+  .help-foot .help-check input { accent-color: #63e6d4; width: 15px; height: 15px; }
+  body.light-mode .help-modal { background: #ffffff; }
+  body.light-mode .help-modal .modal-head b { color: #083a33; }
+  body.light-mode .help-card { background: #f4fffd; border-color: rgba(11, 138, 75, 0.2); }
+  body.light-mode .help-card h4 { color: #0b5c4e; }
+  body.light-mode .help-card b, body.light-mode .help-card strong { color: #0c1a12; }
+  body.light-mode .help-lead b { color: #0b8a4b; }
+  body.light-mode .help-tab { color: #456; }
+  body.light-mode .help-kbd { color: #0b6b3a; background: rgba(11, 138, 75, 0.08); }
+  @media (max-width: 720px) {
+    .help-modal { max-height: 100%; }
+    .help-body { padding: 12px; }
+    .help-tab { padding: 6px 11px; font-size: 0.72rem; }
+  }
   @media (max-width: 640px) {
     .modal { padding: 0; }
     .modal-card { border-radius: 0; border-inline: 0; }
@@ -1242,6 +1410,8 @@ ${PWA_HEAD_TAGS}
       <button class="icon-btn opt" type="button" data-act="toggle-lang" id="langBtn" title="تغییر زبان" aria-label="language">${icon('globe')}</button>
       <button class="icon-btn opt" type="button" data-act="open-multi" title="سابلینک چندلوکیشن" aria-label="locations">${icon('pin')}</button>
       <button class="icon-btn opt" type="button" data-act="open-password" title="تغییر رمز مدیر" aria-label="password">${icon('key')}</button>
+      <button class="icon-btn help-btn" type="button" data-act="open-help" title="راهنمای کامل پنل" aria-label="help">${icon('shield')}</button>
+      <button class="icon-btn reset-all" type="button" data-act="open-reset" title="بازگرداندن همهٔ تنظیمات به پیش‌فرض" aria-label="reset settings">${icon('refresh')}</button>
       <button class="icon-btn danger" type="button" data-act="logout" title="خروج" aria-label="logout">${icon('logout')}</button>
     </div>
   </header>
@@ -1500,6 +1670,333 @@ ${PWA_HEAD_TAGS}
       <div class="modal-foot">
         <button class="btn primary" type="button" data-act="save-password">${icon('check')} ذخیره رمز</button>
         <button class="btn ghost" type="button" data-act="close-modal" data-modal="passwordModal">انصراف</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- بازگرداندن همهٔ تنظیمات به پیش‌فرض (دکمهٔ قرمز هدر) -->
+  <div class="modal animated" id="resetAllModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head"><b>${icon('refresh')} بازگرداندن همهٔ تنظیمات به پیش‌فرض</b><button class="icon-btn" type="button" data-act="close-modal" data-modal="resetAllModal" aria-label="بستن">${icon('close')}</button></div>
+      <div class="modal-body">
+        <p class="help-lead">اگر تنظیمات را به‌هم ریختی و نمی‌دانی کدام گزینه را عوض کردی، این دکمه همه‌چیز را به حالت اولیهٔ کارخانه برمی‌گرداند.</p>
+        <ul class="reset-list">
+          <li><b>چه چیزی ریست می‌شود:</b> تنظیمات کلی موتور (پروتکل‌ها، پورت‌ها، فرگمنت، DNS، WARP، مسیر خروج و...).</li>
+          <li><b>چه چیزی دست‌نخورده می‌ماند:</b> کاربران، شناسه‌ها، حجم مصرف‌شده، تاریخ انقضا، رمز مدیر، مسیر پنل و توکن بروزرسانی.</li>
+          <li><b>بعدش چه می‌شود:</b> ساب‌لینک‌ها با تنظیمات پیش‌فرض از نو ساخته می‌شوند؛ کافی است در کلاینت «بروزرسانی ساب» بزنی.</li>
+        </ul>
+        <div class="help-note"><b>پیشنهاد:</b> قبل از ریست، اگر تنظیم خاصی را دوست داشتی آن را یادداشت کن تا دوباره همان را وارد کنی.</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn danger" type="button" data-act="confirm-reset">${icon('power')} بله، همه را پیش‌فرض کن</button>
+        <button class="btn ghost" type="button" data-act="close-modal" data-modal="resetAllModal">انصراف</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- راهنمای کامل پنل: دو ثانیه بعد از ورود، با حرکت نرم باز می‌شود -->
+  <div class="modal animated" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-card help-modal">
+      <div class="modal-head">
+        <b id="helpTitle">${icon('shield')} راهنمای پنل و ساخت کانفیگ</b>
+        <button class="icon-btn" type="button" data-act="close-modal" data-modal="helpModal" aria-label="بستن راهنما">${icon('close')}</button>
+      </div>
+
+      <div class="help-tabs" role="tablist" aria-label="بخش‌های راهنما">
+        <button class="help-tab is-active" type="button" role="tab" data-help-tab="quick">شروع سریع</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="config">ساخت کانفیگ</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="users">کاربران</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="scanner">اسکنر</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="warp">چندلوکیشن و WARP</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="clients">اتصال کلاینت‌ها</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="fix">عیب‌یابی</button>
+      </div>
+
+      <div class="help-body">
+        <!-- شروع سریع -->
+        <section class="help-pane is-active" data-help-pane="quick">
+          <p class="help-lead">سلام! این پنل مغز متفکر سرویس توست: از همین‌جا کاربر می‌سازی، نود و آدرس می‌سازی و ساب‌لینک تحویل می‌دهی. نگران نباش، همه‌چیز در سه قدم ساده راه می‌افتد.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('bolt')} سه قدم تا اولین اتصال</h4>
+              <ol>
+                <li>تب <b>کاربران</b> را باز کن و دکمهٔ <b>ایجاد کاربر جدید</b> را بزن.</li>
+                <li>یک نام، حجم و مدت اعتبار بده؛ بقیهٔ گزینه‌ها را دست نزن و <b>ساخت کاربر</b> را بزن.</li>
+                <li>روی کارت کاربر دکمهٔ <b>کپی ساب</b> را بزن و آدرس را در کلاینت وارد کن.</li>
+              </ol>
+            </div>
+            <div class="help-card">
+              <h4>${icon('link')} ساب‌لینک اصلی مدیر</h4>
+              <ul>
+                <li>دکمهٔ <b>کپی ساب اصلی</b> در تب کاربران، ساب کامل پنل را کپی می‌کند.</li>
+                <li>این ساب همیشه <b>۴۰۰ نود</b> دارد: VLESS، Trojan، xHTTP، Shadowsocks، WARP و MASQUE.</li>
+                <li>برای تست موتور و مقایسهٔ سرعت‌ها بهترین مرجع همین ساب است.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('lock')} امنیت اولیه</h4>
+              <ul>
+                <li>از دکمهٔ کلید در هدر، <b>رمز مدیر</b> را به یک رمز قوی تغییر بده.</li>
+                <li>مسیر پنل اختصاصی است؛ آن را در اختیار کسی که نباید پنل را ببیند نگذار.</li>
+                <li>هر کاربر باید شناسهٔ خودش را داشته باشد؛ شناسهٔ یک کاربر را برای دیگری نده.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>نکته:</b> هر زمان خواستی این راهنما را دوباره ببینی، روی آیکون سپر کنار دکمهٔ خروج در هدر بزن.</div>
+        </section>
+
+        <!-- ساخت کانفیگ -->
+        <section class="help-pane" data-help-pane="config">
+          <p class="help-lead">وقتی کاربر را می‌سازی یا ویرایش می‌کنی، یک فرم چندتبی باز می‌شود. هر تب یک خانوادهٔ تنظیمات است؛ همهٔ آن‌ها با توضیح کنارشان آمده‌اند و لازم نیست همه را پر کنی. پیش‌فرض‌ها انتخاب‌های خوبی هستند.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('layers')} پروتکل‌ها</h4>
+              <ul>
+                <li><b>VLESS:</b> پروتکل اصلی و سازگارترین گزینه؛ همیشه روشن بماند.</li>
+                <li><b>Trojan:</b> روی شبکه‌هایی که VLESS را محدود می‌کنند، شانس دوم است.</li>
+                <li><b>xHTTP:</b> ترنسپورت جدیدتر برای دور زدن محدودیت شدید؛ کمی سنگین‌تر است.</li>
+                <li><b>Shadowsocks:</b> سبک و سریع؛ فرگمنت روی آن اعمال نمی‌شود.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('server')} آدرس، پورت و مسیر</h4>
+              <ul>
+                <li><b>پورت‌ها:</b> چند پورت را با کاما بنویس (مثلاً 443,2053,8443) تا اگر یکی بسته بود بقیه کار کنند.</li>
+                <li><b>آدرس‌های دستی:</b> هر خط یک آدرس؛ قالب‌های پذیرفته‌شده در همان کادر توضیح داده شده است.</li>
+                <li><b>دامنه‌های SNI و Host:</b> اگر دامنه‌ای داری که به همین ورکر وصل است، اینجا بگذار تا نودها بین آن‌ها بچرخند.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('signal')} دور زدن فیلترینگ</h4>
+              <ul>
+                <li><b>فرگمنت:</b> بستهٔ TLS را تکه‌تکه می‌کند تا اثر انگشت اتصال عادی نباشد.</li>
+                <li><b>ECH:</b> نام دامنه را از دید شنودکننده پنهان می‌کند و به DNS از نوع DoH نیاز دارد.</li>
+                <li><b>پریست فرگمنت:</b> اگر مطمئن نیستی، پریست پیشنهادی را انتخاب کن؛ بهترین نتیجه با تست به دست می‌آید.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('sanctions')} مسیر خروج</h4>
+              <ul>
+                <li><b>تحریم‌شکن:</b> ترافیک را از یک آدرس بیرون از ایران خارج می‌کند تا سرویس‌های مسدود باز شوند.</li>
+                <li><b>پروکسی خروجی:</b> اگر socks5 یا http داری، اینجا بده تا خروجی از آن برود.</li>
+                <li><b>منطقهٔ خروج:</b> کشور خروجی را انتخاب کن؛ روی برخی سایت‌ها (بانک، استریم) اثر دارد.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('radar')} پریست‌ها</h4>
+              <ul>
+                <li><b>ایران سریع:</b> برای استفادهٔ روزمره در ایران؛ تعادل خوبی بین سرعت و پایداری دارد.</li>
+                <li><b>پرقدرت:</b> برای شبکه‌های سخت‌گیرتر؛ کمی سنگین‌تر است.</li>
+                <li>پریست فقط فرم را پر می‌کند؛ بعد از آن می‌توانی هر فیلدی را دستی عوض کنی.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('gauge')} تعداد نود هر کاربر</h4>
+              <ul>
+                <li>عدد نود در ساب همان کاربر تعیین می‌کند چند نود ساخته شود.</li>
+                <li>صفر یعنی سقف ندارد و همهٔ آدرس‌های زنده استفاده می‌شوند.</li>
+                <li>برای گوشی معمولاً ۳۰ تا ۶۰ نود کافی است؛ بیشتر از آن فقط لیست را شلوغ می‌کند.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>هشدارهای هوشمند:</b> اگر ترکیبی از تنظیمات با هم جور نباشد (مثلاً ECH بدون DNS امن)، پنل کنار فرم به تو می‌گوید.</div>
+        </section>
+
+        <!-- کاربران -->
+        <section class="help-pane" data-help-pane="users">
+          <p class="help-lead">قلب روزمرهٔ پنل همین‌جاست: هر کارت یک کاربر است با مصرف، انقضا و دسترسی‌های سریع.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('users')} کارت کاربر</h4>
+              <ul>
+                <li><b>کپی ساب:</b> لینک اختصاصی همین کاربر.</li>
+                <li><b>صفحهٔ وضعیت:</b> صفحهٔ قابل ارسال به کاربر با راهنمای اتصال و دکمه‌های دانلود.</li>
+                <li><b>ویرایش:</b> همهٔ تنظیمات موتور برای همان کاربر.</li>
+                <li><b>ریست مصرف:</b> شمارندهٔ حجم را صفر می‌کند؛ تاریخ انقضا دست نمی‌خورد.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('layers')} لینک‌های آماده</h4>
+              <ul>
+                <li><b>Clash:</b> همان ساب با خروجی مناسب Mihomo و Clash.</li>
+                <li><b>Singbox:</b> خروجی JSON برای Hiddify و sing-box.</li>
+                <li><b>دامنه:</b> فقط نودهای دامنه‌محور، مناسب وقتی آی‌پی خام مشکل دارد.</li>
+                <li><b>IPv6 همراه اول:</b> نسخهٔ IPv6 که در شبکهٔ همراه اول عملکرد بهتری دارد.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('gauge')} کنترل و پایش</h4>
+              <ul>
+                <li><b>تست نود:</b> نودهای کاربر به‌صورت زنده تست می‌شوند و نتیجه همان‌جا می‌آید.</li>
+                <li><b>حجم و انقضا:</b> صفر یعنی نامحدود یا بدون تاریخ انقضا.</li>
+                <li><b>غیرفعال کردن:</b> کاربری که سقف حجمش تمام شود اجازهٔ اتصال ندارد.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>یادت باشد:</b> بعد از هر تغییر در تنظیمات یک کاربر، به او بگو در کلاینت «بروزرسانی ساب» بزند تا نودهای تازه بیاید.</div>
+        </section>
+
+        <!-- اسکنر -->
+        <section class="help-pane" data-help-pane="scanner">
+          <p class="help-lead">اسکنر کارخانهٔ آدرس‌های خوب است: آی‌پی‌ها را تست می‌کند و هر چه واقعاً جواب بدهد به فهرست نودها اضافه می‌کند.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('radar')} چه چیزی اسکن می‌شود</h4>
+              <ul>
+                <li><b>آدرس و دامنه:</b> منابع آنلاین و آی‌پی‌های تازهٔ لبه را می‌خواند.</li>
+                <li><b>پروکسی:</b> پروکسی‌های کشوری را پیدا می‌کند تا مسیر خروج داشته باشی.</li>
+                <li><b>دستی:</b> هر آدرسی که خودت در کادر بگذاری تست می‌شود.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('filter')} انتخاب‌ها</h4>
+              <ul>
+                <li><b>کشور:</b> خروجی از همان کشور انتخاب شود.</li>
+                <li><b>تعداد:</b> چند مورد برتر نگه داشته شود.</li>
+                <li><b>خانوادهٔ آدرس:</b> IPv4، IPv6 یا هر دو.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('check')} اعمال نتیجه</h4>
+              <ul>
+                <li>نتایج تست فقط نمایش داده می‌شوند؛ تا <b>اعمال</b> را نزنی چیزی ذخیره نمی‌شود.</li>
+                <li>اعمال روی «آدرس‌های دستی» یا «پروکسی خروجی» انجام می‌شود.</li>
+                <li>می‌توانی نتیجه را برای یک کاربر خاص هم ذخیره کنی.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>تجربهٔ عملی:</b> اگر سرعت افت کرد، اول یک اسکن تازه بگیر و بعد ساب را بروزرسانی کن؛ معمولاً مشکل از آی‌پی اشباع‌شده است.</div>
+        </section>
+
+        <!-- چندلوکیشن و WARP -->
+        <section class="help-pane" data-help-pane="warp">
+          <p class="help-lead">اینجا آدرس‌های آمادهٔ کشور‌به‌کشور و نودهای WARP را می‌بینی؛ همین تب برای کارهای حرفه‌ای بیشترین کاربرد را دارد.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('globe')} ساب هر کشور</h4>
+              <ul>
+                <li>هر کارت یک کشور است؛ دکمهٔ کپی، ساب همان کشور را می‌دهد.</li>
+                <li>آی‌پی تصادفی تازه، آی‌پی خروجی همان کشور را عوض می‌کند.</li>
+                <li>نسخهٔ IPv6 برای شبکه‌هایی که IPv4 را محدود می‌کنند مفید است.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('warp')} خانوادهٔ WARP</h4>
+              <ul>
+                <li><b>WARP:</b> اتصال رایگان کلادفلر برای دسترسی به سرویس‌های عمومی.</li>
+                <li><b>WARP PRO:</b> با کلید لایسنس، پهنای باند و کیفیت بالاتر.</li>
+                <li><b>چندلوکیشن:</b> چند لبهٔ مختلف برای انتخاب دستی در کلاینت.</li>
+                <li><b>MASQUE:</b> نسخهٔ HTTP/3 روی CONNECT-IP؛ فقط Mihomo و Clash.Meta و فورک Hiddify آن را می‌فهمند.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('bolt')} امنزیا و پروفایل‌ها</h4>
+              <ul>
+                <li><b>AmneziaWG:</b> بسته‌های فریبنده برای عبور از DPI؛ نسخهٔ ۳ کامل‌ترین است.</li>
+                <li><b>پروفایل‌های تنظیم:</b> چند نسخه با MTU و DNS مختلف برای تست در اپراتور.</li>
+                <li>کلید و آی‌پی هر نود در پنل پنهان است؛ فقط دکمه‌های کپی و دانلود را ببین.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('zip')} اندپوینت WARP</h4>
+              <ul>
+                <li>یک آدرس برای همهٔ فرمت‌ها: <span class="help-kbd">/warp/شناسه</span></li>
+                <li>خودش از روی کلاینت تشخیص می‌دهد YAML، JSON یا base64 بدهد.</li>
+                <li>برای گرفتن همهٔ فایل‌ها با هم، دکمهٔ ZIP را بزن.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>نکته:</b> اگر WARP وصل نشد، اول فایل .conf را در اپلیکیشن رسمی تست کن؛ اگر آنجا هم وصل نشد، مشکل از شبکهٔ اپراتور است نه پنل.</div>
+        </section>
+
+        <!-- اتصال کلاینت‌ها -->
+        <section class="help-pane" data-help-pane="clients">
+          <p class="help-lead">ساب‌لینک یک آدرس است که کلاینت آن را می‌خواند و نودها را خودکار می‌سازد. فرمت درست، نصف راه است.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('link')} آدرس اصلی</h4>
+              <ul>
+                <li>ساختار: <span class="help-kbd">/sub/شناسه</span> که شناسه همان UUID کاربر است.</li>
+                <li>این آدرس خودش فرمت مناسب کلاینت را انتخاب می‌کند.</li>
+                <li>لینک را کامل کپی کن؛ حتی یک حرف کم، ساب را خراب می‌کند.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('terminal')} پارامترهای پرکاربرد</h4>
+              <ul>
+                <li><span class="help-kbd">?target=clash</span> خروجی Mihomo</li>
+                <li><span class="help-kbd">?target=singbox</span> خروجی sing-box</li>
+                <li><span class="help-kbd">?target=raw</span> فهرست خام لینک‌ها</li>
+                <li><span class="help-kbd">?limit=80</span> تعداد نود این دریافت</li>
+                <li><span class="help-kbd">?country=DE</span> ساب اختصاصی یک کشور</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('globe')} کدام کلاینت؟</h4>
+              <ul>
+                <li><b>Hiddify:</b> ساب معمولی را وارد کن؛ JSON و YAML را هم می‌خواند.</li>
+                <li><b>v2rayNG:</b> ساب معمولی یا base64.</li>
+                <li><b>Clash Verge / FlClash / Stash:</b> دکمهٔ Clash یا <span class="help-kbd">?target=clash</span>.</li>
+                <li><b>Shadowrocket / Streisand:</b> ساب معمولی یا base64.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('refresh')} بروزرسانی</h4>
+              <ul>
+                <li>در کلاینت گزینهٔ بروزرسانی خودکار را روی ۶ تا ۱۲ ساعت بگذار.</li>
+                <li>اگر نودها عوض شدند، یک‌بار دستی بروزرسانی کن.</li>
+                <li>بعضی کلاینت‌ها کش می‌کنند؛ اگر تغییری ندیدی کلاینت را ببند و باز کن.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>اگر ساب خالی آمد:</b> آدرس را در مرورگر باز کن. اگر جواب داد مشکل از کلاینت است؛ اگر جواب نداد لینک یا شناسه را چک کن.</div>
+        </section>
+
+        <!-- عیب‌یابی -->
+        <section class="help-pane" data-help-pane="fix">
+          <p class="help-lead">هر چیزی که خراب شد، اول آرام باش: بیشتر مشکلات با یکی از این چند کار حل می‌شود.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('stop')} ساب در کلاینت وارد نمی‌شود</h4>
+              <ul>
+                <li>آدرس را بدون پارامتر اضافه در مرورگر باز کن؛ اگر متن یا فایل آمد، آدرس سالم است.</li>
+                <li>برای کلاینتت فرمت درست را انتخاب کن (Clash، sing-box یا ساب معمولی).</li>
+                <li>اگر کلاینت نسخهٔ قدیمی است، اول بروزرسانی‌اش کن؛ بعضی فرمت‌های تازه را نمی‌فهمد.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('gauge')} کند است یا قطع و وصل می‌شود</h4>
+              <ul>
+                <li>یک آی‌پی یا دامنهٔ دیگر را از اسکنر امتحان کن.</li>
+                <li>پورت را عوض کن؛ بعضی اپراتورها پورت‌های خاص را می‌بندند.</li>
+                <li>اگر فقط بعضی سایت‌ها باز نمی‌شوند، مسئله خروجی است نه اتصال.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('refresh')} خطای ۱۱۰۱ یا خطای اتصال ورکر</h4>
+              <ul>
+                <li>یعنی نسخهٔ مستقر با بایندینگ دیتابیس هم‌خوان نیست.</li>
+                <li>کافی است نسخه را دوباره مستقر کنی؛ دادهٔ کاربران در D1 محفوظ می‌ماند.</li>
+                <li>بعد از استقرار چند ثانیه صبر کن و صفحه را دوباره باز کن.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('power')} بازگرداندن تنظیمات</h4>
+              <ul>
+                <li>دکمهٔ <b>قرمز چرخش</b> در هدر همهٔ تنظیمات کلی را به پیش‌فرض برمی‌گرداند.</li>
+                <li>کاربران، مصرف و تاریخ انقضا دست‌نخورده می‌مانند.</li>
+                <li>بعد از ریست، ساب‌ها را در کلاینت بروزرسانی کن.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>هنوز گیر کردی؟</b> از دکمهٔ تلگرام در هدر پیام بده و همین متن خطا را بفرست؛ سریع‌تر راهنمایی می‌شوی.</div>
+        </section>
+      </div>
+
+      <div class="help-foot">
+        <button class="btn primary" type="button" data-act="close-modal" data-modal="helpModal">${icon('check')} فهمیدم، شروع می‌کنم</button>
+        <a class="btn ghost" href="${SUPPORT_URL}" target="_blank" rel="noopener">${icon('telegram')} پشتیبانی</a>
+        <label class="help-check"><input type="checkbox" id="helpNoAuto"> دیگر خودکار باز نشود</label>
       </div>
     </div>
   </div>
@@ -3038,6 +3535,44 @@ ${PWA_HEAD_TAGS}
   function openModal(id) { var m = $(id); if (m) m.classList.add('is-open'); }
   function closeModal(id) { var m = $(id); if (m) m.classList.remove('is-open'); }
 
+  // ——— راهنمای پنل: چند تب، باز شدن نرم بعد از دو ثانیه ———
+  function switchHelpTab(id) {
+    document.querySelectorAll('[data-help-tab]').forEach(function(b) {
+      b.classList.toggle('is-active', b.getAttribute('data-help-tab') === id);
+    });
+    document.querySelectorAll('[data-help-pane]').forEach(function(p) {
+      p.classList.toggle('is-active', p.getAttribute('data-help-pane') === id);
+    });
+    var body = document.querySelector('#helpModal .help-body');
+    if (body) body.scrollTop = 0;
+  }
+  function openHelp() {
+    switchHelpTab(lsGet('mili_help_tab') || 'quick');
+    openModal('helpModal');
+  }
+
+  // بازگرداندن همهٔ تنظیمات کلی به پیش‌فرض
+  function resetAllSettings() {
+    var btn = document.querySelector('[data-act="confirm-reset"]');
+    if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
+    api('/api/config', { method: 'POST', body: JSON.stringify({ _reset: true }) })
+      .then(function(data) {
+        if (data && data.success) {
+          closeModal('resetAllModal');
+          showToast('همهٔ تنظیمات به حالت پیش‌فرض برگشت', 'ok');
+          if (data.config) { state.config = data.config; fillSettings(); }
+          setTimeout(function() { window.location.reload(); }, 1100);
+          return;
+        }
+        if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
+        showToast((data && data.message) || 'بازنشانی انجام نشد', 'err');
+      })
+      .catch(function() {
+        if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
+        showToast('خطای شبکه در بازنشانی تنظیمات', 'err');
+      });
+  }
+
   function masterSub() { return origin() + '/sub/' + (ADMIN_PATH || ''); }
 
   document.addEventListener('click', function(event) {
@@ -3052,6 +3587,14 @@ ${PWA_HEAD_TAGS}
 
     var formTab = event.target.closest('[data-uf-tab]');
     if (formTab) { switchUserFormTab(formTab.getAttribute('data-uf-tab')); return; }
+
+    var helpTab = event.target.closest('[data-help-tab]');
+    if (helpTab) {
+      var helpTabId = helpTab.getAttribute('data-help-tab');
+      lsSet('mili_help_tab', helpTabId);
+      switchHelpTab(helpTabId);
+      return;
+    }
 
     var el = event.target.closest('[data-act]');
     if (!el) return;
@@ -3072,6 +3615,9 @@ ${PWA_HEAD_TAGS}
     else if (act === 'enable-autoupdate') { enableAutoUpdate(); }
     else if (act === 'disable-autoupdate') { disableAutoUpdate(); }
     else if (act === 'open-password') { openModal('passwordModal'); }
+    else if (act === 'open-help') { openHelp(); }
+    else if (act === 'open-reset') { openModal('resetAllModal'); }
+    else if (act === 'confirm-reset') { resetAllSettings(); }
     else if (act === 'open-multi') { showPanel('locations'); }
     else if (act === 'close-modal') { closeModal(el.getAttribute('data-modal')); }
     else if (act === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
@@ -3148,6 +3694,23 @@ ${PWA_HEAD_TAGS}
   fillSettings();
   syncConditionalFields();
   renderMetrics();
+
+  // راهنما: دو ثانیه پس از ورود با یک حرکت نرم جلوی کاربر می‌آید؛ اگر تیک
+  // «دیگر خودکار باز نشود» را بزند، از دفعهٔ بعد فقط دستی باز می‌شود.
+  (function initHelp() {
+    var noAuto = $('helpNoAuto');
+    if (noAuto) {
+      noAuto.checked = lsGet('mili_help_off') === '1';
+      noAuto.addEventListener('change', function() {
+        lsSet('mili_help_off', noAuto.checked ? '1' : '0');
+      });
+    }
+    if (lsGet('mili_help_off') === '1') return;
+    setTimeout(function() {
+      if (document.querySelector('.modal.is-open')) return;
+      openHelp();
+    }, 2000);
+  })();
 
   // نصب اپ: ثبت سرویس‌ورکر و نگه‌داشتن رویداد نصب مرورگر
   ${PWA_CLIENT_JS}

@@ -392,7 +392,9 @@ export function generateClashConfig(links, options = {}) {
   const yamlUdpOpts = { udp: wantUdp };
   const nodes = links.map(parseShareLink).filter(n => n && (n.proto === 'vless' || n.proto === 'trojan' || n.proto === 'ss' || n.proto === 'wireguard'));
   const ovpnNodes = Array.isArray(options.ovpnNodes) ? options.ovpnNodes : [];
-  const names = [...nodes.map(n => n.name), ...ovpnNodes.map(n => n.name)];
+  // نودهای WARP MASQUE (HTTP/3) — فقط Mihomo/Clash.Meta نوع masque را می‌فهمد
+  const masqueNodes = Array.isArray(options.masqueNodes) ? options.masqueNodes : [];
+  const names = [...nodes.map(n => n.name), ...ovpnNodes.map(n => n.name), ...masqueNodes.map(n => n.name)];
 
   const header = [
     '# miliconfig v3.1 - Clash / Mihomo Subscription',
@@ -463,6 +465,14 @@ export function generateClashConfig(links, options = {}) {
   const proxiesSection = ['proxies:'];
   for (const n of nodes) proxiesSection.push(buildClashNodeYaml(n, customECHDomain, yamlUdpOpts));
   for (const n of ovpnNodes) proxiesSection.push(buildClashOpenVpnYaml(n));
+  for (const m of masqueNodes) {
+    proxiesSection.push(
+      `  - { name: "${m.name}", type: masque, server: "${m.server}", port: ${m.port}, ` +
+      `private-key: "${m.privateKey}", public-key: "${m.publicKey}", ip: ${m.address4}/32` +
+      (m.address6 ? `, ipv6: ${m.address6}/128` : '') +
+      `, sni: consumer-masque.cloudflareclient.com, mtu: 1280, udp: true, remote-dns-resolve: true, dns: [1.1.1.1, 1.0.0.1] }`
+    );
+  }
 
   const nodesOnly = names.length ? names.map(n => `      - ${quoteYaml(n)}`).join('\n') : '      - DIRECT';
   const groupsSection = [

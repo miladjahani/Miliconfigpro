@@ -1464,7 +1464,7 @@ export function buildWireguardLink(config = {}, name = 'WARP') {
   const address = String(config.address4 || WARP_DEFAULT_ADDRESS);
   params.set('address', `${address}/32`);
   params.set('mtu', String(parseInt(config.mtu, 10) || 1280));
-  params.set('dns', String(config.dns || '1.1.1.1, 1.0.0.1'));
+  params.set('dns', String(config.dns || '1.1.1.1,1.0.0.1').replace(/\s+/g, ''));
   if (config.address6) params.set('address6', String(config.address6));
   if (awg) {
     params.set('awg', awg.version || '1');
@@ -1645,14 +1645,26 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
   });
   files.push({ name: 'links.txt', data: links.join('\n') + '\n' });
 
+  // لینک‌های «وایرگارد ساده» بدون پارامترهای AmneziaWG: بعضی کلاینت‌ها
+  // (v2rayN / NekoBox / Shadowrocket) پارامترهای i1/i2/i3 و cpa را نمی‌شناسند و
+  // کل لینک را رد می‌کنند؛ ساب base64 از همین نسخهٔ ساده ساخته می‌شود.
+  const plainLinks = entries.map(entry => {
+    const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
+    return buildWireguardLink(
+      { ...base, server: entry.host, port: entry.port, mtu: preset.mtu, dns: preset.dns, awg: false, seed: `${seed}:plain:${entry.host}:${entry.port}` },
+      `WARP ${entry.kind.toUpperCase()} ${entry.host}:${entry.port}`
+    );
+  });
+  files.push({ name: 'links-plain.txt', data: plainLinks.join('\n') + '\n' });
+
   // ---- همهٔ فرمت‌های دیگر WARP در همین زیپ ----
   const reservedArr = (Array.isArray(base.reserved) ? base.reserved : [0, 0, 0]).slice(0, 3);
   const dnsList = String(base.dns || '1.1.1.1, 1.0.0.1').split(',').map(item => item.trim()).filter(Boolean);
   const localAddress = [base.address4 || WARP_DEFAULT_ADDRESS];
   if (base.address6) localAddress.push(base.address6);
 
-  // ۱) ساب‌لینک base64 (v2rayN / NekoBox / Hiddify)
-  files.push({ name: 'WARP-sub-base64.txt', data: encodeBase64Utf8(links.join('\n')) + '\n' });
+  // ۱) ساب‌لینک base64 (v2rayN / NekoBox / Hiddify) — با لینک‌های استاندارد WireGuard
+  files.push({ name: 'WARP-sub-base64.txt', data: encodeBase64Utf8(plainLinks.join('\n')) + '\n' });
 
   // ۲) Clash Meta / Mihomo
   const proxyNames = [];
@@ -1814,7 +1826,8 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
       '  WARP-masque.yaml ...... WARP over MASQUE (HTTP/3) for Mihomo / Clash.Meta / Hiddify',
       '  WARP-singbox.json ..... sing-box config with a selector group',
-      '  links.txt ............. wireguard:// links (NekoBox / Hiddify / v2rayN)',
+      '  links.txt ............. wireguard:// links with AmneziaWG tuning (Hiddify / NekoBox)',
+      '  links-plain.txt ....... plain wireguard:// links (any WireGuard-capable client)',
       '  WARP-sub-base64.txt ... same links in base64 subscription form',
       '  endpoints.txt ......... endpoint matrix (host / port / profile)',
       '',
@@ -2452,8 +2465,10 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
         ) || 0;
         if (wantedTotal === 0 || wantedTotal >= 6) {
           const base = wantedTotal || 24;
-          const v6Wanted = cfg.ipv6 === 'no' ? 0 : Math.max(2, Math.min(8, Math.round(base * 0.2)));
-          const domWanted = Math.max(2, Math.min(10, Math.round(base * 0.25)));
+          // برای ساب‌های بزرگ (مثل ساب ۴۰۰ نودی مدیر) تعداد آی‌پی نسخهٔ ۶ و دامنه هم
+          // بالا می‌رود، وگرنه چند گروه کوچک سقف کل ساب را پایین می‌آورند.
+          const v6Wanted = cfg.ipv6 === 'no' ? 0 : Math.max(2, Math.min(60, Math.round(base * 0.2)));
+          const domWanted = Math.max(2, Math.min(60, Math.round(base * 0.25)));
           if (v6Wanted > 0) {
             const v6List = pickStableAddresses(
               [...OFFICIAL_DIRECT_IPV6, ...edgePool.ipv6],
@@ -2475,6 +2490,26 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       const builtCount = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.ss.length + protoGroups.xhttp.length;
       if (builtCount < 15 && cfg.epi === 'yes') {
         appendFromSource(getStaticCfAddresses(cfg).map(ip => ({ ip, isp: 'CF-Direct' })));
+      }
+
+      // تکمیل تا سقف درخواستی: ساب‌های بزرگ (۴۰۰ نودی مدیر) با منابع ثابت
+      // کسری می‌مانند؛ از استخر زندهٔ لبهٔ CF پر می‌شود تا تعداد واقعاً برسد.
+      const requestedTotal = parseInt(
+        queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0,
+        10
+      ) || 0;
+      if (requestedTotal > 0) {
+        const activeProtoCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
+        const builtNow = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.ss.length + protoGroups.xhttp.length;
+        if (builtNow < requestedTotal) {
+          const perProto = Math.ceil((requestedTotal - builtNow) / activeProtoCount) + 3;
+          const extraIps = pickStableAddresses(edgePool.ipv4, perProto * 2, addrSeed + '-topup')
+            .map(ip => ({ ip, port: 443, isp: 'CF-Live' }));
+          if (extraIps.length) appendFromSource(extraIps);
+          const extraV6 = cfg.ipv6 === 'no' ? [] : pickStableAddresses(edgePool.ipv6, perProto, addrSeed + '-topup-v6')
+            .map(ip => ({ ip, port: 443, isp: 'CF-Live-v6', family: 'ipv6' }));
+          if (extraV6.length) appendFromSource(extraV6);
+        }
       }
     }
   }
@@ -2671,7 +2706,11 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     case 'clashmeta': {
       // نودهای OpenVPN (پروفایل‌های زندهٔ VPNGate) فقط در خروجی Clash/Mihomo قابل استفاده‌اند
       const ovpnNodes = await fetchOpenVpnNodes(cfg);
-      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes });
+      // MASQUE فقط وقتی روشن است ساخته می‌شود؛ ثبت‌نام کش می‌شود تا ساب کند نشود.
+      const masqueNodes = isEnabledValue(cfg.warpMasque, true)
+        ? await buildWarpMasqueNodes(cfg).catch(() => [])
+        : [];
+      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes, masqueNodes });
       contentType = 'text/yaml; charset=utf-8';
       break;
     }

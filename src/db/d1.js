@@ -714,7 +714,13 @@ export async function resetGlobalConfig(env = {}) {
 
   if (detectedD1 && memoryStore.d1SchemaReady) {
     try {
-      await detectedD1.db.prepare(`DELETE FROM system_config WHERE key != 'admin_password_hash'`).run();
+      // فقط کلیدهای تنظیمات پاک می‌شوند؛ رمز مدیر، مسیر پنل و توکن بروزرسانی
+      // باید بمانند تا بعد از بازنشانی هم دسترسی و آپدیت از دست نرود.
+      await detectedD1.db.prepare(
+        `DELETE FROM system_config
+         WHERE key NOT IN ('admin_password_hash', 'admin_path', 'cf_token')
+           AND key NOT LIKE 'secret_%'`
+      ).run();
     } catch (_e) {}
   }
   if (detectedKv) {

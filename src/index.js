@@ -3,7 +3,7 @@
 // مجهز به لایه دیتابیس D1، مدیریت چندکاربره، نام‌گذاری number+miliconfig و محافظ ضد خطای 1101
 // ============================================================================
 
-import { BRAND_NAME, DIRECT_DOMAINS, OFFICIAL_DIRECT_IPS, OFFICIAL_DIRECT_IPV6 } from './config/defaults.js';
+import { ADMIN_SUB_NODE_COUNT, BRAND_NAME, DIRECT_DOMAINS, OFFICIAL_DIRECT_IPS, OFFICIAL_DIRECT_IPV6 } from './config/defaults.js';
 import {
   ensureD1Schema,
   getOrCreateAdminPath,
@@ -275,7 +275,7 @@ export default {
               id: 'mili-admin',
               username: 'Admin',
               uuid: adminUuid,
-              subNodeCount: globalCfg.subNodeCount || 50,
+              subNodeCount: ADMIN_SUB_NODE_COUNT,
               enabled: true,
               status: 'active',
               dataLimitGb: 0,
@@ -326,13 +326,14 @@ export default {
               id: allUsers[0]?.id || null,
               username: BRAND_NAME,
               uuid: adminUuid,
-              subNodeCount: globalCfg.subNodeCount || 50,
+              subNodeCount: ADMIN_SUB_NODE_COUNT,
               enabled: true,
               dataLimitGb: 0,
               usedBytes: 0,
               expireAt: 0,
               nodeScope: 'all',
-              config: globalCfg
+              // ساب مدیر همهٔ پروتکل‌ها/ترکیب‌ها را دارد (VLESS + Trojan + XHTTP + Shadowsocks + WARP)
+              config: { ...globalCfg, ev: 'yes', et: 'yes', ex: 'yes', es: 'yes', warp: 'yes', warpPro: 'yes', warpMl: 'yes', warpMasque: 'yes', warpMasqueCount: globalCfg.warpMasqueCount || 3 }
             };
           }
           if (!targetUser) {
@@ -367,8 +368,24 @@ export default {
             }
           }
           const warpCfg = { ...globalCfg, ...((warpUser && warpUser.config) || {}) };
-          // پیش‌فرض clash است تا اگر کلاینت آدرس را بدون پارامتر وارد کند سابلینک سالم بگیرد (ZIP با format=zip)
-          const format = String(url.searchParams.get('format') || 'clash').toLowerCase();
+          // قالب خروجی: اگر format داده شده همان، وگرنه از روی User-Agent کلاینت
+          // تشخیص داده می‌شود. پیش‌فرض base64 است چون تقریباً همهٔ کلاینت‌ها
+          // (v2rayN، NekoBox، Shadowrocket، Hiddify) آن را می‌خوانند؛ کلاینت‌های
+          // Clash/Mihomo و sing-box نسخهٔ اختصاصی خودشان را می‌گیرند.
+          const formatParam = String(url.searchParams.get('format') || '').toLowerCase();
+          const warpUa = String(request.headers.get('User-Agent') || '').toLowerCase();
+          const detectWarpFormat = () => {
+            if (/clash|mihomo|flclash|stash|verge/.test(warpUa)) return 'clash';
+            if (/sing-?box|hiddify|sfa|sfi|sfm|karing/.test(warpUa)) return 'singbox';
+            return 'base64';
+          };
+          // فرمت‌های شناخته‌شده؛ هر مقدار ناشناخته به قالب کلاینت برمی‌گردد (نه ZIP)
+          const KNOWN_WARP_FORMATS = new Set([
+            'zip', 'clash', 'yaml', 'mihomo', 'singbox', 'sing-box', 'sb', 'hiddify', 'karing', 'json-sub',
+            'base64', 'sub', 'v2ray', 'v2rayng', 'nekobox', 'shadowrocket', 'text', 'txt64',
+            'conf', 'wg', 'txt', 'links', 'json'
+          ]);
+          const format = KNOWN_WARP_FORMATS.has(formatParam) ? formatParam : detectWarpFormat();
           // پارامترهای مبهم‌سازی و ترتیب اندپوینت‌ها با شناسهٔ کاربر ساخته می‌شود
           // تا بستهٔ هر کاربر منحصر به فرد باشد.
           const bundle = await buildWarpConfBundle(warpCfg, { seed: warpUser?.uuid || 'public' });
@@ -401,10 +418,14 @@ export default {
           if (format === 'clash' || format === 'yaml' || format === 'mihomo') {
             return pickFormat('WARP-clash.yaml', 'text/yaml; charset=utf-8', 'miliconfig-warp-clash.yaml');
           }
-          if (format === 'singbox' || format === 'sing-box' || format === 'sb') {
+          if (format === 'singbox' || format === 'sing-box' || format === 'sb' || format === 'hiddify' || format === 'karing' || format === 'json-sub') {
             return pickFormat('WARP-singbox.json', 'application/json; charset=utf-8', 'miliconfig-warp-singbox.json');
           }
-          if (format === 'base64' || format === 'sub') {
+          if (
+            format === 'base64' || format === 'sub' || format === 'v2ray' ||
+            format === 'v2rayng' || format === 'nekobox' || format === 'shadowrocket' ||
+            format === 'text' || format === 'txt64'
+          ) {
             return pickFormat('WARP-sub-base64.txt', 'text/plain; charset=utf-8', 'miliconfig-warp-base64.txt');
           }
           if (format === 'conf' || format === 'wg' || format === 'txt') {
@@ -442,9 +463,9 @@ export default {
               id: 'mili-admin',
               username: BRAND_NAME,
               uuid: adminUuid,
-              subNodeCount: globalCfg.subNodeCount || 50,
+              subNodeCount: ADMIN_SUB_NODE_COUNT,
               enabled: true,
-              config: globalCfg
+              config: { ...globalCfg, ev: 'yes', et: 'yes', ex: 'yes', es: 'yes', warp: 'yes', warpPro: 'yes', warpMl: 'yes', warpMasque: 'yes', warpMasqueCount: globalCfg.warpMasqueCount || 3 }
             };
             const nodes = await generateUserNodesList(adminUser, url.hostname, {
               limit: adminUser.subNodeCount,
