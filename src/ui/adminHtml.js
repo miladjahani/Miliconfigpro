@@ -18,6 +18,7 @@ import {
   TELEGRAM_SUPPORT,
   VERSION
 } from '../config/defaults.js';
+import { IP_POOL, IP_POOL_COUNTRIES, IP_POOL_COUNTRY_NAMES } from '../config/ipPool.js';
 import { USER_PRESETS } from '../config/presets.js';
 import { EDGE_VIP_COUNTRIES } from '../config/sources.js';
 import { FAVICON_DATA_URI, SHIELD_LOGO_SVG, icon, stripEmoji } from './icons.js';
@@ -149,6 +150,11 @@ export function renderAdminDashboardHtml(initialData = {}) {
       return acc;
     }, {}),
     vipCountries: EDGE_VIP_COUNTRIES,
+    // استخر آی‌پی اختصاصی؛ برای انتخاب تصادفی در پنجرهٔ تنظیمات کاربر و ساخت ساب /ips
+    ipPool: IP_POOL,
+    ipPoolCountries: IP_POOL_COUNTRIES,
+    ipPoolCountryNames: IP_POOL_COUNTRY_NAMES,
+    ipPoolPath: '/ips',
     maxUsersLimit: MAX_USERS_LIMIT,
     telegramSupport: TELEGRAM_SUPPORT,
     dnsPresets: DNS_PRESETS,
@@ -857,6 +863,12 @@ ${PWA_HEAD_TAGS}
   .uf-pane .field textarea:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px rgba(181, 255, 77, 0.08); }
   body.light-mode .uf-pane .field textarea { background: #ffffff; color: #0c1a12; }
   .field-hint { display: block; margin-top: 4px; font-size: 0.72rem; line-height: 1.7; opacity: 0.6; }
+  .ip-pool { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 9px; border: 1px dashed rgba(99, 230, 212, 0.3); border-radius: 10px; background: rgba(99, 230, 212, 0.045); }
+  .ip-pool-title { font-size: 0.72rem; opacity: 0.75; }
+  .ip-pool-count { width: 62px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 0.74rem; }
+  .ip-pool-country { flex: 1 1 130px; min-width: 110px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 0.74rem; }
+  .ip-pool .btn { flex: none; }
+  .ip-pool-meta { font-size: 0.68rem; opacity: 0.5; flex-basis: 100%; }
   .field-hint code { font-size: 0.7rem; padding: 1px 5px; border-radius: 5px; background: rgba(181, 255, 77, 0.1); color: var(--neon); direction: ltr; display: inline-block; }
   .adv-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: rgba(255, 255, 255, 0.015); }
   .adv-box summary { cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--neon); }
@@ -2321,6 +2333,7 @@ ${PWA_HEAD_TAGS}
       '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP همهٔ فرمت‌ها</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/masque/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP جداگانهٔ MASQUE</a>' +
       '</div></div>' +
       // اندپوینت مخصوص WARP: یک آدرس با همهٔ فرمت‌ها
       '<div class="loc-card ep-card"><div><div class="loc-name">اندپوینت اختصاصی WARP</div><div class="loc-meta">Clash/Mihomo · Hiddify/sing-box · WireGuard · Shadowrocket — هر کاربر توکن خودش را دارد</div></div>' +
@@ -2539,7 +2552,7 @@ ${PWA_HEAD_TAGS}
         { key: 'region', section: 'منطقه و آدرس‌های دلخواه', label: 'منطقه', type: 'select', def: 'auto', options: 'regions' },
         { key: 'wk', section: 'منطقه و آدرس‌های دلخواه', label: 'منطقهٔ ورکر', type: 'text', def: '', ph: 'DE / NL / US…' },
         { key: 'locationNodeCount', section: 'منطقه و آدرس‌های دلخواه', label: 'تعداد نود هر لوکیشن', type: 'number', def: 6, min: 1, max: 40 },
-        { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 5, wide: true, def: '', ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
+        { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 5, wide: true, def: '', pool: true, ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
         { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
         { key: 'sb', section: 'مسیر خروج', label: 'تحریم‌شکن (خروجی از آدرس واسط)', hint: 'همهٔ نودها از یک آدرس بیرون از ایران خارج می‌شوند تا سرویس‌های مسدود برای آی‌پی ایران باز شوند', type: 'switch', def: 'yes' },
         { key: 'sbRegion', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'DE', options: 'regions' },
@@ -2666,6 +2679,25 @@ ${PWA_HEAD_TAGS}
     return String(text || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).join(NL);
   }
 
+  // کنترل «انتخاب تصادفی» برای فیلدهای آی‌پی؛ فهرست از استخر داخلی می‌آید
+  function ipPoolControlHtml(field) {
+    if (!field.pool) return '';
+    var pool = INITIAL_DATA.ipPool || [];
+    var countries = INITIAL_DATA.ipPoolCountries || [];
+    var opts = '<option value="">همه کشورها</option>' + countries.map(function(c) {
+      return '<option value="' + c.cc + '">' + c.name + ' — ' + c.cc + ' (' + c.count + ')</option>';
+    }).join('');
+    var subPath = INITIAL_DATA.ipPoolPath || '/ips';
+    return '<div class="ip-pool" data-pool-for="' + field.key + '">' +
+      '<span class="ip-pool-title">انتخاب تصادفی از استخر ' + pool.length + ' آی‌پی:</span>' +
+      '<input class="ip-pool-count" type="number" min="1" max="64" step="1" value="5" aria-label="تعداد آی‌پی">' +
+      '<select class="ip-pool-country" aria-label="کشور">' + opts + '</select>' +
+      '<button class="btn sm" type="button" data-pool-fill="' + field.key + '">' + ICO.refresh + ' تصادفی</button>' +
+      '<a class="btn sm ghost" href="' + subPath + '" target="_blank" rel="noopener">' + ICO.link + ' ساب لیست</a>' +
+      '<span class="ip-pool-meta">ساب: ' + subPath + '?count=10&amp;country=DE&amp;port=443&amp;label=1</span>' +
+    '</div>';
+  }
+
   function fieldHtml(field, value) {
     var id = 'uf_' + field.key;
     var val = value === undefined || value === null ? field.def : value;
@@ -2676,7 +2708,7 @@ ${PWA_HEAD_TAGS}
       return '<div class="field"' + wideClass + '><label>' + field.label + '</label>' +
         '<textarea id="' + id + '" data-uf="' + field.key + '" rows="' + rows + '" spellcheck="false" dir="ltr" placeholder="' +
         String(field.ph || '').split(NL).join('&#10;').replace(/"/g, '&quot;') + '">' +
-        manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + '</div>';
+        manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + ipPoolControlHtml(field) + '</div>';
     }
     if (field.type === 'switch') {
       var on = String(val) === 'yes';
@@ -2692,7 +2724,7 @@ ${PWA_HEAD_TAGS}
     if (field.list) attrs += ' list="' + field.list + '"';
     if (field.ph) attrs += ' placeholder="' + field.ph.replace(/"/g, '&quot;') + '"';
     return '<div class="field"><label>' + field.label + '</label>' +
-      '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + '</div>';
+      '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + ipPoolControlHtml(field) + '</div>';
   }
 
   function formPaneHtml(group, cfg) {
@@ -3666,6 +3698,42 @@ ${PWA_HEAD_TAGS}
     if (event.target.classList && event.target.classList.contains('modal')) {
       event.target.classList.remove('is-open');
     }
+  });
+
+  // ——— استخر آی‌پی اختصاصی: انتخاب تصادفی در پنجرهٔ تنظیمات کاربر ———
+  function fillRandomFromIpPool(button) {
+    var key = button.getAttribute('data-pool-fill');
+    var box = button.closest ? button.closest('.ip-pool') : null;
+    var field = document.getElementById('uf_' + key);
+    if (!box || !field) return;
+    var countInput = box.querySelector('.ip-pool-count');
+    var countrySelect = box.querySelector('.ip-pool-country');
+    var count = Math.max(1, Math.min(parseInt(countInput && countInput.value, 10) || 5, 64));
+    var cc = countrySelect ? countrySelect.value : '';
+    var pool = (INITIAL_DATA.ipPool || []).filter(function(item) { return !cc || item.cc === cc; });
+    if (!pool.length) return;
+    var names = INITIAL_DATA.ipPoolCountryNames || {};
+    var picked = pool.slice();
+    for (var i = picked.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = picked[i]; picked[i] = picked[j]; picked[j] = tmp;
+    }
+    picked = picked.slice(0, Math.min(count, picked.length));
+    var lines = picked.map(function(item) { return item.ip + ':443#' + (names[item.cc] || item.cc); });
+    var current = String(field.value || '').split(SEP_RE).map(function(s) { return s.trim(); }).filter(Boolean);
+    var seen = {};
+    current.forEach(function(line) { seen[line] = 1; });
+    lines.forEach(function(line) { if (!seen[line]) { seen[line] = 1; current.push(line); } });
+    field.value = current.join(NL);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    showToast(lines.length + ' آی‌پی تصادفی به آدرس‌های دستی اضافه شد', 'ok');
+  }
+
+  document.addEventListener('click', function(event) {
+    var btn = event.target && event.target.closest ? event.target.closest('[data-pool-fill]') : null;
+    if (!btn) return;
+    event.preventDefault();
+    fillRandomFromIpPool(btn);
   });
 
   document.addEventListener('change', function(event) {

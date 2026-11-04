@@ -546,7 +546,8 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=clash" download>${icon('download')} پروفایل Clash</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=singbox" download>${icon('download')} کانفیگ sing-box</a>
-        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>` : ''}
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>
+        <a class="copy-btn" href="${baseUrl}/warp/masque/${encodeURIComponent(subToken)}?format=zip" download>${icon('zip')} ZIP جداگانهٔ WARP MASQUE (HTTP/3)</a>` : ''}
         ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('zip')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
       </div>
     </div>

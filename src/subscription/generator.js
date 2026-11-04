@@ -814,12 +814,12 @@ export function rotateIpListByTimeBucket(list, rotationSetting = 'off') {
 
 // شادوساکس با همان مکانیزم ورکر Z-E-U-S (منبع الهام cfnew): هر آدرس یک نود
 // SIP002 با userinfo base64 («متد:رمز») + پلاگین v2ray-websocket روی همان مسیر.
-// نکته: هستهٔ این ورکر هدر متنی SS را می‌خواند، پس متد همیشه «none» است
-// (متد AEAD نیازمند پیاده‌سازی رمزنگاری سمت سرور است و در نسخهٔ بعدی می‌آید).
+// متد پیش‌فرض AEAD است (aes-128-gcm) چون «none» در بیشتر کلاینت‌ها پشتیبانی
+// نمی‌شود و نود بدون پینگ می‌ماند؛ هسته هم AEAD را رمزگشایی می‌کند.
 export function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const sspass = (cfg.sspass && String(cfg.sspass).trim()) || userUuid;
-  const cipher = 'none';
+  const cipher = cfg.ssmethod === 'aes-256-gcm' ? 'aes-256-gcm' : 'aes-128-gcm';
   const userinfo = encodeSip002UserInfo(`${cipher}:${sspass}`);
 
   for (let idx = 0; idx < list.length; idx++) {
@@ -1200,7 +1200,7 @@ export function buildFallbackWarpConfig() {
 // مخصوص MASQUE و پین‌کردن کلید عمومی لبه احراز می‌کند. این نوع نود فقط در
 // Mihomo/Clash.Meta (type: masque) و فورک Hiddify قابل استفاده است.
 // ============================================================================
-const WARP_MASQUE_SNI = 'consumer-masque.cloudflareclient.com';
+export const WARP_MASQUE_SNI = 'consumer-masque.cloudflareclient.com';
 const WARP_MASQUE_PORTS = [443, 8443, 4443, 500, 1701, 4500];
 let warpMasqueCache = { key: '', at: 0, data: null };
 
@@ -1568,6 +1568,15 @@ const WARP_PROFILE_PRESETS = {
   mobile: { mtu: 1240, dns: '1.1.1.1, 1.0.0.1' }
 };
 
+// پروفایل‌های مبهم‌سازی WARP: هر پروفایل نسخهٔ AmneziaWG، MTU و DNS متفاوت دارد
+// تا یک نود در DPI یک اپراتور کار کند و دیگری نه؛ همه روی همان اندپوینت اصلی.
+const WARP_OBF_PROFILES = [
+  { id: 'lite', name: 'WARP OBF LITE', awgv: '1', mtu: 1320, dns: '1.0.0.1' },
+  { id: 'balanced', name: 'WARP OBF BALANCED', awgv: '2', mtu: 1280, dns: '1.1.1.1' },
+  { id: 'aggressive', name: 'WARP OBF AGGRESSIVE', awgv: '3', mtu: 1180, dns: '1.1.1.1, 1.0.0.1' },
+  { id: 'stealth', name: 'WARP OBF STEALTH', awgv: '2', mtu: 1240, dns: '1.0.0.1, 1.1.1.1' }
+];
+
 function warpEndpointTag(host) {
   return String(host).replace(/:/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
 }
@@ -1636,6 +1645,41 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
     pushFile(`WARP-profile-${presetId}.conf`, `WARP ${presetId}`, entries[0], presetId);
   }
 
+  // پروفایل‌های مبهم‌سازی مختلف روی همان اندپوینت: AWG1 (فقط Junk)، AWG2
+  // (امضایی + پدینگ) و AWG3 (زمان‌بندی کامل) با MTU/DNS متفاوت.
+  const obfLinks = [];
+  for (const obf of WARP_OBF_PROFILES) {
+    const profileSeed = `${seed}:obf:${obf.id}`;
+    files.push({
+      name: `WARP-obf-${obf.id}.conf`,
+      data: buildWireGuardConf(
+        {
+          ...base,
+          server: entries[0].host,
+          port: entries[0].port,
+          mtu: obf.mtu,
+          dns: obf.dns,
+          awgv: obf.awgv,
+          seed: profileSeed
+        },
+        obf.name
+      )
+    });
+    obfLinks.push(buildWireguardLink(
+      {
+        ...base,
+        server: entries[0].host,
+        port: entries[0].port,
+        mtu: obf.mtu,
+        dns: obf.dns,
+        awgv: obf.awgv,
+        seed: profileSeed
+      },
+      obf.name
+    ));
+  }
+  files.push({ name: 'links-obf.txt', data: obfLinks.join('\n') + '\n' });
+
   const links = entries.map(entry => {
     const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
     return buildWireguardLink(
@@ -1693,14 +1737,7 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
     }
     return `  - { ${parts.join(', ')} }`;
   });
-  // ۲-ب) MASQUE: نودهای HTTP/3 جدا از WireGuard؛ فقط Mihomo/Clash.Meta و Hiddify
-  const masqueNodes = await buildWarpMasqueNodes(cfg).catch(() => []);
-  const masqueProxies = masqueNodes.map(node => `  - { name: "${node.name}", type: masque, server: "${node.server}", port: ${node.port}, ` +
-    `private-key: "${node.privateKey}", public-key: "${node.publicKey}", ip: ${node.address4}/32` +
-    (node.address6 ? `, ipv6: ${node.address6}/128` : '') +
-    `, sni: ${WARP_MASQUE_SNI}, mtu: 1280, udp: true, remote-dns-resolve: true, dns: [1.1.1.1, 1.0.0.1] }`);
-  masqueNodes.forEach(node => proxyNames.push(node.name));
-  clashProxies.push(...masqueProxies);
+  // ۲-ب) MASQUE در بستهٔ مستقل /warp/masque ارائه می‌شود و عمداً در این ZIP نیست.
 
   files.push({
     name: 'WARP-clash.yaml',
@@ -1729,36 +1766,6 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  - MATCH,WARP'
     ].join('\n') + '\n'
   });
-
-  if (masqueNodes.length) {
-    files.push({
-      name: 'WARP-masque.yaml',
-      data: [
-        `# ${BRAND_NAME} — WARP MASQUE (HTTP/3 CONNECT-IP)`,
-        '# فقط Mihomo / Clash.Meta / Hiddify؛ کلاینت‌های WireGuard این را نمی‌خوانند',
-        `# edge: ${masqueNodes[0].server} — sni: ${WARP_MASQUE_SNI}`,
-        'mixed-port: 7890',
-        'allow-lan: false',
-        'mode: rule',
-        'log-level: warning',
-        'dns:',
-        '  enable: true',
-        '  enhanced-mode: fake-ip',
-        '  nameserver:',
-        ...dnsList.map(item => `    - ${item}`),
-        'proxies:',
-        ...masqueProxies,
-        'proxy-groups:',
-        '  - name: "WARP-MASQUE"',
-        '    type: select',
-        '    proxies:',
-        ...masqueNodes.map(node => `      - "${node.name}"`),
-        '      - DIRECT',
-        'rules:',
-        '  - MATCH,WARP-MASQUE'
-      ].join('\n') + '\n'
-    });
-  }
 
   // ۳) sing-box
   const sbOutbounds = entries.map((entry, idx) => {
@@ -1824,11 +1831,15 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  *.conf ................ AmneziaWG profile (Jc/Jmin/Jmax + AWG2/AWG3 signatures)',
       '  plain-wireguard/*.conf . standard WireGuard profile (no AmneziaWG keys)',
       '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
-      '  WARP-masque.yaml ...... WARP over MASQUE (HTTP/3) for Mihomo / Clash.Meta / Hiddify',
+      '  WARP-obf-*.conf ....... 4 obfuscation profiles (AWG1 junk / AWG2 / AWG3 / stealth)',
       '  WARP-singbox.json ..... sing-box config with a selector group',
       '  links.txt ............. wireguard:// links with AmneziaWG tuning (Hiddify / NekoBox)',
+      '  links-obf.txt ......... wireguard:// links for the 4 obfuscation profiles',
       '  links-plain.txt ....... plain wireguard:// links (any WireGuard-capable client)',
       '  WARP-sub-base64.txt ... same links in base64 subscription form',
+      '',
+      'WARP MASQUE (HTTP/3) deliberately lives in its own bundle:',
+      '  /warp/masque/<token>?format=zip|clash|json|links',
       '  endpoints.txt ......... endpoint matrix (host / port / profile)',
       '',
       'AmneziaWG: import any .conf into AmneziaWG (Windows / Android / iOS / macOS).',
@@ -1862,6 +1873,13 @@ export async function buildWarpFamilyLinks(cfg = {}, options = {}) {
 
   if (wantWarp) {
     links.push(buildWireguardLink({ ...base, awgv, seed: `warp:${awgv}` }, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard', awg: awgv })));
+    // همان اندپوینت با سطوح مختلف مبهم‌سازی (AWG1 junk / AWG2 / AWG3 / stealth)
+    for (const obf of WARP_OBF_PROFILES) {
+      links.push(buildWireguardLink(
+        { ...base, awgv: obf.awgv, mtu: obf.mtu, dns: obf.dns, seed: `warp:obf:${obf.id}` },
+        `${buildNodeDisplayName({ proto: 'warp', family: 'WireGuard', awg: obf.awgv })} · OBF ${obf.id.toUpperCase()}`
+      ));
+    }
   }
   if (wantPro) {
     // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
@@ -2704,13 +2722,10 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
     case 'stash':
     case 'meta':
     case 'clashmeta': {
-      // نودهای OpenVPN (پروفایل‌های زندهٔ VPNGate) فقط در خروجی Clash/Mihomo قابل استفاده‌اند
+      // نودهای OpenVPN (پروفایل‌های زندهٔ VPNGate) فقط در خروجی Clash/Mihomo قابل استفاده‌اند.
+      // MASQUE در ساب/ZIP مستقل /warp/masque ارائه می‌شود و در ساب اصلی نیست.
       const ovpnNodes = await fetchOpenVpnNodes(cfg);
-      // MASQUE فقط وقتی روشن است ساخته می‌شود؛ ثبت‌نام کش می‌شود تا ساب کند نشود.
-      const masqueNodes = isEnabledValue(cfg.warpMasque, true)
-        ? await buildWarpMasqueNodes(cfg).catch(() => [])
-        : [];
-      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes, masqueNodes });
+      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes, masqueNodes: [] });
       contentType = 'text/yaml; charset=utf-8';
       break;
     }

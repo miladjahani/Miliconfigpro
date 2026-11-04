@@ -7,6 +7,7 @@ import { connect as cfConnect } from 'cloudflare:sockets';
 import { isValidUuid, parseAddressAndPort, sha224Hex, sharedDecoder } from './utils.js';
 import { getXhttpPaddingMeta, selectFallbackProxyAddress } from '../subscription/generator.js';
 import { recordUserActivity } from '../db/d1.js';
+import { SsAeadSession } from './shadowsocksAead.js';
 
 const ADDR_TYPE_IPV4 = 1;
 const ADDR_TYPE_DOMAIN = 2;
@@ -719,7 +720,7 @@ function makeWebSocketReadableStream(ws, earlyDataHeader) {
   });
 }
 
-async function pipeRemoteToWebSocket(remoteSocket, ws, vlessHeader, retryCallback, onBytesTransferred = null) {
+async function pipeRemoteToWebSocket(remoteSocket, ws, vlessHeader, retryCallback, onBytesTransferred = null, encodeChunk = null) {
   let header = vlessHeader;
   let hasData = false;
   let retried = false;
@@ -769,6 +770,9 @@ async function pipeRemoteToWebSocket(remoteSocket, ws, vlessHeader, retryCallbac
         chunk = concatUint8Arrays(header, chunk);
         header = null;
       }
+      // مسیر Shadowsocks AEAD: هر بستهٔ سرور→کلاینت باید رمز شود
+      if (encodeChunk) chunk = await encodeChunk(chunk);
+      if (!chunk || !chunk.byteLength) continue;
       if (chunk.byteLength >= CHUNK_SIZE >> 1) {
         coalescer.flush();
         ws.send(chunk);
@@ -870,7 +874,7 @@ async function establishOutboundAndPipe(
     sock.closed.catch(() => {}).finally(() => {
       if (remoteState.socket === sock) closeSocketSafe(ws);
     });
-    pipeRemoteToWebSocket(sock, ws, vlessRespHeader, retryCb, onBytesTransferred).finally(() => {
+    pipeRemoteToWebSocket(sock, ws, vlessRespHeader, retryCb, onBytesTransferred, remoteState.encodeDown || null).finally(() => {
       if (remoteState.socket === sock) {
         try { writer.releaseLock(); } catch (_e) {}
         remoteState.writer = null;
@@ -1073,6 +1077,53 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
     if (!draining && !uploadQueue.empty && remoteState.writer) queueMicrotask(drainUploadQueue);
   };
 
+  // ---- Shadowsocks AEAD: فهرست رمزهای ممکن برای یافتن کاربر درست ----
+  function ssCandidates() {
+    const list = [];
+    const seen = new Set();
+    const push = (pw, user) => {
+      const key = String(pw || '');
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      list.push({ pw: key, user });
+    };
+    const qp = (reqUrl.searchParams.get('sspass') || '').trim();
+    if (qp) push(qp, allUsers.find(u => (u.config?.sspass || u.uuid) === qp) || null);
+    allUsers.slice(0, 24).forEach(u => push(u.config?.sspass || u.uuid, u));
+    if (adminUuid) {
+      push(
+        globalCfg.sspass || adminUuid,
+        { id: null, username: 'admin', uuid: adminUuid, config: globalCfg }
+      );
+    }
+    return list;
+  }
+
+  async function tryShadowsocksAead(data) {
+    const primary = String(globalCfg.ssmethod || 'aes-128-gcm') === 'aes-256-gcm' ? 'aes-256-gcm' : 'aes-128-gcm';
+    const ciphers = primary === 'aes-256-gcm' ? ['aes-256-gcm', 'aes-128-gcm'] : ['aes-128-gcm', 'aes-256-gcm'];
+    for (const cand of ssCandidates()) {
+      const userMethod = String(cand.user?.config?.ssmethod || '');
+      const ordered = userMethod === 'aes-256-gcm' ? ['aes-256-gcm', 'aes-128-gcm'] : ciphers;
+      for (const cipher of ordered) {
+        try {
+          const session = await SsAeadSession.create(cand.pw, cipher);
+          const plain = await session.pushIncoming(data);
+          if (!plain || plain.byteLength < 7) continue;
+          const header = parseShadowsocksHeader(plain);
+          if (header.hasError) continue;
+          return {
+            user: cand.user || allUsers[0] || null,
+            header,
+            decode: chunk => session.pushIncoming(chunk),
+            encode: chunk => session.encodeOutgoing(chunk)
+          };
+        } catch (_e) {}
+      }
+    }
+    return null;
+  }
+
   const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
   const wsReadable = makeWebSocketReadableStream(serverWs, earlyDataHeader);
 
@@ -1081,7 +1132,17 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
       new WritableStream({
         async write(chunk) {
           if (closed) return;
-          const data = toUint8Array(chunk);
+          let data = toUint8Array(chunk);
+          // شادوساکس AEAD: ورودی کلاینت رمزشده است
+          if (remoteState.ssDecode) {
+            try {
+              const plain = await remoteState.ssDecode(data);
+              if (!plain || !plain.byteLength) return;
+              data = plain;
+            } catch (_e) {
+              return closeTransport();
+            }
+          }
           if (isDnsSession) return await handleUdpDns(data, serverWs, null, fetcher);
           if (remoteState.socket && remoteState.writer) {
             if (!enqueueUpload(data)) throw new Error('upload queue overflow');
@@ -1150,6 +1211,39 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 trojanRes.hostname,
                 trojanRes.port,
                 trojanRes.rawClientData,
+                serverWs,
+                null,
+                remoteState,
+                userCfg,
+                fetcher,
+                addTransferredBytes
+              );
+              return;
+            }
+          }
+
+          // تلاش برای Shadowsocks AEAD (aes-128-gcm/aes-256-gcm) — متد پیش‌فرض جدید
+          if (data.byteLength >= 18) {
+            const ssAead = await tryShadowsocksAead(data);
+            if (ssAead) {
+              detectedProto = 'ss';
+              matchedUserObj = ssAead.user;
+              remoteState.ssDecode = ssAead.decode;
+              remoteState.encodeDown = ssAead.encode;
+              const userCfg = {
+                ...globalCfg,
+                ...(matchedUserObj?.config || {}),
+                ...(queryP ? { p: queryP } : {}),
+                ...(queryWk ? { wk: queryWk } : {}),
+                ...(queryRm ? { rm: queryRm } : {}),
+                ...(queryS ? { s: queryS } : {}),
+                ...(countryProxyLock ? { qj: 'only' } : {})
+              };
+              await establishOutboundAndPipe(
+                ssAead.header.addressType,
+                ssAead.header.hostname,
+                ssAead.header.port,
+                ssAead.header.rawPayload,
                 serverWs,
                 null,
                 remoteState,

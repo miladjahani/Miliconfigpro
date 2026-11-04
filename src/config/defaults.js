@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.6.0';
+export const VERSION = 'v3.8.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
@@ -62,7 +62,7 @@ export const CONFIG_DEFAULTS = {
   es: 'no', // شادوساکس (Shadowsocks) — امکانات اضافه پیش‌فرض خاموش
   sspass: '',
   // هسته این ورکر هدر Shadowsocks را به‌صورت متنی (بدون AEAD) می‌خواند، بنابراین تنها متد سازگار «none» است
-  ssmethod: 'none',
+  ssmethod: 'aes-128-gcm',
   ech: 'no',
   // — تحریم‌شکن: خروجی همهٔ نودها از «آدرس واسط» بیرون از ایران عبور می‌کند
   // تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند.
@@ -529,8 +529,8 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
     const rotNum = parseInt(rotationRaw, 10);
     snap.ipRotation = Number.isFinite(rotNum) && rotNum > 0 ? String(rotNum) + 'm' : 'off';
   }
-  // تنها متد Shadowsocks پشتیبانی‌شده توسط هسته همین ورکر «none» است؛ انتخاب‌های دیگر باعث بی‌پاسخ شدن نود می‌شدند
-  snap.ssmethod = 'none';
+  // متدهای Shadowsocks پشتیبانی‌شده: aes-128-gcm (پیش‌فرض) و aes-256-gcm
+  snap.ssmethod = String(snap.ssmethod || '').toLowerCase() === 'aes-256-gcm' ? 'aes-256-gcm' : 'aes-128-gcm';
   // اگر پریست فرگمنت روی حالت سفارشی باشد و مقادیر خالی بمانند، از مقادیر پیش‌فرض ضد-DPI استفاده می‌شود
   if (!snap.fragmentLength) snap.fragmentLength = '100-200';
   if (!snap.fragmentInterval) snap.fragmentInterval = '10-20';

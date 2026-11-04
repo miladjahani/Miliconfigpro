@@ -614,6 +614,793 @@ const OPENVPN_PUBLIC_USER = 'vpn';
 const OPENVPN_PUBLIC_PASS = 'vpn';
 
 
+// --- MODULE: src/config/ipPool.js ---
+// ============================================================================
+// استخر آی‌پی اختصاصی miliconfig — 696 آی‌پی در 21 کشور
+// هر خط: آی‌پی|کد کشور (دادهٔ ثابت و قابل ویرایش؛ همین فایل منبع سابِ /ips است)
+// کشورها با نمونه‌گیری جغرافیایی هنگام ساخت فهرست تعیین شده‌اند.
+// ============================================================================
+
+const IP_POOL_RAW = `
+3.29.240.49|AE
+45.82.13.135|AL
+85.192.42.198|AT
+201.10.80.72|BR
+194.124.251.104|CH
+43.169.18.179|CN
+43.169.19.179|CN
+104.105.9.100|DE
+104.152.49.87|DE
+104.194.156.84|DE
+104.194.158.111|DE
+104.194.159.48|DE
+104.207.130.92|DE
+104.238.177.144|DE
+108.165.236.229|DE
+108.165.236.90|DE
+109.120.138.102|DE
+109.120.140.190|DE
+109.122.197.126|DE
+109.122.197.198|DE
+109.230.230.38|DE
+109.69.58.188|DE
+113.30.190.30|DE
+113.30.191.181|DE
+116.202.132.205|DE
+116.203.58.165|DE
+128.140.73.159|DE
+130.162.245.249|DE
+130.17.10.101|DE
+130.17.10.20|DE
+130.17.10.230|DE
+130.17.13.244|DE
+130.17.20.158|DE
+130.17.4.60|DE
+130.61.129.162|DE
+130.61.15.72|DE
+130.61.187.66|DE
+130.61.38.70|DE
+130.61.48.18|DE
+130.61.71.239|DE
+132.145.232.171|DE
+132.226.197.103|DE
+132.226.199.170|DE
+134.122.90.61|DE
+134.255.247.200|DE
+135.125.228.64|DE
+136.244.94.142|DE
+138.124.10.45|DE
+138.124.228.38|DE
+138.124.229.46|DE
+138.124.230.140|DE
+138.124.230.248|DE
+138.124.231.159|DE
+138.124.28.6|DE
+138.124.28.78|DE
+138.124.37.47|DE
+138.124.50.24|DE
+138.124.53.254|DE
+138.124.54.59|DE
+138.124.61.184|DE
+138.124.61.26|DE
+138.124.93.120|DE
+138.124.93.139|DE
+138.197.183.219|DE
+138.199.147.113|DE
+138.199.175.118|DE
+138.249.8.78|DE
+138.3.254.178|DE
+139.59.145.120|DE
+141.147.31.174|DE
+143.20.160.17|DE
+144.31.106.137|DE
+144.31.151.191|DE
+144.31.189.131|DE
+144.31.217.95|DE
+144.31.218.65|DE
+145.63.131.82|DE
+150.230.155.135|DE
+150.241.115.111|DE
+150.241.123.99|DE
+150.241.66.68|DE
+151.243.224.120|DE
+152.53.198.229|DE
+152.53.229.84|DE
+155.117.234.52|DE
+159.100.18.123|DE
+162.19.247.245|DE
+164.90.226.9|DE
+167.17.176.36|DE
+167.235.69.166|DE
+167.71.45.93|DE
+172.238.108.163|DE
+172.86.95.236|DE
+178.105.227.210|DE
+178.17.48.78|DE
+178.83.45.206|DE
+185.100.159.129|DE
+185.14.92.80|DE
+185.209.82.152|DE
+185.233.81.147|DE
+185.233.81.207|DE
+185.242.113.117|DE
+185.242.113.75|DE
+185.66.165.51|DE
+185.94.166.8|DE
+188.245.161.141|DE
+192.124.182.154|DE
+193.111.248.107|DE
+193.168.201.18|DE
+193.233.86.136|DE
+194.154.30.254|DE
+194.37.80.244|DE
+194.58.33.218|DE
+194.62.122.155|DE
+194.87.189.102|DE
+194.87.55.106|DE
+194.87.71.141|DE
+195.133.193.94|DE
+195.133.65.232|DE
+195.201.150.4|DE
+195.248.240.132|DE
+195.58.38.9|DE
+2.26.21.163|DE
+2.26.21.246|DE
+2.26.26.33|DE
+2.26.60.27|DE
+204.11.2.93|DE
+206.189.250.156|DE
+207.244.199.221|DE
+212.113.104.94|DE
+213.165.53.118|DE
+217.144.187.155|DE
+217.154.237.115|DE
+3.122.253.145|DE
+3.126.76.108|DE
+3.76.138.151|DE
+31.172.70.20|DE
+31.25.239.66|DE
+31.76.100.103|DE
+31.76.12.201|DE
+31.77.193.128|DE
+31.77.219.101|DE
+31.77.219.64|DE
+31.77.223.15|DE
+37.1.195.124|DE
+37.1.198.23|DE
+37.220.82.145|DE
+38.180.165.83|DE
+38.180.166.150|DE
+38.180.219.131|DE
+43.170.58.62|DE
+45.138.72.141|DE
+45.150.32.112|DE
+46.224.214.34|DE
+46.225.149.10|DE
+46.249.102.151|DE
+46.249.99.199|DE
+46.38.250.225|DE
+47.245.131.215|DE
+49.13.228.85|DE
+5.104.75.231|DE
+5.180.82.38|DE
+5.75.182.89|DE
+57.129.62.51|DE
+63.176.161.135|DE
+64.188.118.5|DE
+64.188.118.69|DE
+64.188.79.189|DE
+64.188.83.202|DE
+64.226.111.98|DE
+64.226.93.71|DE
+66.151.43.102|DE
+66.151.43.131|DE
+68.183.77.241|DE
+72.56.106.210|DE
+72.56.31.206|DE
+77.239.104.229|DE
+77.239.98.122|DE
+77.239.99.29|DE
+78.47.150.18|DE
+79.132.136.161|DE
+79.132.138.87|DE
+8.209.83.19|DE
+8.211.36.136|DE
+80.240.22.234|DE
+81.200.156.219|DE
+82.117.245.166|DE
+82.165.20.186|DE
+82.21.117.137|DE
+82.21.117.93|DE
+82.21.150.7|DE
+82.23.177.177|DE
+82.26.150.163|DE
+83.219.249.189|DE
+85.121.53.39|DE
+85.190.107.238|DE
+85.208.139.48|DE
+85.234.100.221|DE
+85.234.100.68|DE
+86.53.110.15|DE
+86.53.110.160|DE
+87.106.198.216|DE
+87.120.126.127|DE
+87.120.126.131|DE
+87.120.205.64|DE
+87.120.92.172|DE
+87.251.87.213|DE
+88.99.92.84|DE
+89.106.78.217|DE
+89.106.89.97|DE
+89.125.54.80|DE
+89.167.109.28|DE
+89.168.108.209|DE
+89.168.67.158|DE
+89.191.226.252|DE
+89.213.171.201|DE
+89.213.171.222|DE
+89.40.117.130|DE
+89.40.117.143|DE
+89.58.59.201|DE
+91.107.152.178|DE
+91.107.178.25|DE
+91.107.240.211|DE
+91.107.243.223|DE
+91.107.251.16|DE
+91.107.254.128|DE
+91.132.160.255|DE
+91.149.222.113|DE
+91.149.223.242|DE
+91.219.23.154|DE
+91.99.148.150|DE
+91.99.161.159|DE
+91.99.222.109|DE
+92.5.12.76|DE
+92.5.37.229|DE
+92.5.85.78|DE
+92.51.37.45|DE
+94.143.231.154|DE
+94.177.231.152|DE
+94.237.80.56|DE
+95.140.154.46|DE
+95.85.230.15|DE
+95.85.237.48|DE
+95.85.252.115|DE
+109.120.185.201|FI
+109.120.185.210|FI
+109.172.54.73|FI
+111.88.215.50|FI
+132.243.24.155|FI
+135.136.177.174|FI
+141.0.184.108|FI
+141.0.184.160|FI
+144.31.184.200|FI
+150.241.88.243|FI
+185.17.2.161|FI
+185.188.181.14|FI
+185.221.196.177|FI
+185.42.163.194|FI
+192.124.181.74|FI
+192.145.29.34|FI
+193.164.128.68|FI
+193.23.201.56|FI
+194.180.189.194|FI
+195.96.156.121|FI
+195.96.156.240|FI
+2.26.105.147|FI
+206.245.135.117|FI
+217.179.49.227|FI
+31.77.183.133|FI
+37.27.36.143|FI
+64.188.80.100|FI
+78.17.15.130|FI
+78.17.187.202|FI
+78.17.39.165|FI
+79.110.48.71|FI
+81.19.139.232|FI
+82.25.174.66|FI
+84.22.150.176|FI
+85.204.18.6|FI
+85.204.18.93|FI
+91.186.222.76|FI
+92.42.102.109|FI
+93.152.207.174|FI
+94.156.180.27|FI
+95.217.185.57|FI
+104.238.191.179|FR
+107.161.160.91|FR
+109.120.179.99|FR
+109.172.55.148|FR
+109.199.122.5|FR
+109.199.126.6|FR
+129.151.242.76|FR
+132.243.204.151|FR
+132.243.204.84|FR
+139.64.167.70|FR
+144.31.214.138|FR
+145.223.69.87|FR
+147.90.14.132|FR
+151.80.56.155|FR
+152.228.191.232|FR
+159.60.146.81|FR
+159.60.146.82|FR
+161.97.159.242|FR
+185.10.18.238|FR
+185.10.18.88|FR
+185.10.19.205|FR
+185.193.89.107|FR
+185.234.100.41|FR
+188.92.28.145|FR
+193.42.60.24|FR
+194.76.147.168|FR
+194.76.147.171|FR
+195.216.169.63|FR
+2.7.113.69|FR
+20.33.23.66|FR
+217.60.5.249|FR
+31.56.176.44|FR
+31.59.103.13|FR
+38.180.240.91|FR
+45.144.28.170|FR
+45.155.54.115|FR
+45.77.61.133|FR
+5.157.51.85|FR
+51.91.40.26|FR
+82.22.50.162|FR
+82.64.120.239|FR
+82.70.232.70|FR
+82.70.234.100|FR
+83.171.225.168|FR
+91.134.43.127|FR
+92.118.168.112|FR
+92.119.126.219|FR
+92.119.56.83|FR
+94.183.187.190|FR
+94.183.187.80|FR
+104.128.190.209|GB
+134.209.19.200|GB
+144.31.213.171|GB
+159.65.19.63|GB
+165.227.237.209|GB
+168.222.13.57|GB
+168.222.13.58|GB
+168.222.13.59|GB
+168.222.13.60|GB
+168.222.13.61|GB
+168.222.13.65|GB
+168.222.13.71|GB
+168.222.13.73|GB
+168.222.13.74|GB
+168.222.13.75|GB
+172.166.113.27|GB
+18.134.196.127|GB
+185.153.183.229|GB
+185.66.164.51|GB
+194.147.88.43|GB
+194.147.88.45|GB
+194.147.88.46|GB
+194.37.82.144|GB
+217.154.53.220|GB
+31.76.60.114|GB
+34.39.62.53|GB
+45.147.44.148|GB
+45.32.180.58|GB
+5.83.218.80|GB
+57.128.176.37|GB
+57.128.176.87|GB
+57.128.177.172|GB
+57.128.177.198|GB
+57.128.178.196|GB
+57.128.178.63|GB
+57.128.179.189|GB
+57.128.181.219|GB
+57.128.181.221|GB
+57.128.182.61|GB
+57.128.183.108|GB
+57.128.183.138|GB
+57.128.183.248|GB
+57.128.183.3|GB
+57.128.183.35|GB
+57.128.183.82|GB
+57.128.183.90|GB
+64.176.181.12|GB
+79.72.91.32|GB
+8.208.20.116|GB
+82.38.171.209|GB
+82.38.171.239|GB
+84.8.145.58|GB
+89.125.212.90|GB
+91.149.238.129|GB
+77.91.77.98|GE
+156.244.57.227|HK
+144.31.243.69|LT
+151.244.201.178|MX
+151.244.201.180|MX
+151.244.201.182|MX
+151.244.201.189|MX
+151.244.201.192|MX
+151.244.201.193|MX
+151.244.201.194|MX
+151.244.201.207|MX
+151.244.201.212|MX
+151.244.201.213|MX
+151.244.201.216|MX
+151.244.201.226|MX
+151.244.201.231|MX
+151.244.201.234|MX
+151.244.201.235|MX
+151.244.201.242|MX
+151.244.201.249|MX
+151.244.201.250|MX
+151.244.201.253|MX
+103.80.87.191|NL
+109.234.34.17|NL
+113.30.188.83|NL
+130.12.46.75|NL
+134.209.136.197|NL
+138.124.2.203|NL
+140.150.226.22|NL
+141.144.195.228|NL
+144.124.235.197|NL
+144.31.72.69|NL
+144.31.78.217|NL
+146.103.115.212|NL
+146.103.96.48|NL
+147.45.117.151|NL
+147.90.11.46|NL
+150.241.90.79|NL
+159.223.224.80|NL
+165.232.89.21|NL
+167.71.65.115|NL
+178.62.206.22|NL
+185.130.224.105|NL
+185.159.128.184|NL
+185.159.75.65|NL
+185.184.121.228|NL
+185.80.53.221|NL
+188.253.25.212|NL
+194.246.83.147|NL
+194.87.83.44|NL
+2.27.39.147|NL
+2.58.113.192|NL
+209.38.101.169|NL
+217.179.48.74|NL
+31.222.229.52|NL
+31.59.140.91|NL
+31.76.252.71|NL
+45.144.232.27|NL
+45.153.186.22|NL
+45.43.88.232|NL
+46.30.41.73|NL
+5.175.217.27|NL
+62.171.228.94|NL
+64.188.117.181|NL
+66.151.33.31|NL
+66.163.127.56|NL
+72.56.68.247|NL
+77.238.228.195|NL
+77.239.111.51|NL
+79.137.197.140|NL
+79.137.197.212|NL
+80.74.25.110|NL
+85.136.180.64|NL
+87.239.250.142|NL
+87.239.251.254|NL
+89.125.63.28|NL
+89.125.85.228|NL
+89.127.214.183|NL
+89.30.198.194|NL
+89.30.198.68|NL
+94.142.137.72|NL
+94.176.3.215|NL
+95.179.140.212|NL
+185.65.151.81|RU
+109.120.155.164|SE
+109.120.156.105|SE
+121.127.33.130|SE
+132.243.231.36|SE
+138.124.102.89|SE
+138.124.103.252|SE
+138.124.25.223|SE
+138.124.25.250|SE
+138.124.25.51|SE
+141.98.161.36|SE
+147.45.73.177|SE
+147.45.76.230|SE
+158.179.206.143|SE
+16.170.253.163|SE
+172.232.149.77|SE
+185.117.88.115|SE
+185.153.180.9|SE
+185.186.78.15|SE
+185.58.115.45|SE
+192.145.30.27|SE
+193.168.197.68|SE
+193.68.89.220|SE
+193.68.89.71|SE
+196.196.5.26|SE
+196.196.5.28|SE
+206.168.215.172|SE
+37.203.209.26|SE
+37.203.209.42|SE
+37.252.9.236|SE
+41.216.182.98|SE
+45.158.116.43|SE
+45.9.18.119|SE
+45.9.18.74|SE
+46.249.103.176|SE
+5.175.236.36|SE
+5.175.236.4|SE
+5.175.236.48|SE
+5.175.236.53|SE
+5.175.236.54|SE
+5.175.236.58|SE
+51.20.202.203|SE
+62.182.198.178|SE
+64.188.81.49|SE
+70.34.194.51|SE
+70.34.210.205|SE
+79.108.164.203|SE
+80.66.78.190|SE
+80.66.78.207|SE
+84.32.154.0|SE
+84.32.208.201|SE
+87.251.85.34|SE
+89.125.37.200|SE
+89.125.76.10|SE
+89.127.201.202|SE
+92.246.137.103|SE
+103.253.145.105|SG
+103.6.169.135|SG
+124.156.202.172|SG
+128.1.186.115|SG
+128.1.186.117|SG
+128.1.186.119|SG
+128.1.186.180|SG
+128.1.186.182|SG
+128.1.186.183|SG
+128.1.186.55|SG
+128.1.186.56|SG
+128.1.186.59|SG
+128.1.186.60|SG
+128.1.186.61|SG
+128.1.186.62|SG
+129.121.129.25|SG
+138.2.108.213|SG
+139.59.118.255|SG
+140.245.103.72|SG
+140.245.127.48|SG
+143.42.66.91|SG
+149.28.159.222|SG
+150.109.11.223|SG
+152.175.67.17|SG
+157.228.130.240|SG
+157.230.255.214|SG
+159.65.1.74|SG
+161.118.220.61|SG
+164.52.2.100|SG
+164.52.2.99|SG
+165.245.176.192|SG
+168.138.189.91|SG
+168.144.110.83|SG
+177.5.66.59|SG
+178.93.160.236|SG
+20.6.12.145|SG
+206.189.39.92|SG
+213.35.105.58|SG
+43.133.61.219|SG
+43.156.116.194|SG
+43.156.181.203|SG
+43.170.38.62|SG
+45.139.226.157|SG
+45.77.36.140|SG
+47.82.155.79|SG
+8.219.185.66|SG
+83.147.234.163|SG
+84.32.22.205|SG
+38.244.150.113|TH
+103.83.86.172|TR
+104.143.204.62|TR
+104.239.87.51|TR
+130.94.1.150|TR
+130.94.1.177|TR
+141.98.118.80|TR
+155.103.70.71|TR
+155.103.71.111|TR
+155.103.71.142|TR
+155.103.71.159|TR
+155.103.71.80|TR
+167.104.219.81|TR
+178.157.15.73|TR
+185.200.36.36|TR
+185.219.132.27|TR
+185.219.133.106|TR
+185.255.93.189|TR
+193.124.46.93|TR
+194.36.85.113|TR
+201.50.115.20|TR
+201.50.115.25|TR
+203.202.232.110|TR
+203.202.232.211|TR
+213.155.119.28|TR
+213.238.182.13|TR
+31.40.204.131|TR
+31.40.204.200|TR
+31.40.204.243|TR
+37.221.79.43|TR
+38.180.172.231|TR
+45.136.5.132|TR
+45.141.148.137|TR
+45.67.202.173|TR
+62.133.63.124|TR
+62.60.233.121|TR
+77.83.245.48|TR
+78.135.77.252|TR
+82.26.136.32|TR
+82.26.198.25|TR
+82.26.198.89|TR
+83.217.9.70|TR
+89.45.45.110|TR
+89.45.45.144|TR
+93.180.134.48|TR
+104.156.225.101|US
+104.168.125.179|US
+104.238.129.180|US
+107.172.190.151|US
+107.172.241.7|US
+107.173.15.46|US
+117.55.231.178|US
+129.159.119.161|US
+129.159.84.71|US
+132.145.166.33|US
+138.249.133.40|US
+141.148.93.235|US
+141.98.41.20|US
+141.98.41.28|US
+141.98.41.80|US
+142.111.173.20|US
+143.198.31.221|US
+143.47.96.200|US
+146.190.56.83|US
+149.28.49.149|US
+149.28.56.202|US
+150.136.105.229|US
+150.136.169.72|US
+150.136.243.175|US
+154.7.183.116|US
+154.9.241.186|US
+162.212.155.85|US
+162.243.115.22|US
+163.192.19.221|US
+179.255.185.118|US
+179.255.185.124|US
+179.255.185.132|US
+185.198.26.215|US
+191.222.247.114|US
+192.193.104.25|US
+192.204.62.245|US
+192.236.234.71|US
+194.59.221.122|US
+198.20.138.119|US
+20.106.211.232|US
+203.88.123.113|US
+204.44.74.241|US
+205.186.76.187|US
+205.186.76.237|US
+207.246.94.121|US
+208.167.245.42|US
+213.170.157.1|US
+216.155.157.220|US
+23.94.123.231|US
+23.95.113.61|US
+23.95.148.8|US
+31.59.138.204|US
+35.212.207.185|US
+45.138.100.200|US
+45.32.136.112|US
+45.61.148.252|US
+45.63.62.4|US
+47.251.18.155|US
+47.251.95.178|US
+47.254.15.111|US
+47.254.57.63|US
+47.88.88.99|US
+64.176.198.77|US
+64.181.255.215|US
+64.237.48.135|US
+66.112.210.246|US
+66.135.5.63|US
+66.154.101.223|US
+69.12.91.111|US
+71.168.153.36|US
+8.221.126.227|US
+82.38.69.104|US
+85.208.119.187|US
+85.209.156.253|US
+91.149.239.206|US
+`;
+
+// نام فارسی کشورها (برای نمایش در پنل)
+const IP_POOL_COUNTRY_NAMES = {
+  "DE": "آلمان",
+  "US": "آمریکا",
+  "NL": "هلند",
+  "SE": "سوئد",
+  "GB": "بریتانیا",
+  "FR": "فرانسه",
+  "SG": "سنگاپور",
+  "TR": "ترکیه",
+  "FI": "فنلاند",
+  "MX": "مکزیک",
+  "CN": "چین",
+  "AE": "امارات",
+  "AL": "AL",
+  "AT": "اتریش",
+  "BR": "برزیل",
+  "CH": "سوئیس",
+  "GE": "GE",
+  "HK": "HK",
+  "LT": "لیتوانی",
+  "RU": "روسیه",
+  "TH": "تایلند"
+};
+
+const IP_POOL = IP_POOL_RAW.trim().split('\n').filter(Boolean).map(line => {
+  const [ip, cc] = line.split('|');
+  return { ip: ip.trim(), cc: (cc || '??').trim() };
+});
+
+const IP_POOL_SIZE = IP_POOL.length;
+
+// فهرست کشورها به‌ترتیب تعداد آی‌پی (برای منوی انتخاب)
+const IP_POOL_COUNTRIES = (() => {
+  const counts = {};
+  for (const item of IP_POOL) counts[item.cc] = (counts[item.cc] || 0) + 1;
+  return Object.keys(counts)
+    .map(cc => ({ cc, count: counts[cc], name: IP_POOL_COUNTRY_NAMES[cc] || cc }))
+    .sort((a, b) => b.count - a.count || (a.cc < b.cc ? -1 : 1));
+})();
+
+function poolCountryName(cc) {
+  return IP_POOL_COUNTRY_NAMES[String(cc || '').toUpperCase()] || 'نامشخص';
+}
+
+// انتخاب تصادفی بدون تکرار؛ country می‌تواند خالی، یک کد، یا فهرست کد باشد
+function pickPoolIps(count = 5, country = '', random = Math.random) {
+  const wanted = String(country || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+  const source = wanted.length && !wanted.includes('ALL')
+    ? IP_POOL.filter(item => wanted.includes(item.cc))
+    : IP_POOL;
+  const total = Math.min(Math.max(1, parseInt(count, 10) || 1), source.length || 1);
+  const pool = source.slice();
+  if (pool.length > total * 4) {
+    // برای استخرهای بزرگ، به‌جای کپی کامل فقط به تعداد لازم انتخاب می‌کنیم
+    for (let i = 0; i < total; i++) {
+      const j = i + Math.floor(random() * (pool.length - i));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, total);
+  }
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, total);
+}
+
+// متن ساب: هر خط یک آی‌پی (با پورت اختیاری) و در صورت خواست، نام کشور
+function poolSubscriptionText(options = {}) {
+  const port = String(options.port || '').trim().replace(/[^0-9]/g, '');
+  const withCountry = Boolean(options.countryLabel);
+  const items = pickPoolIps(options.count || IP_POOL_SIZE, options.country || '', options.random);
+  const lines = items.map(item => {
+    const host = port ? item.ip + ':' + port : item.ip;
+    return withCountry ? host + '#' + (IP_POOL_COUNTRY_NAMES[item.cc] || item.cc) : host;
+  });
+  return lines.join('\n') + '\n';
+}
+
+
 // --- MODULE: src/config/defaults.js ---
 // ============================================================================
 // miliconfig v3.2 - تنظیمات پیش‌فرض پایه
@@ -623,7 +1410,7 @@ const OPENVPN_PUBLIC_PASS = 'vpn';
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.6.0';
+const VERSION = 'v3.8.0';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
@@ -642,7 +1429,7 @@ const CONFIG_DEFAULTS = {
   es: 'no', // شادوساکس (Shadowsocks) — امکانات اضافه پیش‌فرض خاموش
   sspass: '',
   // هسته این ورکر هدر Shadowsocks را به‌صورت متنی (بدون AEAD) می‌خواند، بنابراین تنها متد سازگار «none» است
-  ssmethod: 'none',
+  ssmethod: 'aes-128-gcm',
   ech: 'no',
   // — تحریم‌شکن: خروجی همهٔ نودها از «آدرس واسط» بیرون از ایران عبور می‌کند
   // تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند.
@@ -1078,8 +1865,8 @@ function normalizeEffectiveConfig(rawConfig = {}) {
     const rotNum = parseInt(rotationRaw, 10);
     snap.ipRotation = Number.isFinite(rotNum) && rotNum > 0 ? String(rotNum) + 'm' : 'off';
   }
-  // تنها متد Shadowsocks پشتیبانی‌شده توسط هسته همین ورکر «none» است؛ انتخاب‌های دیگر باعث بی‌پاسخ شدن نود می‌شدند
-  snap.ssmethod = 'none';
+  // متدهای Shadowsocks پشتیبانی‌شده: aes-128-gcm (پیش‌فرض) و aes-256-gcm
+  snap.ssmethod = String(snap.ssmethod || '').toLowerCase() === 'aes-256-gcm' ? 'aes-256-gcm' : 'aes-128-gcm';
   // اگر پریست فرگمنت روی حالت سفارشی باشد و مقادیر خالی بمانند، از مقادیر پیش‌فرض ضد-DPI استفاده می‌شود
   if (!snap.fragmentLength) snap.fragmentLength = '100-200';
   if (!snap.fragmentInterval) snap.fragmentInterval = '10-20';
@@ -1861,6 +2648,159 @@ function formatBytes(bytes = 0) {
   const i = Math.min(units.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
   const val = b / Math.pow(1024, i);
   return `${val >= 100 || i === 0 ? Math.round(val) : val.toFixed(2)} ${units[i]}`;
+}
+
+
+// --- MODULE: src/core/shadowsocksAead.js ---
+// ============================================================================
+// Shadowsocks AEAD (SIP004) — پیاده‌سازی سبک برای aes-128-gcm / aes-256-gcm
+// رمزنگاری واقعی سمت سرور تا نودهای ss:// در همهٔ کلاینت‌ها (v2rayNG،
+// NekoBox، sing-box، Clash Meta، Shadowrocket) واقعاً پینگ بدهند.
+// کلید اصلی با EVP_BytesToKey/MD5 و کلید هر جهت با HKDF-SHA1 ساخته می‌شود.
+// ============================================================================
+
+
+const te = new TextEncoder();
+const MAX_CHUNK = 0x3fff;
+const TAG_LEN = 16;
+
+function hexToBytes(hex) {
+  const clean = String(hex || '').replace(/[^0-9a-f]/gi, '');
+  const out = new Uint8Array(clean.length >> 1);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
+  return out;
+}
+
+function concat(a, b) {
+  const out = new Uint8Array((a?.length || 0) + (b?.length || 0));
+  if (a?.length) out.set(a, 0);
+  if (b?.length) out.set(b, a?.length || 0);
+  return out;
+}
+
+function randomBytes(size) {
+  const out = new Uint8Array(size);
+  crypto.getRandomValues(out);
+  return out;
+}
+
+// nonce = شمارندهٔ ۱۲ بایتی little-endian
+function incrementNonce(nonce) {
+  for (let i = 0; i < nonce.length; i++) {
+    nonce[i] = (nonce[i] + 1) & 0xff;
+    if (nonce[i] !== 0) break;
+  }
+}
+
+function cipherInfo(cipher) {
+  return cipher === 'aes-256-gcm'
+    ? { keyLen: 32, saltLen: 32, subtle: 'AES-GCM' }
+    : { keyLen: 16, saltLen: 16, subtle: 'AES-GCM' };
+}
+
+async function deriveMasterKey(password) {
+  // keyLen برابر طول خروجی MD5 است؛ پس همان یک دور کافی است
+  return hexToBytes(await md5Hex(String(password)));
+}
+
+async function deriveSessionKey(master, salt) {
+  const base = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-1', salt, info: te.encode('ss-subkey') },
+    base,
+    128
+  );
+  return crypto.subtle.importKey('raw', new Uint8Array(bits), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+class SsAeadSession {
+  constructor(master, cipher = 'aes-128-gcm') {
+    this.master = master;
+    this.cipher = cipher;
+    this.info = cipherInfo(cipher);
+    this.decKey = null;
+    this.decNonce = new Uint8Array(12);
+    this.decBuffer = new Uint8Array(0);
+    this.encKey = null;
+    this.encNonce = new Uint8Array(12);
+    this.encSaltSent = false;
+  }
+
+  static async create(password, cipher = 'aes-128-gcm') {
+    return new SsAeadSession(await deriveMasterKey(password), cipher);
+  }
+
+  async _open(key, nonce, data) {
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, key, data);
+    return new Uint8Array(plain);
+  }
+
+  async _seal(key, nonce, data) {
+    const buf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, key, data);
+    return new Uint8Array(buf);
+  }
+
+  // داده‌های کلاینت (salt + قاب‌های رمزشده) را می‌گیرد و متن ساده برمی‌گرداند.
+  // اگر قاب ناقص باشد، تا رسیدن بایت‌های بعدی بافر می‌کند.
+  async pushIncoming(chunk) {
+    this.decBuffer = concat(this.decBuffer, chunk);
+    if (!this.decKey) {
+      if (this.decBuffer.length < this.info.saltLen) return null;
+      const salt = this.decBuffer.slice(0, this.info.saltLen);
+      this.decBuffer = this.decBuffer.slice(this.info.saltLen);
+      this.decKey = await deriveSessionKey(this.master, salt);
+    }
+    const out = [];
+    for (;;) {
+      let payloadLen = this.pendingLen || 0;
+      if (!payloadLen) {
+        if (this.decBuffer.length < 2 + TAG_LEN) break;
+        const lenCt = this.decBuffer.slice(0, 2 + TAG_LEN);
+        const lenPlain = await this._open(this.decKey, this.decNonce, lenCt);
+        incrementNonce(this.decNonce);
+        this.decBuffer = this.decBuffer.slice(2 + TAG_LEN);
+        payloadLen = (lenPlain[0] << 8) | lenPlain[1];
+        if (payloadLen <= 0 || payloadLen > MAX_CHUNK) throw new Error('invalid ss aead chunk length');
+        this.pendingLen = payloadLen;
+      }
+      const total = payloadLen + TAG_LEN;
+      if (this.decBuffer.length < total) break; // قاب ناقص: منتظر بایت بعدی
+      const payloadCt = this.decBuffer.slice(0, total);
+      const plain = await this._open(this.decKey, this.decNonce, payloadCt);
+      incrementNonce(this.decNonce);
+      this.pendingLen = 0;
+      out.push(plain);
+      this.decBuffer = this.decBuffer.slice(total);
+    }
+    if (!out.length) return null;
+    return out.length === 1 ? out[0] : out.reduce((a, b) => concat(a, b));
+  }
+
+  // پاسخ سرور: اولین خروجی با salt شروع می‌شود، بعد قاب‌های رمزشده
+  async encodeOutgoing(chunk) {
+    if (!this.encKey) {
+      const salt = randomBytes(this.info.saltLen);
+      this.encKey = await deriveSessionKey(this.master, salt);
+      this.encSaltPrefix = salt;
+    }
+    const parts = [];
+    if (this.encSaltPrefix) {
+      parts.push(this.encSaltPrefix);
+      this.encSaltPrefix = null;
+    }
+    let offset = 0;
+    while (offset < chunk.length) {
+      const slice = chunk.subarray(offset, offset + MAX_CHUNK);
+      offset += slice.length;
+      const lenPlain = Uint8Array.from([slice.length >> 8, slice.length & 0xff]);
+      const lenCt = await this._seal(this.encKey, this.encNonce, lenPlain);
+      incrementNonce(this.encNonce);
+      const payloadCt = await this._seal(this.encKey, this.encNonce, slice);
+      incrementNonce(this.encNonce);
+      parts.push(lenCt, payloadCt);
+    }
+    return parts.length === 1 ? parts[0] : parts.reduce((a, b) => concat(a, b));
+  }
 }
 
 
@@ -3999,7 +4939,7 @@ async function createUser(env = {}, payload = {}, clientIp = '') {
       ex: payload.ex ?? payload.config?.ex ?? globalCfg.ex ?? CONFIG_DEFAULTS.ex,
       es: payload.es ?? payload.config?.es ?? globalCfg.es ?? CONFIG_DEFAULTS.es,
       sspass: payload.sspass ?? payload.config?.sspass ?? globalCfg.sspass ?? '',
-      ssmethod: payload.ssmethod ?? payload.config?.ssmethod ?? globalCfg.ssmethod ?? 'chacha20-ietf-poly1305',
+      ssmethod: payload.ssmethod ?? payload.config?.ssmethod ?? globalCfg.ssmethod ?? 'aes-128-gcm',
       ech: payload.ech ?? payload.config?.ech ?? globalCfg.ech ?? CONFIG_DEFAULTS.ech,
       tp: payload.tp ?? payload.config?.tp ?? globalCfg.tp ?? CONFIG_DEFAULTS.tp,
       customDNS: payload.customDNS ?? payload.config?.customDNS ?? globalCfg.customDNS ?? CONFIG_DEFAULTS.customDNS,
@@ -6496,12 +7436,12 @@ function rotateIpListByTimeBucket(list, rotationSetting = 'off') {
 
 // شادوساکس با همان مکانیزم ورکر Z-E-U-S (منبع الهام cfnew): هر آدرس یک نود
 // SIP002 با userinfo base64 («متد:رمز») + پلاگین v2ray-websocket روی همان مسیر.
-// نکته: هستهٔ این ورکر هدر متنی SS را می‌خواند، پس متد همیشه «none» است
-// (متد AEAD نیازمند پیاده‌سازی رمزنگاری سمت سرور است و در نسخهٔ بعدی می‌آید).
+// متد پیش‌فرض AEAD است (aes-128-gcm) چون «none» در بیشتر کلاینت‌ها پشتیبانی
+// نمی‌شود و نود بدون پینگ می‌ماند؛ هسته هم AEAD را رمزگشایی می‌کند.
 function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
   const links = [];
   const sspass = (cfg.sspass && String(cfg.sspass).trim()) || userUuid;
-  const cipher = 'none';
+  const cipher = cfg.ssmethod === 'aes-256-gcm' ? 'aes-256-gcm' : 'aes-128-gcm';
   const userinfo = encodeSip002UserInfo(`${cipher}:${sspass}`);
 
   for (let idx = 0; idx < list.length; idx++) {
@@ -7250,6 +8190,15 @@ const WARP_PROFILE_PRESETS = {
   mobile: { mtu: 1240, dns: '1.1.1.1, 1.0.0.1' }
 };
 
+// پروفایل‌های مبهم‌سازی WARP: هر پروفایل نسخهٔ AmneziaWG، MTU و DNS متفاوت دارد
+// تا یک نود در DPI یک اپراتور کار کند و دیگری نه؛ همه روی همان اندپوینت اصلی.
+const WARP_OBF_PROFILES = [
+  { id: 'lite', name: 'WARP OBF LITE', awgv: '1', mtu: 1320, dns: '1.0.0.1' },
+  { id: 'balanced', name: 'WARP OBF BALANCED', awgv: '2', mtu: 1280, dns: '1.1.1.1' },
+  { id: 'aggressive', name: 'WARP OBF AGGRESSIVE', awgv: '3', mtu: 1180, dns: '1.1.1.1, 1.0.0.1' },
+  { id: 'stealth', name: 'WARP OBF STEALTH', awgv: '2', mtu: 1240, dns: '1.0.0.1, 1.1.1.1' }
+];
+
 function warpEndpointTag(host) {
   return String(host).replace(/:/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
 }
@@ -7318,6 +8267,41 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
     pushFile(`WARP-profile-${presetId}.conf`, `WARP ${presetId}`, entries[0], presetId);
   }
 
+  // پروفایل‌های مبهم‌سازی مختلف روی همان اندپوینت: AWG1 (فقط Junk)، AWG2
+  // (امضایی + پدینگ) و AWG3 (زمان‌بندی کامل) با MTU/DNS متفاوت.
+  const obfLinks = [];
+  for (const obf of WARP_OBF_PROFILES) {
+    const profileSeed = `${seed}:obf:${obf.id}`;
+    files.push({
+      name: `WARP-obf-${obf.id}.conf`,
+      data: buildWireGuardConf(
+        {
+          ...base,
+          server: entries[0].host,
+          port: entries[0].port,
+          mtu: obf.mtu,
+          dns: obf.dns,
+          awgv: obf.awgv,
+          seed: profileSeed
+        },
+        obf.name
+      )
+    });
+    obfLinks.push(buildWireguardLink(
+      {
+        ...base,
+        server: entries[0].host,
+        port: entries[0].port,
+        mtu: obf.mtu,
+        dns: obf.dns,
+        awgv: obf.awgv,
+        seed: profileSeed
+      },
+      obf.name
+    ));
+  }
+  files.push({ name: 'links-obf.txt', data: obfLinks.join('\n') + '\n' });
+
   const links = entries.map(entry => {
     const preset = WARP_PROFILE_PRESETS[entry.preset] || WARP_PROFILE_PRESETS.balanced;
     return buildWireguardLink(
@@ -7375,14 +8359,7 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
     }
     return `  - { ${parts.join(', ')} }`;
   });
-  // ۲-ب) MASQUE: نودهای HTTP/3 جدا از WireGuard؛ فقط Mihomo/Clash.Meta و Hiddify
-  const masqueNodes = await buildWarpMasqueNodes(cfg).catch(() => []);
-  const masqueProxies = masqueNodes.map(node => `  - { name: "${node.name}", type: masque, server: "${node.server}", port: ${node.port}, ` +
-    `private-key: "${node.privateKey}", public-key: "${node.publicKey}", ip: ${node.address4}/32` +
-    (node.address6 ? `, ipv6: ${node.address6}/128` : '') +
-    `, sni: ${WARP_MASQUE_SNI}, mtu: 1280, udp: true, remote-dns-resolve: true, dns: [1.1.1.1, 1.0.0.1] }`);
-  masqueNodes.forEach(node => proxyNames.push(node.name));
-  clashProxies.push(...masqueProxies);
+  // ۲-ب) MASQUE در بستهٔ مستقل /warp/masque ارائه می‌شود و عمداً در این ZIP نیست.
 
   files.push({
     name: 'WARP-clash.yaml',
@@ -7411,36 +8388,6 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  - MATCH,WARP'
     ].join('\n') + '\n'
   });
-
-  if (masqueNodes.length) {
-    files.push({
-      name: 'WARP-masque.yaml',
-      data: [
-        `# ${BRAND_NAME} — WARP MASQUE (HTTP/3 CONNECT-IP)`,
-        '# فقط Mihomo / Clash.Meta / Hiddify؛ کلاینت‌های WireGuard این را نمی‌خوانند',
-        `# edge: ${masqueNodes[0].server} — sni: ${WARP_MASQUE_SNI}`,
-        'mixed-port: 7890',
-        'allow-lan: false',
-        'mode: rule',
-        'log-level: warning',
-        'dns:',
-        '  enable: true',
-        '  enhanced-mode: fake-ip',
-        '  nameserver:',
-        ...dnsList.map(item => `    - ${item}`),
-        'proxies:',
-        ...masqueProxies,
-        'proxy-groups:',
-        '  - name: "WARP-MASQUE"',
-        '    type: select',
-        '    proxies:',
-        ...masqueNodes.map(node => `      - "${node.name}"`),
-        '      - DIRECT',
-        'rules:',
-        '  - MATCH,WARP-MASQUE'
-      ].join('\n') + '\n'
-    });
-  }
 
   // ۳) sing-box
   const sbOutbounds = entries.map((entry, idx) => {
@@ -7506,11 +8453,15 @@ async function buildWarpConfBundle(cfg = {}, options = {}) {
       '  *.conf ................ AmneziaWG profile (Jc/Jmin/Jmax + AWG2/AWG3 signatures)',
       '  plain-wireguard/*.conf . standard WireGuard profile (no AmneziaWG keys)',
       '  WARP-clash.yaml ....... Clash Meta / Mihomo profile (clash-verge, flclash, stash)',
-      '  WARP-masque.yaml ...... WARP over MASQUE (HTTP/3) for Mihomo / Clash.Meta / Hiddify',
+      '  WARP-obf-*.conf ....... 4 obfuscation profiles (AWG1 junk / AWG2 / AWG3 / stealth)',
       '  WARP-singbox.json ..... sing-box config with a selector group',
       '  links.txt ............. wireguard:// links with AmneziaWG tuning (Hiddify / NekoBox)',
+      '  links-obf.txt ......... wireguard:// links for the 4 obfuscation profiles',
       '  links-plain.txt ....... plain wireguard:// links (any WireGuard-capable client)',
       '  WARP-sub-base64.txt ... same links in base64 subscription form',
+      '',
+      'WARP MASQUE (HTTP/3) deliberately lives in its own bundle:',
+      '  /warp/masque/<token>?format=zip|clash|json|links',
       '  endpoints.txt ......... endpoint matrix (host / port / profile)',
       '',
       'AmneziaWG: import any .conf into AmneziaWG (Windows / Android / iOS / macOS).',
@@ -7544,6 +8495,13 @@ async function buildWarpFamilyLinks(cfg = {}, options = {}) {
 
   if (wantWarp) {
     links.push(buildWireguardLink({ ...base, awgv, seed: `warp:${awgv}` }, buildNodeDisplayName({ proto: 'warp', family: 'WireGuard', awg: awgv })));
+    // همان اندپوینت با سطوح مختلف مبهم‌سازی (AWG1 junk / AWG2 / AWG3 / stealth)
+    for (const obf of WARP_OBF_PROFILES) {
+      links.push(buildWireguardLink(
+        { ...base, awgv: obf.awgv, mtu: obf.mtu, dns: obf.dns, seed: `warp:obf:${obf.id}` },
+        `${buildNodeDisplayName({ proto: 'warp', family: 'WireGuard', awg: obf.awgv })} · OBF ${obf.id.toUpperCase()}`
+      ));
+    }
   }
   if (wantPro) {
     // بدون لایسنس هم ساخته می‌شود (کلید رایگان) تا کاربر هیچ تنظیمی لازم نداشته باشد
@@ -8386,13 +9344,10 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
     case 'stash':
     case 'meta':
     case 'clashmeta': {
-      // نودهای OpenVPN (پروفایل‌های زندهٔ VPNGate) فقط در خروجی Clash/Mihomo قابل استفاده‌اند
+      // نودهای OpenVPN (پروفایل‌های زندهٔ VPNGate) فقط در خروجی Clash/Mihomo قابل استفاده‌اند.
+      // MASQUE در ساب/ZIP مستقل /warp/masque ارائه می‌شود و در ساب اصلی نیست.
       const ovpnNodes = await fetchOpenVpnNodes(cfg);
-      // MASQUE فقط وقتی روشن است ساخته می‌شود؛ ثبت‌نام کش می‌شود تا ساب کند نشود.
-      const masqueNodes = isEnabledValue(cfg.warpMasque, true)
-        ? await buildWarpMasqueNodes(cfg).catch(() => [])
-        : [];
-      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes, masqueNodes });
+      bodyContent = generateClashConfig(finalLinks, { ...cfg, ovpnNodes, masqueNodes: [] });
       contentType = 'text/yaml; charset=utf-8';
       break;
     }
@@ -8463,6 +9418,111 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
   }
 
   return new Response(bodyContent, { headers });
+}
+
+
+// --- MODULE: src/subscription/masqueBundle.js ---
+
+// ============================================================================
+// بستهٔ مستقل WARP MASQUE (HTTP/3 CONNECT-IP)
+// ساب/ZIP جدا از WARP وایرگارد؛ فقط کلاینت‌هایی که نوع masque را می‌شناسند
+// (Mihomo/Clash.Meta، FlClash، Clash Verge، Hiddify) آن را می‌خوانند.
+// ============================================================================
+async function buildWarpMasqueBundle(cfg = {}, options = {}) {
+  const nodes = await buildWarpMasqueNodes(cfg).catch(() => []);
+  const seed = String(options.seed || 'public');
+  const dnsList = ['1.1.1.1', '1.0.0.1'];
+  const files = [];
+  const server = nodes[0]?.server || '';
+  const count = nodes.length;
+
+  if (count) {
+    const proxies = nodes.map(node =>
+      `  - { name: "${node.name}", type: masque, server: "${node.server}", port: ${node.port}, ` +
+      `private-key: "${node.privateKey}", public-key: "${node.publicKey}", ip: ${node.address4}/32` +
+      (node.address6 ? `, ipv6: ${node.address6}/128` : '') +
+      `, sni: ${WARP_MASQUE_SNI}, mtu: 1280, udp: true, remote-dns-resolve: true, dns: [${dnsList.join(', ')}] }`
+    );
+    files.push({
+      name: 'WARP-masque.yaml',
+      data: [
+        `# ${BRAND_NAME} — WARP MASQUE (HTTP/3 CONNECT-IP)`,
+        '# مستقل از WARP وایرگارد — فقط Mihomo / Clash.Meta / FlClash / Clash Verge / Hiddify',
+        `# edge: ${server} — sni: ${WARP_MASQUE_SNI} — nodes: ${count}`,
+        'mixed-port: 7890',
+        'allow-lan: false',
+        'mode: rule',
+        'log-level: warning',
+        'dns:',
+        '  enable: true',
+        '  enhanced-mode: fake-ip',
+        '  nameserver:',
+        ...dnsList.map(item => `    - ${item}`),
+        'proxies:',
+        ...proxies,
+        'proxy-groups:',
+        '  - name: "WARP-MASQUE"',
+        '    type: select',
+        '    proxies:',
+        ...nodes.map(node => `      - "${node.name}"`),
+        '      - DIRECT',
+        'rules:',
+        '  - MATCH,WARP-MASQUE'
+      ].join('\n') + '\n'
+    });
+
+    files.push({
+      name: 'WARP-masque.json',
+      data: JSON.stringify({
+        brand: BRAND_NAME,
+        protocol: 'masque',
+        sni: WARP_MASQUE_SNI,
+        server,
+        nodes: nodes.map(node => ({
+          name: node.name,
+          server: node.server,
+          port: node.port,
+          privateKey: node.privateKey,
+          publicKey: node.publicKey,
+          address4: node.address4,
+          address6: node.address6
+        }))
+      }, null, 2) + '\n'
+    });
+
+    files.push({
+      name: 'endpoints.txt',
+      data: [
+        `# ${BRAND_NAME} — WARP MASQUE endpoints`,
+        `# sni: ${WARP_MASQUE_SNI}`,
+        `# seed: ${seed.slice(0, 8)}`,
+        '',
+        ...nodes.map(node => `${node.server}\t${node.port}\t${node.name}`)
+      ].join('\n') + '\n'
+    });
+  }
+
+  files.push({
+    name: 'README.txt',
+    data: [
+      `${BRAND_NAME} — WARP MASQUE`,
+      '',
+      'این بستهٔ جداست: هیچ فایل WireGuard/AmneziaWG داخل آن نیست و برعکس،',
+      'بستهٔ اصلی WARP هیچ نود MASQUE ندارد.',
+      '',
+      'files:',
+      '  WARP-masque.yaml ... پروفایل Mihomo / Clash.Meta / FlClash / Clash Verge',
+      '  WARP-masque.json ... همان نودها به شکل JSON',
+      '  endpoints.txt ...... لیست لبه/پورت',
+      '',
+      `sni: ${WARP_MASQUE_SNI}`,
+      `nodes: ${count}`,
+      'اگر کلاینت نوع masque را پشتیبانی نکند، این فایل را وارد نکنید؛',
+      'برای کلاینت‌های وایرگارد از ZIP اصلی WARP استفاده کنید.'
+    ].join('\n') + '\n'
+  });
+
+  return { config: { server, sni: WARP_MASQUE_SNI, nodes: count }, files, nodes };
 }
 
 
@@ -9184,7 +10244,7 @@ function makeWebSocketReadableStream(ws, earlyDataHeader) {
   });
 }
 
-async function pipeRemoteToWebSocket(remoteSocket, ws, vlessHeader, retryCallback, onBytesTransferred = null) {
+async function pipeRemoteToWebSocket(remoteSocket, ws, vlessHeader, retryCallback, onBytesTransferred = null, encodeChunk = null) {
   let header = vlessHeader;
   let hasData = false;
   let retried = false;
@@ -9234,6 +10294,9 @@ async function pipeRemoteToWebSocket(remoteSocket, ws, vlessHeader, retryCallbac
         chunk = concatUint8Arrays(header, chunk);
         header = null;
       }
+      // مسیر Shadowsocks AEAD: هر بستهٔ سرور→کلاینت باید رمز شود
+      if (encodeChunk) chunk = await encodeChunk(chunk);
+      if (!chunk || !chunk.byteLength) continue;
       if (chunk.byteLength >= CHUNK_SIZE >> 1) {
         coalescer.flush();
         ws.send(chunk);
@@ -9335,7 +10398,7 @@ async function establishOutboundAndPipe(
     sock.closed.catch(() => {}).finally(() => {
       if (remoteState.socket === sock) closeSocketSafe(ws);
     });
-    pipeRemoteToWebSocket(sock, ws, vlessRespHeader, retryCb, onBytesTransferred).finally(() => {
+    pipeRemoteToWebSocket(sock, ws, vlessRespHeader, retryCb, onBytesTransferred, remoteState.encodeDown || null).finally(() => {
       if (remoteState.socket === sock) {
         try { writer.releaseLock(); } catch (_e) {}
         remoteState.writer = null;
@@ -9538,6 +10601,53 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
     if (!draining && !uploadQueue.empty && remoteState.writer) queueMicrotask(drainUploadQueue);
   };
 
+  // ---- Shadowsocks AEAD: فهرست رمزهای ممکن برای یافتن کاربر درست ----
+  function ssCandidates() {
+    const list = [];
+    const seen = new Set();
+    const push = (pw, user) => {
+      const key = String(pw || '');
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      list.push({ pw: key, user });
+    };
+    const qp = (reqUrl.searchParams.get('sspass') || '').trim();
+    if (qp) push(qp, allUsers.find(u => (u.config?.sspass || u.uuid) === qp) || null);
+    allUsers.slice(0, 24).forEach(u => push(u.config?.sspass || u.uuid, u));
+    if (adminUuid) {
+      push(
+        globalCfg.sspass || adminUuid,
+        { id: null, username: 'admin', uuid: adminUuid, config: globalCfg }
+      );
+    }
+    return list;
+  }
+
+  async function tryShadowsocksAead(data) {
+    const primary = String(globalCfg.ssmethod || 'aes-128-gcm') === 'aes-256-gcm' ? 'aes-256-gcm' : 'aes-128-gcm';
+    const ciphers = primary === 'aes-256-gcm' ? ['aes-256-gcm', 'aes-128-gcm'] : ['aes-128-gcm', 'aes-256-gcm'];
+    for (const cand of ssCandidates()) {
+      const userMethod = String(cand.user?.config?.ssmethod || '');
+      const ordered = userMethod === 'aes-256-gcm' ? ['aes-256-gcm', 'aes-128-gcm'] : ciphers;
+      for (const cipher of ordered) {
+        try {
+          const session = await SsAeadSession.create(cand.pw, cipher);
+          const plain = await session.pushIncoming(data);
+          if (!plain || plain.byteLength < 7) continue;
+          const header = parseShadowsocksHeader(plain);
+          if (header.hasError) continue;
+          return {
+            user: cand.user || allUsers[0] || null,
+            header,
+            decode: chunk => session.pushIncoming(chunk),
+            encode: chunk => session.encodeOutgoing(chunk)
+          };
+        } catch (_e) {}
+      }
+    }
+    return null;
+  }
+
   const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
   const wsReadable = makeWebSocketReadableStream(serverWs, earlyDataHeader);
 
@@ -9546,7 +10656,17 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
       new WritableStream({
         async write(chunk) {
           if (closed) return;
-          const data = toUint8Array(chunk);
+          let data = toUint8Array(chunk);
+          // شادوساکس AEAD: ورودی کلاینت رمزشده است
+          if (remoteState.ssDecode) {
+            try {
+              const plain = await remoteState.ssDecode(data);
+              if (!plain || !plain.byteLength) return;
+              data = plain;
+            } catch (_e) {
+              return closeTransport();
+            }
+          }
           if (isDnsSession) return await handleUdpDns(data, serverWs, null, fetcher);
           if (remoteState.socket && remoteState.writer) {
             if (!enqueueUpload(data)) throw new Error('upload queue overflow');
@@ -9615,6 +10735,39 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 trojanRes.hostname,
                 trojanRes.port,
                 trojanRes.rawClientData,
+                serverWs,
+                null,
+                remoteState,
+                userCfg,
+                fetcher,
+                addTransferredBytes
+              );
+              return;
+            }
+          }
+
+          // تلاش برای Shadowsocks AEAD (aes-128-gcm/aes-256-gcm) — متد پیش‌فرض جدید
+          if (data.byteLength >= 18) {
+            const ssAead = await tryShadowsocksAead(data);
+            if (ssAead) {
+              detectedProto = 'ss';
+              matchedUserObj = ssAead.user;
+              remoteState.ssDecode = ssAead.decode;
+              remoteState.encodeDown = ssAead.encode;
+              const userCfg = {
+                ...globalCfg,
+                ...(matchedUserObj?.config || {}),
+                ...(queryP ? { p: queryP } : {}),
+                ...(queryWk ? { wk: queryWk } : {}),
+                ...(queryRm ? { rm: queryRm } : {}),
+                ...(queryS ? { s: queryS } : {}),
+                ...(countryProxyLock ? { qj: 'only' } : {})
+              };
+              await establishOutboundAndPipe(
+                ssAead.header.addressType,
+                ssAead.header.hostname,
+                ssAead.header.port,
+                ssAead.header.rawPayload,
                 serverWs,
                 null,
                 remoteState,
@@ -11208,6 +12361,22 @@ async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
 
   const candidates = [];
   const seen = new Set();
+
+  // استخر آی‌پی اختصاصی miliconfig (داخل مخزن) — همیشه در دسترس و بدون وابستگی به شبکه
+  if (family === 'proxyip' && IP_POOL.length) {
+    const wanted = String(region || '').toUpperCase();
+    const local = wanted ? IP_POOL.filter(item => item.cc === wanted) : IP_POOL;
+    if (local.length) {
+      diagnostics.push({ source: 'builtin:ip-pool', reachable: true, entries: local.length, label: 'استخر اختصاصی' });
+      for (const item of local) {
+        const key = `${item.ip}:443`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({ host: item.ip, port: 443, family: 'proxyip', cc: item.cc });
+      }
+    }
+  }
+
   for (const feed of feeds) {
     for (const entry of feed.entries) {
       const key = `${entry.host}:${entry.port || 443}`;
@@ -11305,8 +12474,12 @@ async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
       port: item.port || 443,
       name: item.host,
       proxy: mode === 'proxyip' ? `https://${item.host}:${item.port || 443}` : '',
-      country: region || (mode === 'ipv6' ? 'IPv6' : mode === 'proxyip' ? 'ProxyIP' : 'CF'),
-      code: region || 'CF',
+      country: region
+        ? (IP_POOL_COUNTRY_NAMES[region] || region)
+        : mode === 'proxyip'
+          ? (item.cc ? (IP_POOL_COUNTRY_NAMES[item.cc] || item.cc) : 'ProxyIP')
+          : mode === 'ipv6' ? 'IPv6' : 'CF',
+      code: region || item.cc || 'CF',
       family: item.family || (mode === 'ipv6' ? 'ipv6' : 'ipv4'),
       protocol: mode === 'domain' ? 'Domain' : mode === 'proxyip' ? 'ProxyIP' : (mode === 'ipv6' ? 'IPv6' : 'IPv4'),
       latencyMs: item.latencyMs || 0,
@@ -11460,7 +12633,14 @@ async function handleScannerApi(request, env) {
       // آی‌پی‌ها و دامنه‌های پیش‌فرض لبهٔ کلادفلر برای افزودن مستقیم به yx از داخل اسکنر
       officialIps: OFFICIAL_DIRECT_IPS,
       officialIpv6: OFFICIAL_DIRECT_IPV6,
-      directDomains: DIRECT_DOMAINS.map(item => item.domain)
+      directDomains: DIRECT_DOMAINS.map(item => item.domain),
+      // استخر آی‌پی اختصاصی miliconfig (داخل مخزن) — برای حالت ProxyIP اسکنر
+      ipPool: {
+        count: IP_POOL.length,
+        countries: IP_POOL_COUNTRIES.map(item => ({ code: item.cc, name: item.name, count: item.count })),
+        subscription: '/ips',
+        meta: '/ips.json'
+      }
     });
   }
 
@@ -13037,7 +14217,8 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=conf" download>${icon('download')} فایل WARP.conf</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=clash" download>${icon('download')} پروفایل Clash</a>
         <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=singbox" download>${icon('download')} کانفیگ sing-box</a>
-        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>` : ''}
+        <a class="copy-btn" href="${baseUrl}/warp/${encodeURIComponent(subToken)}?format=links" download>${icon('download')} لینک‌های wireguard (NekoBox/Hiddify)</a>
+        <a class="copy-btn" href="${baseUrl}/warp/masque/${encodeURIComponent(subToken)}?format=zip" download>${icon('zip')} ZIP جداگانهٔ WARP MASQUE (HTTP/3)</a>` : ''}
         ${ovpnEnabled ? `<a class="copy-btn" href="${baseSubUrl}?target=ovpn&format=zip" download>${icon('zip')} دانلود ZIP پروفایل‌های OpenVPN</a>` : ''}
       </div>
     </div>
@@ -13707,6 +14888,11 @@ function renderAdminDashboardHtml(initialData = {}) {
       return acc;
     }, {}),
     vipCountries: EDGE_VIP_COUNTRIES,
+    // استخر آی‌پی اختصاصی؛ برای انتخاب تصادفی در پنجرهٔ تنظیمات کاربر و ساخت ساب /ips
+    ipPool: IP_POOL,
+    ipPoolCountries: IP_POOL_COUNTRIES,
+    ipPoolCountryNames: IP_POOL_COUNTRY_NAMES,
+    ipPoolPath: '/ips',
     maxUsersLimit: MAX_USERS_LIMIT,
     telegramSupport: TELEGRAM_SUPPORT,
     dnsPresets: DNS_PRESETS,
@@ -14415,6 +15601,12 @@ ${PWA_HEAD_TAGS}
   .uf-pane .field textarea:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px rgba(181, 255, 77, 0.08); }
   body.light-mode .uf-pane .field textarea { background: #ffffff; color: #0c1a12; }
   .field-hint { display: block; margin-top: 4px; font-size: 0.72rem; line-height: 1.7; opacity: 0.6; }
+  .ip-pool { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 9px; border: 1px dashed rgba(99, 230, 212, 0.3); border-radius: 10px; background: rgba(99, 230, 212, 0.045); }
+  .ip-pool-title { font-size: 0.72rem; opacity: 0.75; }
+  .ip-pool-count { width: 62px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 0.74rem; }
+  .ip-pool-country { flex: 1 1 130px; min-width: 110px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 0.74rem; }
+  .ip-pool .btn { flex: none; }
+  .ip-pool-meta { font-size: 0.68rem; opacity: 0.5; flex-basis: 100%; }
   .field-hint code { font-size: 0.7rem; padding: 1px 5px; border-radius: 5px; background: rgba(181, 255, 77, 0.1); color: var(--neon); direction: ltr; display: inline-block; }
   .adv-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: rgba(255, 255, 255, 0.015); }
   .adv-box summary { cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--neon); }
@@ -15879,6 +17071,7 @@ ${PWA_HEAD_TAGS}
       '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP همهٔ فرمت‌ها</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
       '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/masque/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP جداگانهٔ MASQUE</a>' +
       '</div></div>' +
       // اندپوینت مخصوص WARP: یک آدرس با همهٔ فرمت‌ها
       '<div class="loc-card ep-card"><div><div class="loc-name">اندپوینت اختصاصی WARP</div><div class="loc-meta">Clash/Mihomo · Hiddify/sing-box · WireGuard · Shadowrocket — هر کاربر توکن خودش را دارد</div></div>' +
@@ -16097,7 +17290,7 @@ ${PWA_HEAD_TAGS}
         { key: 'region', section: 'منطقه و آدرس‌های دلخواه', label: 'منطقه', type: 'select', def: 'auto', options: 'regions' },
         { key: 'wk', section: 'منطقه و آدرس‌های دلخواه', label: 'منطقهٔ ورکر', type: 'text', def: '', ph: 'DE / NL / US…' },
         { key: 'locationNodeCount', section: 'منطقه و آدرس‌های دلخواه', label: 'تعداد نود هر لوکیشن', type: 'number', def: 6, min: 1, max: 40 },
-        { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 5, wide: true, def: '', ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
+        { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 5, wide: true, def: '', pool: true, ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
         { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
         { key: 'sb', section: 'مسیر خروج', label: 'تحریم‌شکن (خروجی از آدرس واسط)', hint: 'همهٔ نودها از یک آدرس بیرون از ایران خارج می‌شوند تا سرویس‌های مسدود برای آی‌پی ایران باز شوند', type: 'switch', def: 'yes' },
         { key: 'sbRegion', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'DE', options: 'regions' },
@@ -16224,6 +17417,25 @@ ${PWA_HEAD_TAGS}
     return String(text || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).join(NL);
   }
 
+  // کنترل «انتخاب تصادفی» برای فیلدهای آی‌پی؛ فهرست از استخر داخلی می‌آید
+  function ipPoolControlHtml(field) {
+    if (!field.pool) return '';
+    var pool = INITIAL_DATA.ipPool || [];
+    var countries = INITIAL_DATA.ipPoolCountries || [];
+    var opts = '<option value="">همه کشورها</option>' + countries.map(function(c) {
+      return '<option value="' + c.cc + '">' + c.name + ' — ' + c.cc + ' (' + c.count + ')</option>';
+    }).join('');
+    var subPath = INITIAL_DATA.ipPoolPath || '/ips';
+    return '<div class="ip-pool" data-pool-for="' + field.key + '">' +
+      '<span class="ip-pool-title">انتخاب تصادفی از استخر ' + pool.length + ' آی‌پی:</span>' +
+      '<input class="ip-pool-count" type="number" min="1" max="64" step="1" value="5" aria-label="تعداد آی‌پی">' +
+      '<select class="ip-pool-country" aria-label="کشور">' + opts + '</select>' +
+      '<button class="btn sm" type="button" data-pool-fill="' + field.key + '">' + ICO.refresh + ' تصادفی</button>' +
+      '<a class="btn sm ghost" href="' + subPath + '" target="_blank" rel="noopener">' + ICO.link + ' ساب لیست</a>' +
+      '<span class="ip-pool-meta">ساب: ' + subPath + '?count=10&amp;country=DE&amp;port=443&amp;label=1</span>' +
+    '</div>';
+  }
+
   function fieldHtml(field, value) {
     var id = 'uf_' + field.key;
     var val = value === undefined || value === null ? field.def : value;
@@ -16234,7 +17446,7 @@ ${PWA_HEAD_TAGS}
       return '<div class="field"' + wideClass + '><label>' + field.label + '</label>' +
         '<textarea id="' + id + '" data-uf="' + field.key + '" rows="' + rows + '" spellcheck="false" dir="ltr" placeholder="' +
         String(field.ph || '').split(NL).join('&#10;').replace(/"/g, '&quot;') + '">' +
-        manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + '</div>';
+        manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + ipPoolControlHtml(field) + '</div>';
     }
     if (field.type === 'switch') {
       var on = String(val) === 'yes';
@@ -16250,7 +17462,7 @@ ${PWA_HEAD_TAGS}
     if (field.list) attrs += ' list="' + field.list + '"';
     if (field.ph) attrs += ' placeholder="' + field.ph.replace(/"/g, '&quot;') + '"';
     return '<div class="field"><label>' + field.label + '</label>' +
-      '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + '</div>';
+      '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + ipPoolControlHtml(field) + '</div>';
   }
 
   function formPaneHtml(group, cfg) {
@@ -17226,6 +18438,42 @@ ${PWA_HEAD_TAGS}
     }
   });
 
+  // ——— استخر آی‌پی اختصاصی: انتخاب تصادفی در پنجرهٔ تنظیمات کاربر ———
+  function fillRandomFromIpPool(button) {
+    var key = button.getAttribute('data-pool-fill');
+    var box = button.closest ? button.closest('.ip-pool') : null;
+    var field = document.getElementById('uf_' + key);
+    if (!box || !field) return;
+    var countInput = box.querySelector('.ip-pool-count');
+    var countrySelect = box.querySelector('.ip-pool-country');
+    var count = Math.max(1, Math.min(parseInt(countInput && countInput.value, 10) || 5, 64));
+    var cc = countrySelect ? countrySelect.value : '';
+    var pool = (INITIAL_DATA.ipPool || []).filter(function(item) { return !cc || item.cc === cc; });
+    if (!pool.length) return;
+    var names = INITIAL_DATA.ipPoolCountryNames || {};
+    var picked = pool.slice();
+    for (var i = picked.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = picked[i]; picked[i] = picked[j]; picked[j] = tmp;
+    }
+    picked = picked.slice(0, Math.min(count, picked.length));
+    var lines = picked.map(function(item) { return item.ip + ':443#' + (names[item.cc] || item.cc); });
+    var current = String(field.value || '').split(SEP_RE).map(function(s) { return s.trim(); }).filter(Boolean);
+    var seen = {};
+    current.forEach(function(line) { seen[line] = 1; });
+    lines.forEach(function(line) { if (!seen[line]) { seen[line] = 1; current.push(line); } });
+    field.value = current.join(NL);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    showToast(lines.length + ' آی‌پی تصادفی به آدرس‌های دستی اضافه شد', 'ok');
+  }
+
+  document.addEventListener('click', function(event) {
+    var btn = event.target && event.target.closest ? event.target.closest('[data-pool-fill]') : null;
+    if (!btn) return;
+    event.preventDefault();
+    fillRandomFromIpPool(btn);
+  });
+
   document.addEventListener('change', function(event) {
     var target = event.target;
     if (!target) return;
@@ -17450,6 +18698,44 @@ const __MILI_WORKER_EXPORT__ = {
 
       // ۴. هندل کردن درخواست‌های GET
       if (request.method === 'GET' || request.method === 'HEAD') {
+        // ۴-۰-۰: ساب اختصاصی استخر آی‌پی miliconfig (فهرست ثابت داخل مخزن)
+        if (url.pathname === '/ips' || url.pathname === '/ips.txt' || url.pathname === '/ips.json') {
+          const poolHeaders = {
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-store',
+            'profile-update-interval': '6'
+          };
+          if (url.pathname === '/ips.json') {
+            return new Response(JSON.stringify({
+              success: true,
+              name: 'miliconfig-ip-pool',
+              count: IP_POOL_SIZE,
+              countries: IP_POOL_COUNTRIES,
+              ips: IP_POOL.map(item => item.ip),
+              subscription: url.origin + '/ips'
+            }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json; charset=utf-8', ...poolHeaders }
+            });
+          }
+          const rawCount = String(url.searchParams.get('count') || '').trim();
+          const count = Math.min(Math.max(parseInt(rawCount, 10) || IP_POOL_SIZE, 1), IP_POOL_SIZE);
+          const body = poolSubscriptionText({
+            count,
+            country: url.searchParams.get('country') || url.searchParams.get('cc') || '',
+            port: url.searchParams.get('port') || '',
+            countryLabel: /^(1|yes|true)$/i.test(String(url.searchParams.get('label') || ''))
+          });
+          return new Response(body, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Content-Disposition': 'inline; filename="miliconfig-ips.txt"',
+              ...poolHeaders
+            }
+          });
+        }
+
         // ۴-۰: فایل‌های نصب اپ (PWA) — برای دسکتاپ و گوشی، بیرون از مسیر مدیریت
         if (url.pathname === '/manifest.webmanifest') return pwaManifestResponse();
         if (url.pathname === '/sw.js') return pwaServiceWorkerResponse();
@@ -17600,6 +18886,53 @@ const __MILI_WORKER_EXPORT__ = {
         // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)
         // /warp/<token>?format=zip|conf|json — بدون هیچ تنظیمی کار می‌کند؛
         // حتی بدون توکن (آدرس /warp) هم یک بستهٔ آماده برمی‌گردد.
+        if (pathParts[0] === 'warp' && String(pathParts[1] || '').toLowerCase() === 'masque') {
+          // ساب/ZIP مستقل WARP MASQUE (HTTP/3) — جدا از بستهٔ وایرگارد
+          const masqueToken = decodeURIComponent(pathParts.slice(2).join('/'));
+          let masqueUser = null;
+          if (masqueToken && !isAdminAuthorizedPath(masqueToken, adminUuid, globalCfg.d)) {
+            masqueUser = await getUserByIdOrToken(env, masqueToken);
+            if (!masqueUser) {
+              return new Response(JSON.stringify({ error: 'شناسه نامعتبر است' }), {
+                status: 403,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+              });
+            }
+          }
+          const masqueCfg = { ...globalCfg, ...((masqueUser && masqueUser.config) || {}), warpMasque: 'yes' };
+          const masqueFormat = String(url.searchParams.get('format') || 'zip').toLowerCase();
+          const bundle = await buildWarpMasqueBundle(masqueCfg, { seed: masqueUser?.uuid || 'public' });
+          const pick = (name, type, fileName) => {
+            const file = bundle.files.find(item => item.name === name);
+            return new Response(file ? file.data : '', {
+              status: file ? 200 : 404,
+              headers: {
+                'Content-Type': type,
+                'Content-Disposition': `inline; filename="${fileName}"`,
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-store'
+              }
+            });
+          };
+          if (['clash', 'yaml', 'mihomo', 'meta'].includes(masqueFormat)) {
+            return pick('WARP-masque.yaml', 'text/yaml; charset=utf-8', 'WARP-masque.yaml');
+          }
+          if (['json', 'sub', 'nodes'].includes(masqueFormat)) {
+            return pick('WARP-masque.json', 'application/json; charset=utf-8', 'WARP-masque.json');
+          }
+          if (['links', 'txt', 'text', 'conf'].includes(masqueFormat)) {
+            return pick('endpoints.txt', 'text/plain; charset=utf-8', 'masque-endpoints.txt');
+          }
+          return new Response(buildZip(bundle.files), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Disposition': 'attachment; filename="miliconfig-warp-masque.zip"',
+              'Cache-Control': 'no-store'
+            }
+          });
+        }
+
         if (pathParts[0] === 'warp') {
           const warpToken = decodeURIComponent(pathParts.slice(1).join('/'));
           let warpUser = null;

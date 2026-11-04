@@ -26,7 +26,9 @@ import {
   handleSubscriptionResponse,
   refreshCountryProxyPool
 } from './subscription/generator.js';
+import { buildWarpMasqueBundle } from './subscription/masqueBundle.js';
 import { buildZip } from './core/utils.js';
+import { IP_POOL, IP_POOL_COUNTRIES, IP_POOL_SIZE, poolSubscriptionText } from './config/ipPool.js';
 import {
   handleAuthApi,
   handleAutoUpdateSetupApi,
@@ -202,6 +204,44 @@ export default {
 
       // ۴. هندل کردن درخواست‌های GET
       if (request.method === 'GET' || request.method === 'HEAD') {
+        // ۴-۰-۰: ساب اختصاصی استخر آی‌پی miliconfig (فهرست ثابت داخل مخزن)
+        if (url.pathname === '/ips' || url.pathname === '/ips.txt' || url.pathname === '/ips.json') {
+          const poolHeaders = {
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-store',
+            'profile-update-interval': '6'
+          };
+          if (url.pathname === '/ips.json') {
+            return new Response(JSON.stringify({
+              success: true,
+              name: 'miliconfig-ip-pool',
+              count: IP_POOL_SIZE,
+              countries: IP_POOL_COUNTRIES,
+              ips: IP_POOL.map(item => item.ip),
+              subscription: url.origin + '/ips'
+            }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json; charset=utf-8', ...poolHeaders }
+            });
+          }
+          const rawCount = String(url.searchParams.get('count') || '').trim();
+          const count = Math.min(Math.max(parseInt(rawCount, 10) || IP_POOL_SIZE, 1), IP_POOL_SIZE);
+          const body = poolSubscriptionText({
+            count,
+            country: url.searchParams.get('country') || url.searchParams.get('cc') || '',
+            port: url.searchParams.get('port') || '',
+            countryLabel: /^(1|yes|true)$/i.test(String(url.searchParams.get('label') || ''))
+          });
+          return new Response(body, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Content-Disposition': 'inline; filename="miliconfig-ips.txt"',
+              ...poolHeaders
+            }
+          });
+        }
+
         // ۴-۰: فایل‌های نصب اپ (PWA) — برای دسکتاپ و گوشی، بیرون از مسیر مدیریت
         if (url.pathname === '/manifest.webmanifest') return pwaManifestResponse();
         if (url.pathname === '/sw.js') return pwaServiceWorkerResponse();
@@ -352,6 +392,53 @@ export default {
         // ۴-د-۲: دانلود مستقیم کانفیگ‌های WARP / WARP PRO / چندلوکیشن (AmneziaWG)
         // /warp/<token>?format=zip|conf|json — بدون هیچ تنظیمی کار می‌کند؛
         // حتی بدون توکن (آدرس /warp) هم یک بستهٔ آماده برمی‌گردد.
+        if (pathParts[0] === 'warp' && String(pathParts[1] || '').toLowerCase() === 'masque') {
+          // ساب/ZIP مستقل WARP MASQUE (HTTP/3) — جدا از بستهٔ وایرگارد
+          const masqueToken = decodeURIComponent(pathParts.slice(2).join('/'));
+          let masqueUser = null;
+          if (masqueToken && !isAdminAuthorizedPath(masqueToken, adminUuid, globalCfg.d)) {
+            masqueUser = await getUserByIdOrToken(env, masqueToken);
+            if (!masqueUser) {
+              return new Response(JSON.stringify({ error: 'شناسه نامعتبر است' }), {
+                status: 403,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+              });
+            }
+          }
+          const masqueCfg = { ...globalCfg, ...((masqueUser && masqueUser.config) || {}), warpMasque: 'yes' };
+          const masqueFormat = String(url.searchParams.get('format') || 'zip').toLowerCase();
+          const bundle = await buildWarpMasqueBundle(masqueCfg, { seed: masqueUser?.uuid || 'public' });
+          const pick = (name, type, fileName) => {
+            const file = bundle.files.find(item => item.name === name);
+            return new Response(file ? file.data : '', {
+              status: file ? 200 : 404,
+              headers: {
+                'Content-Type': type,
+                'Content-Disposition': `inline; filename="${fileName}"`,
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-store'
+              }
+            });
+          };
+          if (['clash', 'yaml', 'mihomo', 'meta'].includes(masqueFormat)) {
+            return pick('WARP-masque.yaml', 'text/yaml; charset=utf-8', 'WARP-masque.yaml');
+          }
+          if (['json', 'sub', 'nodes'].includes(masqueFormat)) {
+            return pick('WARP-masque.json', 'application/json; charset=utf-8', 'WARP-masque.json');
+          }
+          if (['links', 'txt', 'text', 'conf'].includes(masqueFormat)) {
+            return pick('endpoints.txt', 'text/plain; charset=utf-8', 'masque-endpoints.txt');
+          }
+          return new Response(buildZip(bundle.files), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Disposition': 'attachment; filename="miliconfig-warp-masque.zip"',
+              'Cache-Control': 'no-store'
+            }
+          });
+        }
+
         if (pathParts[0] === 'warp') {
           const warpToken = decodeURIComponent(pathParts.slice(1).join('/'));
           let warpUser = null;

@@ -29,6 +29,7 @@ import {
   getFeedKind
 } from '../config/defaults.js';
 import { USER_PRESETS } from '../config/presets.js';
+import { IP_POOL, IP_POOL_COUNTRIES, IP_POOL_COUNTRY_NAMES } from '../config/ipPool.js';
 import {
   applyUpdate,
   checkForUpdate,
@@ -1349,6 +1350,22 @@ async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
 
   const candidates = [];
   const seen = new Set();
+
+  // استخر آی‌پی اختصاصی miliconfig (داخل مخزن) — همیشه در دسترس و بدون وابستگی به شبکه
+  if (family === 'proxyip' && IP_POOL.length) {
+    const wanted = String(region || '').toUpperCase();
+    const local = wanted ? IP_POOL.filter(item => item.cc === wanted) : IP_POOL;
+    if (local.length) {
+      diagnostics.push({ source: 'builtin:ip-pool', reachable: true, entries: local.length, label: 'استخر اختصاصی' });
+      for (const item of local) {
+        const key = `${item.ip}:443`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({ host: item.ip, port: 443, family: 'proxyip', cc: item.cc });
+      }
+    }
+  }
+
   for (const feed of feeds) {
     for (const entry of feed.entries) {
       const key = `${entry.host}:${entry.port || 443}`;
@@ -1446,8 +1463,12 @@ async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
       port: item.port || 443,
       name: item.host,
       proxy: mode === 'proxyip' ? `https://${item.host}:${item.port || 443}` : '',
-      country: region || (mode === 'ipv6' ? 'IPv6' : mode === 'proxyip' ? 'ProxyIP' : 'CF'),
-      code: region || 'CF',
+      country: region
+        ? (IP_POOL_COUNTRY_NAMES[region] || region)
+        : mode === 'proxyip'
+          ? (item.cc ? (IP_POOL_COUNTRY_NAMES[item.cc] || item.cc) : 'ProxyIP')
+          : mode === 'ipv6' ? 'IPv6' : 'CF',
+      code: region || item.cc || 'CF',
       family: item.family || (mode === 'ipv6' ? 'ipv6' : 'ipv4'),
       protocol: mode === 'domain' ? 'Domain' : mode === 'proxyip' ? 'ProxyIP' : (mode === 'ipv6' ? 'IPv6' : 'IPv4'),
       latencyMs: item.latencyMs || 0,
@@ -1601,7 +1622,14 @@ export async function handleScannerApi(request, env) {
       // آی‌پی‌ها و دامنه‌های پیش‌فرض لبهٔ کلادفلر برای افزودن مستقیم به yx از داخل اسکنر
       officialIps: OFFICIAL_DIRECT_IPS,
       officialIpv6: OFFICIAL_DIRECT_IPV6,
-      directDomains: DIRECT_DOMAINS.map(item => item.domain)
+      directDomains: DIRECT_DOMAINS.map(item => item.domain),
+      // استخر آی‌پی اختصاصی miliconfig (داخل مخزن) — برای حالت ProxyIP اسکنر
+      ipPool: {
+        count: IP_POOL.length,
+        countries: IP_POOL_COUNTRIES.map(item => ({ code: item.cc, name: item.name, count: item.count })),
+        subscription: '/ips',
+        meta: '/ips.json'
+      }
     });
   }
 
