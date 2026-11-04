@@ -1410,7 +1410,7 @@ function poolSubscriptionText(options = {}) {
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.8.0';
+const VERSION = 'v3.8.1';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
@@ -6557,6 +6557,70 @@ async function fetchJkNodes() {
   return parsed;
 }
 
+// ============================================================================
+// استخر اختصاصی زنجیره خانگی — زنده از همان مخازن cfnew + استخر داخلی پنل
+// نودهای «CF前置» ساب خانگی از این استخر ساخته می‌شوند تا وابسته به فهرست
+// ثابت ساب نباشند؛ کش کوتاه است تا آدرس‌های تازه زودتر وارد شوند.
+// ============================================================================
+const JK_POOL_TTL = 10 * 60 * 1000;
+const JK_POOL_MAX_NODES = 6;
+let jkPoolCache = { at: 0, hosts: [], live: false };
+
+function parseJkPoolHosts(text) {
+  const hosts = [];
+  const seen = new Set();
+  const re = /\b((?:\d{1,3}\.){3}\d{1,3})\b/g;
+  let m;
+  while ((m = re.exec(String(text || ''))) !== null) {
+    const ip = m[1];
+    const parts = ip.split('.').map(Number);
+    if (parts.some(p => p < 0 || p > 255)) continue;
+    // آدرس‌های خصوصی/رزرو برای لبهٔ کلادفلر بی‌معنی‌اند
+    if (parts[0] === 10 || parts[0] === 127 || parts[0] === 0) continue;
+    if (parts[0] === 192 && parts[1] === 168) continue;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) continue;
+    if (parts[0] === 169 && parts[1] === 254) continue;
+    if (seen.has(ip)) continue;
+    seen.add(ip);
+    hosts.push(ip);
+  }
+  return hosts;
+}
+
+async function readJkPoolSource(url, timeoutMs = 3500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/plain' },
+      signal: controller.signal
+    });
+    if (!resp.ok) return [];
+    return parseJkPoolHosts(await resp.text());
+  } catch (_e) {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchJkFrontPool() {
+  const now = Date.now();
+  if (jkPoolCache.hosts.length && now - jkPoolCache.at < JK_POOL_TTL) return jkPoolCache;
+  const results = await Promise.allSettled(CFNEW_IPV4_SOURCES.map(url => readJkPoolSource(url)));
+  const live = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+  const seen = new Set();
+  const hosts = [];
+  for (const ip of [...live, ...IP_POOL.map(item => item.ip)]) {
+    if (!ip || seen.has(ip)) continue;
+    seen.add(ip);
+    hosts.push(ip);
+    if (hosts.length >= 32) break;
+  }
+  jkPoolCache = { at: now, hosts, live: live.length > 0 };
+  return jkPoolCache;
+}
+
 async function generateResidentialChainConfig(links, options = {}) {
   const customDNS = options.customDNS || 'https://223.5.5.5/dns-query';
   const customECHDomain = options.customECHDomain || 'cloudflare-ech.com';
@@ -6574,6 +6638,21 @@ async function generateResidentialChainConfig(links, options = {}) {
     ...n,
     name: `${idx + 1}+${BRAND_NAME}`
   }));
+
+  // نودهای «CF前置» از استخر اختصاصی زنجیره خانگی (زنده از مخازن cfnew)
+  const pool = await fetchJkFrontPool().catch(() => ({ hosts: [], live: false }));
+  const poolTemplate = frontNodes.find(n => n.tls) || null;
+  const usedFrontServers = new Set(frontNodes.map(n => normalizeHost(n.server)));
+  let poolAdded = 0;
+  if (poolTemplate) {
+    for (const ip of pool.hosts) {
+      if (poolAdded >= JK_POOL_MAX_NODES) break;
+      if (usedFrontServers.has(ip)) continue;
+      usedFrontServers.add(ip);
+      frontNodes.push({ ...poolTemplate, server: ip, name: `${frontNodes.length + 1}+${BRAND_NAME}` });
+      poolAdded++;
+    }
+  }
   const frontNames = frontNodes.map(n => n.name);
 
   const { nodes, cert } = await fetchJkNodes();
@@ -6603,6 +6682,13 @@ async function generateResidentialChainConfig(links, options = {}) {
     '    - https://1.1.1.1/dns-query',
     ''
   ];
+
+  if (poolAdded) {
+    header.push(
+      `# front pool: cfnew live — ${poolAdded} IP${pool.live ? '' : ' (builtin fallback)'}`,
+      ''
+    );
+  }
 
   const proxySection = ['proxies:'];
   for (const n of frontNodes) proxySection.push(buildClashNodeYaml(n, customECHDomain));

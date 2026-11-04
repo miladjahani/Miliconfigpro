@@ -45,6 +45,7 @@
 
 - **WARP با چند سطح مبهم‌سازی:** ساب‌لینک و ZIP وارپ شامل ۴ پروفایل مجزاست — `OBF LITE` (AmneziaWG 1 + Junk)، `OBF BALANCED` (AWG2)، `OBF AGGRESSIVE` (AWG3) و `OBF STEALTH` — با MTU و DNS متفاوت تا در اپراتورهای مختلف یکی از آن‌ها وصل شود (`links-obf.txt` و `WARP-obf-*.conf`).
 - **ساب/ZIP جدا برای WARP MASQUE:** `GET /warp/masque/<token>?format=zip|clash|json|links` فقط نودهای HTTP/3 CONNECT-IP را می‌دهد؛ بستهٔ اصلی وایرگارد دیگر هیچ نود MASQUE ندارد.
+- **استخر زندهٔ زنجیرهٔ خانگی:** ساب `target=jk|vg` نودهای «CF前置» را به‌صورت زنده از استخر اختصاصی cfnew (فیدهای bestcf / Z-E-U-S / IPDB) و در صورت قطعی از استخر داخلی پنل می‌سازد؛ کش ۱۰ دقیقه‌ای و سقف ۶ نود اضافه.
 - **Shadowsocks با رمزنگاری واقعی:** متد پیش‌فرض `aes-128-gcm` (SIP004، HKDF-SHA1) است و هسته قاب‌های AEAD را در هر دو جهت رمز/رمزگشایی می‌کند؛ روش متنی `none` نیز برای سازگاری باقی مانده است. لینک‌ها با پلاگین `v2ray-plugin` روی TLS ساخته می‌شوند و در v2rayNG/NekoBox/sing-box/Clash Meta/Shadowrocket پینگ می‌دهند.
 
 ## راهنمای استقرار مستقیم از گیت‌هاب (Cloudflare Workers & Pages)
