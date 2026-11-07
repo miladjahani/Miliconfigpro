@@ -1141,8 +1141,8 @@ ${PWA_HEAD_TAGS}
   }
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .brand .mili-shield-svg { width: 38px; height: 38px; flex: none; }
-  .brand-text { line-height: 1.15; }
-  .brand-name { font-size: 1.02rem; font-weight: 800; letter-spacing: 0.4px; }
+  .brand-text { line-height: 1.15; min-width: 0; overflow: hidden; }
+  .brand-name { font-size: 1.02rem; font-weight: 800; letter-spacing: 0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .brand-name span { color: var(--neon); }
   .brand-ver {
     font-family: var(--mono);
@@ -1152,7 +1152,7 @@ ${PWA_HEAD_TAGS}
   }
   .topbar-spacer { flex: 1; }
   /* هدر فقط لوگو + آیکون‌های افقی بدون متن فارسی */
-  .topbar-actions { display: flex; align-items: center; gap: 7px; }
+  .topbar-actions { display: flex; align-items: center; gap: 7px; flex: none; }
   .topbar-actions .icon-btn { width: 38px; height: 38px; padding: 0; border-radius: var(--icon-radius); }
   .topbar-actions .icon-btn .mi { width: 19px; height: 19px; }
   .topbar-actions .icon-btn.tg { color: #7fd7ff; border-color: rgba(125, 211, 252, 0.3); background: rgba(56, 189, 248, 0.1); }
@@ -2166,6 +2166,7 @@ ${PWA_HEAD_TAGS}
     .topbar-actions .icon-btn { width: 34px; height: 34px; }
     .topbar-actions .icon-btn.install { width: 34px; height: 34px; }
     .topbar-actions { gap: 6px; }
+    .brand { flex: none; }
     .menu-btn { display: inline-flex; }
     .nav-drawer { display: block; }
     .drawer-backdrop { display: block; }
@@ -2174,6 +2175,12 @@ ${PWA_HEAD_TAGS}
     .tabbar-pill { width: 100%; padding: 6px; gap: 5px; }
     .tab { height: 54px; padding: 6px 3px; font-size: 0.63rem; }
     .tab .mi { width: 18px; height: 18px; }
+  }
+  @media (max-width: 560px) {
+    /* در گوشی فقط نشان برند می‌ماند تا با دکمه‌های اکشن روی هم نیفتد */
+    .brand-text { display: none; }
+    .brand { gap: 0; }
+    .topbar { gap: 8px; }
   }
 </style>
 </head>
