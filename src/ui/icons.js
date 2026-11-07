@@ -38,6 +38,8 @@ export const ICONS = {
   close: wrap('<path d="m6 6 12 12"/><path d="m18 6-12 12"/>'),
   sun: wrap('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>'),
   moon: wrap('<path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.6 8.6 0 1 0 20 14.2z"/>'),
+  // قالب ظاهری: پالت رنگ با چهار چکهٔ رنگ
+  palette: wrap('<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2.3-.9 2.3-2.1 0-.6-.3-1.1-.6-1.5-.3-.5-.6-.9-.6-1.5 0-1.1.9-2 2-2H17a4 4 0 0 0 4-4c0-4-4-6.9-9-6.9z"/><circle cx="7.6" cy="12" r="1.1" fill="currentColor"/><circle cx="9.5" cy="7.8" r="1.1" fill="currentColor"/><circle cx="14" cy="7" r="1.1" fill="currentColor"/><circle cx="17.3" cy="10" r="1.1" fill="currentColor"/>'),
   database: wrap('<ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6"/>'),
   activity: wrap('<path d="M3 12h3.4l2.2-6.6 3.6 13.2L15 12h6"/>'),
   wifi: wrap('<path d="M4 9.4a12.5 12.5 0 0 1 16 0"/><path d="M7 12.6a8.2 8.2 0 0 1 10 0"/><path d="M9.8 15.8a4 4 0 0 1 4.4 0"/><circle cx="12" cy="19" r="1.1" fill="currentColor"/>'),
@@ -68,7 +70,8 @@ export const ICONS = {
   back: wrap('<path d="M20 12H5"/><path d="m11 6-6 6 6 6"/>'),
   stop: wrap('<rect x="6" y="6" width="12" height="12" rx="2.4"/>'),
   // تپش/حرکت
-  pulse: wrap('<path d="M2.8 12h3.6l2-4.8 3.4 9.8 2.2-5h7.2"/>')
+  pulse: wrap('<path d="M2.8 12h3.6l2-4.8 3.4 9.8 2.2-5h7.2"/>'),
+  sparkles: wrap('<path d="M12 3.2l1.6 4.1 4.1 1.6-4.1 1.6L12 14.6l-1.6-4.1L6.3 8.9l4.1-1.6L12 3.2z"/><path d="M18.4 14.1l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8.8-2.1z"/><path d="M5.2 15.1l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z"/>')
 };
 
 export function icon(name, extraClass = '') {
