@@ -1,5 +1,5 @@
 # استقرار Cloudflare Workers (جایگزین Pages بلاک‌شده)
-name = "miliconfig-worker-v5"
+name = "miliconfig v3.1"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
