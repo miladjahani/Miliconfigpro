@@ -1,6 +1,6 @@
 # استقرار Cloudflare Pages (پروژه جدید miliconfig-v5)
 # این فایل فقط برای Pages است؛ wrangler.toml اصلی برای Workers دست‌نخورده می‌ماند.
-name = "miliconfig-v5"
+name = "miliconfig v3.1"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-09-23"
 
